@@ -7,6 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 @RestController
 @RequestMapping("/api/schedules")
@@ -19,38 +21,43 @@ public class ScheduleControllers {
         this.scheduleService = scheduleService;
     }
 
-    // Get all schedules
+    // Get all schedules asynchronously
     @GetMapping
-    public ResponseEntity<List<ScheduleModels>> getSchedules() {
-        List<ScheduleModels> schedules = scheduleService.getAllSchedules();
+    public ResponseEntity<List<ScheduleModels>> getSchedules() throws ExecutionException, InterruptedException {
+        Future<List<ScheduleModels>> schedulesFuture = scheduleService.getAllSchedules();
+        List<ScheduleModels> schedules = schedulesFuture.get();  // Wait for the async operation to complete
         return ResponseEntity.ok(schedules);
     }
 
-    // Get a schedule by ID
+    // Get a schedule by ID asynchronously
     @GetMapping("/{id}")
-    public ResponseEntity<ScheduleModels> getSchedule(@PathVariable long id) {
-        ScheduleModels schedule = scheduleService.getScheduleById(id);
+    public ResponseEntity<ScheduleModels> getSchedule(@PathVariable long id) throws ExecutionException, InterruptedException {
+        Future<ScheduleModels> scheduleFuture = scheduleService.getScheduleById(id);
+        ScheduleModels schedule = scheduleFuture.get();  // Wait for the async operation to complete
         return ResponseEntity.ok(schedule);
     }
 
-    // Create a new schedule
+    // Create a new schedule asynchronously
     @PostMapping
-    public ResponseEntity<ScheduleModels> createSchedule(@RequestBody ScheduleModels newSchedule) {
-        ScheduleModels createdSchedule = scheduleService.createSchedule(newSchedule);
+    public ResponseEntity<ScheduleModels> createSchedule(@RequestBody ScheduleModels newSchedule) throws ExecutionException, InterruptedException {
+        Future<ScheduleModels> createdScheduleFuture = scheduleService.createSchedule(newSchedule);
+        ScheduleModels createdSchedule = createdScheduleFuture.get();  // Wait for the async operation to complete
         return ResponseEntity.status(201).body(createdSchedule);
     }
 
-    // Update a schedule by ID
+    // Update a schedule by ID asynchronously
     @PutMapping("/{id}")
-    public ResponseEntity<ScheduleModels> updateSchedule(@PathVariable long id, @RequestBody ScheduleModels updatedSchedule) {
-        ScheduleModels updated = scheduleService.updateSchedule(id, updatedSchedule);
+    public ResponseEntity<ScheduleModels> updateSchedule(@PathVariable long id, @RequestBody ScheduleModels updatedSchedule) throws ExecutionException, InterruptedException {
+        Future<ScheduleModels> updatedScheduleFuture = scheduleService.updateSchedule(id, updatedSchedule);
+        ScheduleModels updated = updatedScheduleFuture.get();  // Wait for the async operation to complete
         return ResponseEntity.ok(updated);
     }
 
-    // Delete a schedule by ID
+    // Delete a schedule by ID asynchronously
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteSchedule(@PathVariable long id) {
-        scheduleService.deleteSchedule(id);
+    public ResponseEntity<Void> deleteSchedule(@PathVariable long id) throws ExecutionException, InterruptedException {
+        Future<Void> deleteFuture = scheduleService.deleteSchedule(id);
+        deleteFuture.get();  // Wait for the async operation to complete
         return ResponseEntity.noContent().build();
     }
 }
