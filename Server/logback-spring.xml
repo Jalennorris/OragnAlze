@@ -1,0 +1,21 @@
+<configuration>
+
+    <!-- Define an appender that sends logs to Logstash -->
+    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>localhost:5044</destination> <!-- Logstash server's address -->
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <provider class="net.logstash.logback.encoder.org.apache.logging.log4j.message.ThreadNameJsonProvider" />
+                <provider class="net.logstash.logback.encoder.org.apache.logging.log4j.message.MessageJsonProvider" />
+                <provider class="net.logstash.logback.encoder.org.apache.logging.log4j.message.TimestampJsonProvider" />
+                <provider class="net.logstash.logback.encoder.org.apache.logging.log4j.message.LoggerNameJsonProvider" />
+            </providers>
+        </encoder>
+    </appender>
+
+    <!-- Define the root logger -->
+    <root level="INFO">
+        <appender-ref ref="LOGSTASH" />
+    </root>
+
+</configuration>
