@@ -9,9 +9,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import com.jalennorris.server.dto.UserDTO;
+import com.jalennorris.server.util.JwtUtil;
+
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import com.jalennorris.server.util.JwtUtil;
 
 @Service
 public class UserService {
@@ -26,49 +27,69 @@ public class UserService {
     }
 
     // Helper method to convert UserModels to UserDTO
-    private UserDTO convertToDto(UserModels userModel) {
+    private UserDTO convertToDto(UserModels userModel, String token) {
+        String role = jwtUtil.extractRole(token); // Extract role from token using JwtUtil
         return new UserDTO(
                 userModel.getUserId(),
                 userModel.getFirstname(),
                 userModel.getLastname(),
                 userModel.getEmail(),
-                userModel.getUsername()
+                userModel.getUsername(),
+                role, // Pass extracted role
+                token // Pass token
         );
     }
 
-    // Register a new user (Save user)
+    // Register a new user (Save user and generate token)
     @Async
-    @CacheEvict(value = "users", allEntries = true) // Evict cache when a new user is created
+    @CacheEvict(value = "users", allEntries = true)
     public CompletableFuture<UserDTO> createUser(UserModels user) {
         return CompletableFuture.supplyAsync(() -> {
-            UserModels savedUser = userRepository.save(user);
-            return convertToDto(savedUser); // Convert to DTO before returning
+            try {
+                UserModels savedUser = userRepository.save(user);
+                String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
+                return convertToDto(savedUser, token);
+            } catch (Exception e) {
+                // Log the error
+                System.err.println("Error creating user: " + e.getMessage());
+                throw new RuntimeException("Error creating user: " + e.getMessage(), e);
+            }
         });
     }
 
-    // Get all users
+    // Get all users (Admin access only)
     @Async
-    @Cacheable(value = "users", unless = "#result == null || #result.isEmpty()") // Cache only if result is not empty
-    public CompletableFuture<List<UserDTO>> getAllUsers() {
+    @Cacheable(value = "users", unless = "#result == null || #result.isEmpty()")
+    public CompletableFuture<List<UserDTO>> getAllUsers(String token) {
         return CompletableFuture.supplyAsync(() -> {
+            String username = jwtUtil.extractUsername(token);
+            if (!isAdmin(username)) { // Check if user is admin
+                throw new RuntimeException("Unauthorized access. Admins only.");
+            }
             List<UserModels> users = userRepository.findAll();
-            return users.stream().map(this::convertToDto).toList(); // Convert each user to DTO
+            return users.stream()
+                    .map(user -> convertToDto(user, null)) // No token needed in this context
+                    .toList();
         });
     }
 
-    // Get user by id
+    // Get user by id (Admin or user with token)
     @Async
-    @Cacheable(value = "users", key = "#id", unless = "#result == null") // Cache by user ID
-    public CompletableFuture<UserDTO> getUserById(Long id) {
+    @Cacheable(value = "users", key = "#id", unless = "#result == null")
+    public CompletableFuture<UserDTO> getUserById(Long id, String token) {
         return CompletableFuture.supplyAsync(() -> {
+            String username = jwtUtil.extractUsername(token);
             UserModels user = userRepository.findById(id).orElse(null);
-            return user != null ? convertToDto(user) : null; // Convert to DTO if user exists
+            if (user == null || (!isAdmin(username) && !username.equals(user.getUsername()))) {
+                throw new RuntimeException("Unauthorized access.");
+            }
+            return convertToDto(user, token);
         });
     }
 
     // Update user details
     @Async
-    @CacheEvict(value = "users", key = "#id") // Evict cache for updated user
+    @CacheEvict(value = "users", key = "#id")
     public CompletableFuture<UserDTO> updateUser(Long id, UserModels user, String token) {
         return CompletableFuture.supplyAsync(() -> {
             String usernameFromToken = jwtUtil.extractUsername(token);
@@ -83,20 +104,20 @@ public class UserService {
                 existingUser.setEmail(user.getEmail());
                 existingUser.setPassword(user.getPassword());
                 UserModels updatedUser = userRepository.save(existingUser);
-                return convertToDto(updatedUser); // Convert to DTO before returning
+                return convertToDto(updatedUser, token);
             }
             return null;
         });
     }
 
-    // Delete user by ID
+    // Delete user by ID (Admin or user with token)
     @Async
-    @CacheEvict(value = "users", key = "#id") // Evict cache for deleted user
+    @CacheEvict(value = "users", key = "#id")
     public CompletableFuture<Boolean> deleteUser(long id, String token) {
         return CompletableFuture.supplyAsync(() -> {
             String usernameFromToken = jwtUtil.extractUsername(token);
             UserModels user = userRepository.findById(id).orElse(null);
-            if (user != null && usernameFromToken.equals(user.getUsername())) {
+            if (user != null && (isAdmin(usernameFromToken) || usernameFromToken.equals(user.getUsername()))) {
                 userRepository.deleteById(id);
                 return true;
             } else {
@@ -107,22 +128,27 @@ public class UserService {
 
     // Login: Authenticate and generate JWT token
     @Async
-    @Cacheable(value = "users", key = "#loginRequest.username", unless = "#result == null") // Cache JWT token by username
+    @Cacheable(value = "users", key = "#loginRequest.username", unless = "#result == null")
     public CompletableFuture<String> login(loginModels loginRequest) {
         return CompletableFuture.supplyAsync(() -> {
             UserModels user = userRepository.findByUsername(loginRequest.getUsername())
                     .orElseThrow(() -> new RuntimeException("User not found"));
             if (user.getPassword().equals(loginRequest.getPassword())) {
-                // Generate and return JWT token
-                String token = jwtUtil.generateToken(user.getUsername());
-                return token;
+                return jwtUtil.generateToken(user.getUsername(),user.getRole()); // Generate and return token
             } else {
                 throw new RuntimeException("Incorrect username or password");
             }
         });
     }
 
-    // Method to validate JWT (for use across protected routes)
+    // Check if user is an admin (for access control)
+    private boolean isAdmin(String username) {
+        return userRepository.findByUsername(username)
+                .map(user -> "admin".equalsIgnoreCase(user.getRole()))  // Use role instead of username
+                .orElse(false);
+    }
+
+    // Method to validate JWT
     public boolean isValidJwt(String token) {
         try {
             String username = jwtUtil.extractUsername(token);
@@ -132,13 +158,13 @@ public class UserService {
         }
     }
 
-    // Method to get user info from token (for protected routes)
+    // Method to get user info from token
     public CompletableFuture<UserDTO> getUserFromToken(String token) {
         return CompletableFuture.supplyAsync(() -> {
             String username = jwtUtil.extractUsername(token);
             UserModels user = userRepository.findByUsername(username)
                     .orElseThrow(() -> new RuntimeException("User not found"));
-            return convertToDto(user); // Convert to DTO before returning
+            return convertToDto(user, token);
         });
     }
 }

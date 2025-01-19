@@ -17,13 +17,12 @@ import java.util.concurrent.CompletableFuture;
 public class UserControllers {
 
     private final UserService userService;
-    private final JwtUtil jwtUtil; // Declare JwtUtil
+    private final JwtUtil jwtUtil;
 
-    // Constructor-based injection
     @Autowired
     public UserControllers(UserService userService, JwtUtil jwtUtil) {
         this.userService = userService;
-        this.jwtUtil = jwtUtil; // Initialize JwtUtil
+        this.jwtUtil = jwtUtil;
     }
 
     @GetMapping("/welcome")
@@ -31,22 +30,22 @@ public class UserControllers {
         return "Welcome this endpoint is not secure";
     }
 
-    // Get all users (Protected route)
+    // Get all users (Admin-only protected route)
     @GetMapping
     public CompletableFuture<ResponseEntity<List<UserDTO>>> getUsers(@RequestHeader("Authorization") String token) {
-        if (isValidJwt(token)) {
-            return userService.getAllUsers()
+        if (isAdmin(token)) {
+            return userService.getAllUsers(token) // Pass token to the service
                     .thenApply(users -> ResponseEntity.ok(users)); // Returning DTO list
         } else {
             return CompletableFuture.completedFuture(ResponseEntity.status(403).body(null)); // Forbidden
         }
     }
 
-    // Get a user by ID (Protected route)
+    // Get a user by ID (Protected route for all users)
     @GetMapping("/{id}")
     public CompletableFuture<ResponseEntity<UserDTO>> getUser(@PathVariable("id") long id, @RequestHeader("Authorization") String token) {
         if (isValidJwt(token)) {
-            return userService.getUserById(id)
+            return userService.getUserById(id, token)  // Pass token for user verification
                     .thenApply(user -> user != null ? ResponseEntity.ok(user) : ResponseEntity.notFound().build()); // Returning DTO
         } else {
             return CompletableFuture.completedFuture(ResponseEntity.status(403).build()); // Forbidden
@@ -93,6 +92,16 @@ public class UserControllers {
     private boolean isValidJwt(String token) {
         try {
             return jwtUtil.validateToken(token, jwtUtil.extractUsername(token));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // Helper method to check if the user is an admin
+    private boolean isAdmin(String token) {
+        try {
+            String role = jwtUtil.extractRole(token); // Assuming JWT contains a "role" claim
+            return "admin".equals(role);
         } catch (Exception e) {
             return false;
         }

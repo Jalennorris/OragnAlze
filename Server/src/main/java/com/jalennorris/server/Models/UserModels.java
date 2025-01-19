@@ -33,17 +33,22 @@ public class UserModels {
     @Size(min = 8, message = "Password must be at least 8 characters long")
     private String password;
 
+    @NotNull(message = "Role cannot be null")
+    @Column(name = "role", nullable = false)
+    private String role; // New field for user roles (e.g., ADMIN, USER)
+
     // Default constructor
     public UserModels() {}
 
     // Parameterized constructor
-    public UserModels(long user_id, String firstname, String lastname, String email, String username, String password) {
+    public UserModels(long user_id, String firstname, String lastname, String email, String username, String password, String role) {
         this.user_id = user_id;
         this.firstname = firstname;
         this.lastname = lastname;
         this.email = email;
         this.username = username;
         this.password = password;
+        this.role = role;
     }
 
     // Getters and setters
@@ -52,7 +57,7 @@ public class UserModels {
     }
 
     public void setUserId(long user_id) {
-        this.user_id = user_id; // Corrected assignment to parameter
+        this.user_id = user_id;
     }
 
     public String getFirstname() {
@@ -94,5 +99,12 @@ public class UserModels {
     public void setPassword(String password) {
         this.password = password;
     }
-}
 
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
+    }
+}
