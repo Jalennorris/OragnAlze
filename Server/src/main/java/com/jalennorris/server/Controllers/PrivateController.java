@@ -1,5 +1,6 @@
 package com.jalennorris.server.Controllers;
 
+import com.jalennorris.server.enums.Role;
 import com.jalennorris.server.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -21,8 +22,8 @@ public class PrivateController {
             String token = authorizationHeader.substring(7); // Extract token
             String username = jwtUtil.extractUsername(token);
 
-            if (jwtUtil.validateToken(token, username)) {
-                String role = jwtUtil.extractRole(token);
+            if (jwtUtil.validateToken(token, username, null)) {
+                Role role = jwtUtil.extractRole(token);
                 if ("ADMIN".equals(role)) {
                     // Allow access
                     return ResponseEntity.ok("Welcome, Admin!");

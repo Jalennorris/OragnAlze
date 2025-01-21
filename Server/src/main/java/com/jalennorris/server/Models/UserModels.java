@@ -1,5 +1,6 @@
 package com.jalennorris.server.Models;
 
+import com.jalennorris.server.enums.Role;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 
@@ -34,14 +35,15 @@ public class UserModels {
     private String password;
 
     @NotNull(message = "Role cannot be null")
+    @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)
-    private String role; // New field for user roles (e.g., ADMIN, USER)
+    private Role role; // Enum for user roles (e.g., ADMIN, USER)
 
     // Default constructor
     public UserModels() {}
 
     // Parameterized constructor
-    public UserModels(long user_id, String firstname, String lastname, String email, String username, String password, String role) {
+    public UserModels(long user_id, String firstname, String lastname, String email, String username, String password, Role role) {
         this.user_id = user_id;
         this.firstname = firstname;
         this.lastname = lastname;
@@ -100,11 +102,11 @@ public class UserModels {
         this.password = password;
     }
 
-    public String getRole() {
+    public Role getRole() {
         return role;
     }
 
-    public void setRole(String role) {
+    public void setRole(Role role) {
         this.role = role;
     }
 }

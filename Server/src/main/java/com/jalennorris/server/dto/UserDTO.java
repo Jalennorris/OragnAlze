@@ -1,5 +1,7 @@
 package com.jalennorris.server.dto;
 
+import com.jalennorris.server.enums.Role;
+
 public class UserDTO {
 
     private long userId;
@@ -7,14 +9,14 @@ public class UserDTO {
     private String lastname;
     private String email;
     private String username;
-    private String role; // New field for roles
+    private Role role; // New field for roles
     private String token; // Token for authentication
 
     // Default constructor
     public UserDTO() {}
 
     // Parameterized constructor
-    public UserDTO(long userId, String firstname, String lastname, String email, String username, String role, String token) {
+    public UserDTO(long userId, String firstname, String lastname, String email, String username, Role role, String token) {
         this.userId = userId;
         this.firstname = firstname;
         this.lastname = lastname;
@@ -65,11 +67,11 @@ public class UserDTO {
         this.username = username;
     }
 
-    public String getRole() {
+    public Role getRole() {
         return role;
     }
 
-    public void setRole(String role) {
+    public void setRole(Role role) {
         this.role = role;
     }
 

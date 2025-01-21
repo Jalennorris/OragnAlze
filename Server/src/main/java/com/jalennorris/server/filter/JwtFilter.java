@@ -1,11 +1,12 @@
 package com.jalennorris.server.filter;
 
+import com.jalennorris.server.enums.Role;
 import com.jalennorris.server.util.JwtUtil;
+import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.Filter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -25,39 +26,67 @@ public class JwtFilter implements Filter {
 
         HttpServletRequest request = (HttpServletRequest) servletRequest;
         HttpServletResponse response = (HttpServletResponse) servletResponse;
-        // Allow unauthenticated access to specific endpoints
+
         String requestPath = request.getRequestURI();
-        if ("/api/users".equals(requestPath) && "POST".equalsIgnoreCase(request.getMethod())) {
-            filterChain.doFilter(request, response); // Skip JWT validation for createUser
+        String method = request.getMethod();
+        System.out.println("Request Path: " + requestPath);
+        System.out.println("HTTP Method: " + method);
+
+        // Allow unauthenticated access to specific public endpoints
+        if (("/api/users".equals(requestPath) && "POST".equalsIgnoreCase(method)) ||
+                "/api/users/login".equals(requestPath)) {
+            System.out.println("Public endpoint accessed: " + requestPath);
+            filterChain.doFilter(request, response);
             return;
         }
 
-
+        // Extract the Authorization header
         String authorizationHeader = request.getHeader("Authorization");
+        System.out.println("Authorization Header: " + authorizationHeader);
 
+        // Validate Authorization header presence
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
-            String token = authorizationHeader.substring(7); // Extract the token
-            String username = jwtUtil.extractUsername(token);
+            String token = authorizationHeader.substring(7); // Extract token from header
+            System.out.println("Extracted Token: " + token);
 
-            if (jwtUtil.validateToken(token, username)) {
-                String role = jwtUtil.extractRole(token);
-                if ("ADMIN".equals(role)) {
-                    // Allow access for ADMIN
-                    filterChain.doFilter(request, response);
+            try {
+                // Extract username and validate token
+                String username = jwtUtil.extractUsername(token);
+                System.out.println("Extracted Username: " + username);
+
+                Role role = jwtUtil.extractRole(token); // Extract role from token
+                System.out.println("Extracted Role: " + role);
+
+                // Validate token and role
+                if (username != null && jwtUtil.validateToken(token, username, role)) {
+                    System.out.println("Token validated for user: " + username);
+
+                    // Role-based access control
+                    if (role == Role.ADMIN || role == Role.USER) {
+                        System.out.println("Access granted for role: " + role);
+                        filterChain.doFilter(request, response); // Allow the request to proceed
+                        return;
+                    } else {
+                        System.out.println("Access denied for role: " + role);
+                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        response.getWriter().write("Access Denied: Insufficient Permissions");
+                        return;
+                    }
                 } else {
-                    // Deny access for non-ADMIN roles
-                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                    response.getWriter().write("Access Denied: Insufficient Permissions");
+                    System.out.println("Token validation failed.");
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.getWriter().write("Invalid Token");
                     return;
                 }
-            } else {
-                // Invalid token
+            } catch (Exception e) {
+                System.out.println("Error during token validation: " + e.getMessage());
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.getWriter().write("Invalid Token");
+                response.getWriter().write("Token Processing Error");
                 return;
             }
         } else {
-            // No token provided
+            // Missing or invalid Authorization header
+            System.out.println("Missing or invalid Authorization header.");
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.getWriter().write("Missing Authorization Header");
             return;

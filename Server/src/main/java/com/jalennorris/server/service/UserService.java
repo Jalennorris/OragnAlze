@@ -3,15 +3,20 @@ package com.jalennorris.server.service;
 import com.jalennorris.server.Models.UserModels;
 import com.jalennorris.server.Models.loginModels;
 import com.jalennorris.server.Repository.UserRepository;
+import com.jalennorris.server.enums.Role;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import com.jalennorris.server.dto.UserDTO;
 import com.jalennorris.server.util.JwtUtil;
 
+
+
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 @Service
@@ -26,16 +31,17 @@ public class UserService {
         this.jwtUtil = jwtUtil;
     }
 
+
     // Helper method to convert UserModels to UserDTO
     private UserDTO convertToDto(UserModels userModel, String token) {
-        String role = jwtUtil.extractRole(token); // Extract role from token using JwtUtil
+
         return new UserDTO(
                 userModel.getUserId(),
                 userModel.getFirstname(),
                 userModel.getLastname(),
                 userModel.getEmail(),
                 userModel.getUsername(),
-                role, // Pass extracted role
+                userModel.getRole(), // Pass extracted role
                 token // Pass token
         );
     }
@@ -144,20 +150,22 @@ public class UserService {
     // Check if user is an admin (for access control)
     private boolean isAdmin(String username) {
         return userRepository.findByUsername(username)
-                .map(user -> "admin".equalsIgnoreCase(user.getRole()))  // Use role instead of username
+                .map(user -> Role.ADMIN.equals(user.getRole())) // Compare with enum instead of string
                 .orElse(false);
     }
-
     // Method to validate JWT
     public boolean isValidJwt(String token) {
         try {
             String username = jwtUtil.extractUsername(token);
-            return jwtUtil.validateToken(token, username);
+            if (username == null || !jwtUtil.validateToken(token, username, Role.USER)) { // Add appropriate role check
+                return false;
+            }
+            return true;
         } catch (Exception e) {
+            System.err.println("Error validating JWT: " + e.getMessage()); // Log the exception for debugging
             return false;
         }
     }
-
     // Method to get user info from token
     public CompletableFuture<UserDTO> getUserFromToken(String token) {
         return CompletableFuture.supplyAsync(() -> {
@@ -166,5 +174,41 @@ public class UserService {
                     .orElseThrow(() -> new RuntimeException("User not found"));
             return convertToDto(user, token);
         });
+    }
+
+    public CompletableFuture<UserDTO> createUserIfNotExist(UserModels user) {
+        return CompletableFuture.supplyAsync(() -> {
+            // Check if user already exists
+            if (userRepository.findByUsername(user.getUsername()).isPresent()) {
+                throw new RuntimeException("User with username " + user.getUsername() + " already exists.");
+            }
+
+            try {
+                // Skip password encoding (no hashing of the password)
+                // Save the new user
+                UserModels savedUser = userRepository.save(user);
+                String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
+
+                // Return the DTO for the saved user
+                return convertToDto(savedUser, token);
+            } catch (Exception e) {
+                throw new RuntimeException("Error creating user: " + e.getMessage());
+            }
+        });
+
+    }
+    public boolean createUserIfNotExist(loginModels loginRequest) {
+        Optional<UserModels> existingUser = userRepository.findByUsername(loginRequest.getUsername());
+        if (existingUser.isPresent()) {
+            return false; // User already exists, don't create a new one
+        } else {
+            // Create a new user
+            UserModels newUser = new UserModels();
+            newUser.setUsername(loginRequest.getUsername());
+            newUser.setPassword(loginRequest.getPassword()); // Ensure password is encrypted
+            newUser.setRole(Role.USER); // Assign a default role or any logic as per your requirements
+            userRepository.save(newUser); // Save the user in the repository
+            return true; // New user created successfully
+        }
     }
 }
