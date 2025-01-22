@@ -1,22 +1,35 @@
 package com.jalennorris.server.filter;
 
-import com.jalennorris.server.enums.Role;
 import com.jalennorris.server.util.JwtUtil;
+import com.jalennorris.server.service.CustomUserDetailsService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.logging.Logger;
 
 @Component
 public class JwtFilter implements Filter {
 
+    private static final Logger LOGGER = Logger.getLogger(JwtFilter.class.getName());
+
     @Autowired
     private JwtUtil jwtUtil;
+
+    private final CustomUserDetailsService userDetailsService;
+
+    public JwtFilter(CustomUserDetailsService userDetailsService) {
+        this.userDetailsService = userDetailsService;
+    }
 
     @Override
     public void doFilter(
@@ -27,69 +40,34 @@ public class JwtFilter implements Filter {
         HttpServletRequest request = (HttpServletRequest) servletRequest;
         HttpServletResponse response = (HttpServletResponse) servletResponse;
 
-        String requestPath = request.getRequestURI();
-        String method = request.getMethod();
-        System.out.println("Request Path: " + requestPath);
-        System.out.println("HTTP Method: " + method);
-
-        // Allow unauthenticated access to specific public endpoints
-        if (("/api/users".equals(requestPath) && "POST".equalsIgnoreCase(method)) ||
-                "/api/users/login".equals(requestPath)) {
-            System.out.println("Public endpoint accessed: " + requestPath);
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        // Extract the Authorization header
         String authorizationHeader = request.getHeader("Authorization");
-        System.out.println("Authorization Header: " + authorizationHeader);
+        String token = null;
+        String username = null;
 
-        // Validate Authorization header presence
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
-            String token = authorizationHeader.substring(7); // Extract token from header
-            System.out.println("Extracted Token: " + token);
-
+            token = authorizationHeader.substring(7); // Extract token from header
             try {
-                // Extract username and validate token
-                String username = jwtUtil.extractUsername(token);
-                System.out.println("Extracted Username: " + username);
-
-                Role role = jwtUtil.extractRole(token); // Extract role from token
-                System.out.println("Extracted Role: " + role);
-
-                // Validate token and role
-                if (username != null && jwtUtil.validateToken(token, username, role)) {
-                    System.out.println("Token validated for user: " + username);
-
-                    // Role-based access control
-                    if (role == Role.ADMIN || role == Role.USER) {
-                        System.out.println("Access granted for role: " + role);
-                        filterChain.doFilter(request, response); // Allow the request to proceed
-                        return;
+                username = jwtUtil.extractUsername(token);
+                LOGGER.info("Extracted Username: " + username);
+                if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                    if (jwtUtil.validateToken(token, userDetails.getUsername(), jwtUtil.extractRole(token))) {
+                        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
+                                userDetails, null, userDetails.getAuthorities());
+                        authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+                        LOGGER.info("JWT Token is valid. Setting authentication for user: " + username);
                     } else {
-                        System.out.println("Access denied for role: " + role);
-                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                        response.getWriter().write("Access Denied: Insufficient Permissions");
-                        return;
+                        LOGGER.warning("JWT Token is invalid.");
                     }
-                } else {
-                    System.out.println("Token validation failed.");
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.getWriter().write("Invalid Token");
-                    return;
                 }
             } catch (Exception e) {
-                System.out.println("Error during token validation: " + e.getMessage());
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.getWriter().write("Token Processing Error");
-                return;
+                LOGGER.severe("Token validation error: " + e.getMessage());
             }
         } else {
-            // Missing or invalid Authorization header
-            System.out.println("Missing or invalid Authorization header.");
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.getWriter().write("Missing Authorization Header");
-            return;
+            LOGGER.warning("JWT Token does not begin with Bearer String");
         }
+
+        filterChain.doFilter(request, response);
     }
 }

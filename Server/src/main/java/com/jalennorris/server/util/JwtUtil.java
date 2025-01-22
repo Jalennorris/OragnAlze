@@ -6,118 +6,69 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
-import java.util.Collections;
 import java.util.Date;
 import java.util.logging.Logger;
 
 @Component
-@Configuration
 public class JwtUtil {
 
     private static final Logger LOGGER = Logger.getLogger(JwtUtil.class.getName());
+    private static final String ROLE_PREFIX = "ROLE_";
+    private static final String TOKEN_PREFIX = "Bearer ";
 
-    @Value("${jwt.secret}") // Load from application.properties or application.yml
+    @Value("${jwt.secret}")
     private String secretKey;
+    @Value("${jwt.expiration:3600000}")
+    private long jwtExpirationMs;
 
     private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(secretKey.getBytes());
     }
 
-    // Generate a JWT token for a user
     public String generateToken(String username, Role role) {
-        String prefixedRole = "ROLE_" + role.name(); // Ensure the role has "ROLE_" prefix
+        String prefixedRole = ROLE_PREFIX + role.name();
         LOGGER.info("Generating token for user: " + username + ", Role: " + prefixedRole);
         return Jwts.builder()
                 .setSubject(username)
-                .claim("role", prefixedRole) // Add prefixed role to token claims
+                .claim("role", prefixedRole)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60)) // Token valid for 1 hour
+                .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
-    // Extract role from token
-    public Role extractRole(String token) {
-        try {
-            Claims claims = extractAllClaims(token);
-            String roleString = claims.get("role", String.class);
-            LOGGER.info("Extracted Role: " + roleString);
-            return Role.valueOf(roleString.replace("ROLE_", "")); // Remove prefix and convert to enum
-        } catch (Exception e) {
-            LOGGER.severe("Error extracting role: " + e.getMessage());
-            return null; // Return null if the role cannot be extracted
-        }
-    }
-
-    // Validate if the user has the required role
-    public boolean hasRole(String token, Role requiredRole) {
-        Role role = extractRole(token);
-        if (role == null) {
-            LOGGER.warning("Role is null. Token might be invalid.");
-            return false;
-        }
-        return role == requiredRole;
-    }
-
-    // Validate the token
     public boolean validateToken(String token, String username, Role role) {
-        try {
-            String extractedUsername = extractUsername(token);
-            Role extractedRole = extractRole(token);
-            boolean isValid = extractedUsername != null &&
-                    extractedUsername.equals(username) &&
-                    extractedRole == role &&
-                    !isTokenExpired(token);
-            LOGGER.info("Token validation result: " + isValid);
-            return isValid;
-        } catch (Exception e) {
-            LOGGER.severe("Token validation error: " + e.getMessage());
-            return false;
-        }
+        Claims claims = extractAllClaims(token);
+        String extractedUsername = claims.getSubject();
+        String extractedRole = claims.get("role", String.class);
+        return (username.equals(extractedUsername) && (ROLE_PREFIX + role.name()).equals(extractedRole) && !isTokenExpired(token));
     }
 
-    // Extract username from token
     public String extractUsername(String token) {
-        try {
-            String username = extractAllClaims(token).getSubject();
-            LOGGER.info("Extracted Username: " + username);
-            return username;
-        } catch (Exception e) {
-            LOGGER.severe("Error extracting username: " + e.getMessage());
-            return null;
-        }
+        return extractAllClaims(token).getSubject();
     }
 
-    // Check if the token is expired
+    public Role extractRole(String token) {
+        String roleString = extractAllClaims(token).get("role", String.class);
+        return Role.valueOf(roleString.replace(ROLE_PREFIX, ""));
+    }
+
     private boolean isTokenExpired(String token) {
-        Date expiration = extractExpiration(token);
-        LOGGER.info("Token Expiration: " + expiration);
-        return expiration.before(new Date());
+        return extractExpiration(token).before(new Date());
     }
 
     private Date extractExpiration(String token) {
-        try {
-            return extractAllClaims(token).getExpiration();
-        } catch (Exception e) {
-            LOGGER.severe("Error extracting expiration: " + e.getMessage());
-            return null;
-        }
+        return extractAllClaims(token).getExpiration();
     }
 
     private Claims extractAllClaims(String token) {
-        try {
-            return Jwts.parserBuilder()
-                    .setSigningKey(getSigningKey())
-                    .build()
-                    .parseClaimsJws(token)
-                    .getBody();
-        } catch (Exception e) {
-            LOGGER.severe("Error extracting claims: " + e.getMessage());
-            throw e;
-        }
+        return Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
     }
 }
