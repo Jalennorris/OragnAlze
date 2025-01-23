@@ -1,23 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import moment from 'moment';
 
-type AddTaskScreenProps = {
-  navigation: {
-    goBack: () => void;
-  };
-};
-
-const AddTaskScreen: React.FC<AddTaskScreenProps> = ({ navigation }) => {
+const AddTaskScreen: React.FC = () => {
   const [taskName, setTaskName] = useState<string>('');
   const [taskDescription, setTaskDescription] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
+  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const router = useRouter();
 
-
   const handleSaveTask = () => {
-    
     const newTask = {
       id: Math.random().toString(), // Generate a unique id (for demonstration)
       title: taskName,
@@ -28,49 +23,77 @@ const AddTaskScreen: React.FC<AddTaskScreenProps> = ({ navigation }) => {
     console.log('New task created:', newTask);
 
     // Navigate back to the Home screen after saving the task
-    navigation.goBack();
+    router.back();
+  };
+
+  const showDatePicker = () => {
+    setDatePickerVisibility(true);
+  };
+
+  const hideDatePicker = () => {
+    setDatePickerVisibility(false);
+  };
+
+  const handleConfirm = (date: Date) => {
+    setDueDate(moment(date).format('YYYY-MM-DD'));
+    hideDatePicker();
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Create New Task</Text>
+      {/* Navbar */}
+      <View style={styles.navbar}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <Text style={styles.navbarTitle}>Add Task</Text>
+        <TouchableOpacity onPress={handleSaveTask}>
+          <Ionicons name="checkmark" size={24} color="white" />
+        </TouchableOpacity>
+      </View>
 
-      {/* Back Button */}
-      <TouchableOpacity 
-        style={styles.iconContainer} 
-        onPress={() => router.back()} // Use router.back() to go back
-      >
-        <Ionicons name="arrow-back" size={24} color="black" />
-      </TouchableOpacity>
+      {/* Main Content */}
+      <ScrollView contentContainerStyle={styles.scrollViewContent}>
+        <Text style={styles.title}>Create New Task</Text>
 
-
-      {/* Input Fields */}
-      <TextInput
-        style={styles.input}
-        placeholder="Task Name"
-        value={taskName}
-        onChangeText={setTaskName}
-      />
-      
-      <TextInput
-        style={styles.input}
-        placeholder="Task Description"
-        value={taskDescription}
-        onChangeText={setTaskDescription}
-        multiline
-      />
-      
-      <TextInput
-        style={styles.input}
-        placeholder="Due Date (YYYY-MM-DD)"
-        value={dueDate}
-        onChangeText={setDueDate}
-      />
-
-      {/* Save Button */}
-      <TouchableOpacity style={styles.saveButton} onPress={handleSaveTask}>
-        <Text style={styles.saveButtonText}>Save Task</Text>
-      </TouchableOpacity>
+        <View style={styles.inputContainer}>
+          <Ionicons name="clipboard-outline" size={20} color="white" style={styles.icon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Task Name"
+            placeholderTextColor="#aaa"
+            value={taskName}
+            onChangeText={setTaskName}
+          />
+        </View>
+        
+        <View style={styles.inputContainer}>
+          <Ionicons name="document-text-outline" size={20} color="white" style={styles.icon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Task Description"
+            placeholderTextColor="#aaa"
+            value={taskDescription}
+            onChangeText={setTaskDescription}
+            multiline
+          />
+        </View>
+        
+        <View style={styles.inputContainer}>
+          <Ionicons name="calendar-outline" size={20} color="white" style={styles.icon} />
+          <TouchableOpacity onPress={showDatePicker} style={styles.dateInput}>
+            <Text style={styles.dateText}>
+              {dueDate ? dueDate : 'Select Due Date'}
+            </Text>
+          </TouchableOpacity>
+          <DateTimePickerModal
+            isVisible={isDatePickerVisible}
+            mode="date"
+            onConfirm={handleConfirm}
+            onCancel={hideDatePicker}
+          />
+        </View>
+      </ScrollView>
     </View>
   );
 };
@@ -78,39 +101,57 @@ const AddTaskScreen: React.FC<AddTaskScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#121212',
+  },
+  navbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: '#1e88e5',
+  },
+  navbarTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  scrollViewContent: {
+    flexGrow: 1,
     padding: 20,
-    justifyContent: 'center',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
-    textAlign: 'center',
+    color: 'white',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2c2c2c',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 15,
+  },
+  icon: {
+    marginRight: 10,
   },
   input: {
+    flex: 1,
     height: 40,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    marginBottom: 15,
-    paddingLeft: 8,
-    borderRadius: 5,
-  },
-  iconContainer: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-  },
-  saveButton: {
-    backgroundColor: '#007BFF',
-    paddingVertical: 12,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  saveButtonText: {
     color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
+  },
+  dateInput: {
+    flex: 1,
+    justifyContent: 'center',
+    borderColor: '#444',
+    borderWidth: 1,
+    borderRadius: 5,
+    padding: 8,
+  },
+  dateText: {
+    color: 'white',
   },
 });
 

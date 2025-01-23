@@ -8,7 +8,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
-import jakarta.servlet.Filter;
+import org.springframework.web.filter.OncePerRequestFilter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,37 +18,37 @@ import java.io.IOException;
 import java.util.logging.Logger;
 
 @Component
-public class JwtFilter implements Filter {
+public class JwtFilter extends OncePerRequestFilter {
 
     private static final Logger LOGGER = Logger.getLogger(JwtFilter.class.getName());
 
-    @Autowired
-    private JwtUtil jwtUtil;
-
+    private final JwtUtil jwtUtil;
     private final CustomUserDetailsService userDetailsService;
 
-    public JwtFilter(CustomUserDetailsService userDetailsService) {
+    @Autowired
+    public JwtFilter(JwtUtil jwtUtil, CustomUserDetailsService userDetailsService) {
+        this.jwtUtil = jwtUtil;
         this.userDetailsService = userDetailsService;
     }
 
     @Override
-    public void doFilter(
-            jakarta.servlet.ServletRequest servletRequest,
-            jakarta.servlet.ServletResponse servletResponse,
-            FilterChain filterChain) throws IOException, ServletException {
-
-        HttpServletRequest request = (HttpServletRequest) servletRequest;
-        HttpServletResponse response = (HttpServletResponse) servletResponse;
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
 
         String authorizationHeader = request.getHeader("Authorization");
         String token = null;
         String username = null;
+        String role = null;
 
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             token = authorizationHeader.substring(7); // Extract token from header
             try {
                 username = jwtUtil.extractUsername(token);
+                role = jwtUtil.extractRole(token).name();
                 LOGGER.info("Extracted Username: " + username);
+                LOGGER.info("Extracted Role: " + role);
                 if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                     UserDetails userDetails = userDetailsService.loadUserByUsername(username);
                     if (jwtUtil.validateToken(token, userDetails.getUsername(), jwtUtil.extractRole(token))) {
@@ -57,6 +57,10 @@ public class JwtFilter implements Filter {
                         authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                         SecurityContextHolder.getContext().setAuthentication(authenticationToken);
                         LOGGER.info("JWT Token is valid. Setting authentication for user: " + username);
+
+                        // Log details of the authentication object
+                        LOGGER.info("Authentication details: " + authenticationToken);
+                        LOGGER.info("Authorities: " + authenticationToken.getAuthorities());
                     } else {
                         LOGGER.warning("JWT Token is invalid.");
                     }

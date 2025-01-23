@@ -6,10 +6,10 @@ import com.jalennorris.server.Repository.UserRepository;
 import com.jalennorris.server.enums.Role;
 import com.jalennorris.server.dto.UserDTO;
 import com.jalennorris.server.util.JwtUtil;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.scheduling.annotation.Async;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -51,10 +51,22 @@ public class UserService {
     public CompletableFuture<UserDTO> createUser(UserModels user) {
         return CompletableFuture.supplyAsync(() -> {
             try {
+                // Check if the email already exists
+                if (userRepository.findByEmail(user.getEmail()).isPresent()) {
+                    throw new RuntimeException("Error creating user: Email already exists");
+                }
+
+                // Encode the password
                 String encodedPassword = passwordEncoder.encode(user.getPassword());
                 user.setPassword(encodedPassword);
+
+                // Save the user
                 UserModels savedUser = userRepository.save(user);
+
+                // Generate a token
                 String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
+
+                // Convert to DTO with token
                 return convertToDto(savedUser, token);
             } catch (Exception e) {
                 LOGGER.severe("Error creating user: " + e.getMessage());
@@ -69,9 +81,16 @@ public class UserService {
     public CompletableFuture<List<UserDTO>> getAllUsers(String token) {
         return CompletableFuture.supplyAsync(() -> {
             String username = jwtUtil.extractUsername(token);
+            Role role = jwtUtil.extractRole(token);
+
+            if (!jwtUtil.validateToken(token, username, role)) {
+                throw new RuntimeException("Invalid token");
+            }
+
             if (!isAdmin(username)) {
                 throw new RuntimeException("Unauthorized access. Admins only.");
             }
+
             List<UserModels> users = userRepository.findAll();
             return users.stream()
                     .map(user -> convertToDto(user, null))
@@ -85,10 +104,18 @@ public class UserService {
     public CompletableFuture<UserDTO> getUserById(Long id, String token) {
         return CompletableFuture.supplyAsync(() -> {
             String username = jwtUtil.extractUsername(token);
+            Role role = jwtUtil.extractRole(token);
+
+            if (!jwtUtil.validateToken(token, username, role)) {
+                throw new RuntimeException("Invalid token");
+            }
+
             UserModels user = userRepository.findById(id).orElse(null);
+
             if (user == null || (!isAdmin(username) && !username.equals(user.getUsername()))) {
                 throw new RuntimeException("Unauthorized access.");
             }
+
             return convertToDto(user, token);
         });
     }
@@ -99,6 +126,12 @@ public class UserService {
     public CompletableFuture<UserDTO> updateUser(Long id, UserModels user, String token) {
         return CompletableFuture.supplyAsync(() -> {
             String usernameFromToken = jwtUtil.extractUsername(token);
+            Role role = jwtUtil.extractRole(token);
+
+            if (!jwtUtil.validateToken(token, usernameFromToken, role)) {
+                throw new RuntimeException("Invalid token");
+            }
+
             if (!user.getUsername().equals(usernameFromToken) && !isAdmin(usernameFromToken)) {
                 throw new RuntimeException("Unauthorized to update this user.");
             }
@@ -122,6 +155,12 @@ public class UserService {
     public CompletableFuture<Boolean> deleteUser(long id, String token) {
         return CompletableFuture.supplyAsync(() -> {
             String usernameFromToken = jwtUtil.extractUsername(token);
+            Role role = jwtUtil.extractRole(token);
+
+            if (!jwtUtil.validateToken(token, usernameFromToken, role)) {
+                throw new RuntimeException("Invalid token");
+            }
+
             UserModels user = userRepository.findById(id).orElse(null);
             if (user != null && (isAdmin(usernameFromToken) || usernameFromToken.equals(user.getUsername()))) {
                 userRepository.deleteById(id);
@@ -143,8 +182,6 @@ public class UserService {
             if (passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
                 String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
                 LOGGER.info("Login successful for user: " + user.getUsername());
-                LOGGER.info("User role: " + user.getRole());
-                LOGGER.info("Generated token: " + token);
                 return token;
             } else {
                 LOGGER.warning("Login failed: Incorrect password for user " + loginRequest.getUsername());
@@ -164,7 +201,8 @@ public class UserService {
     public boolean isValidJwt(String token) {
         try {
             String username = jwtUtil.extractUsername(token);
-            return username != null && jwtUtil.validateToken(token, username, jwtUtil.extractRole(token));
+            Role role = jwtUtil.extractRole(token);
+            return jwtUtil.validateToken(token, username, role);
         } catch (Exception e) {
             LOGGER.severe("Error validating JWT: " + e.getMessage());
             return false;
