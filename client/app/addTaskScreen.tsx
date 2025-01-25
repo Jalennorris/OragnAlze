@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import moment from 'moment';
+import Header  from '../components/header';
+
 
 const AddTaskScreen: React.FC = () => {
   const [taskName, setTaskName] = useState<string>('');
@@ -41,6 +43,7 @@ const AddTaskScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      <Header/>
       {/* Navbar */}
       <View style={styles.navbar}>
         <TouchableOpacity onPress={() => router.back()}>
@@ -101,7 +104,7 @@ const AddTaskScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: 'white',
   },
   navbar: {
     flexDirection: 'row',

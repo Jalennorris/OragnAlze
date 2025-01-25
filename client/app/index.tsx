@@ -3,6 +3,10 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-nati
 import TaskItem from '../components/taskItem';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Header from '../components/header'
+import Greeting from '@/components/Greeting';
+import NavBar from '@/components/Navbar';
+
 
 // Define types for the task structure
 interface Task {
@@ -23,7 +27,9 @@ const HomeScreen: React.FC = () => {
     { id: '3', title: 'Task 3', description: 'Task 3 description', dueDate: '2025-01-22', completed: false, priority: 'low' },
     { id: '4', title: 'Task 4', description: 'Task 4 description', dueDate: '2025-01-23', completed: false, priority: 'medium' },
     { id: '5', title: 'Task 5', description: 'Task 5 description', dueDate: '2025-01-24', completed: false, priority: 'high' },
+    { id: '5', title: 'Task 5', description: 'Task 5 description', dueDate: '2025-01-24', completed: false, priority: 'high' },
     { id: '6', title: 'Task 6', description: 'Task 6 description', dueDate: '2025-01-25', completed: false, priority: 'low' },
+    { id: '17', title: 'Task 17', description: 'Task 6 description', dueDate: '2025-01-25', completed: false, priority: 'low' },
     { id: '7', title: 'Task 7', description: 'Task 7 description', dueDate: '2025-01-26', completed: false, priority: 'medium' },
     { id: '8', title: 'Task 8', description: 'Task 8 description', dueDate: '2025-02-02', completed: false, priority: 'high' },
     { id: '9', title: 'Task 9', description: 'Task 9 description', dueDate: '2025-02-10', completed: false, priority: 'low' },
@@ -89,7 +95,10 @@ const HomeScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Your Tasks</Text>
+      <Header/>
+      <Greeting/>
+    <View style={styles.taskcontainer}>
+     
       <ScrollView>
         {currentWeekTasks.map(task => (
           <View key={task.dueDate} style={styles.dateSection}>
@@ -122,7 +131,9 @@ const HomeScreen: React.FC = () => {
           ))}
         </View>
       </ScrollView>
+
       <BottomNavBar />
+    </View>
     </View>
   );
 };
@@ -137,16 +148,16 @@ const BottomNavBar: React.FC = () => {
   return (
     <View style={styles.navBar}>
       <TouchableOpacity onPress={() => handleNavigate('/')} style={styles.navItem}>
-        <Ionicons name="home-outline" size={24} color="black" />
-        <Text style={styles.navText}>Home</Text>
+        <Ionicons name="home-outline" size={30} color="black" />
+      
       </TouchableOpacity>
       <TouchableOpacity onPress={() => handleNavigate('/addTaskScreen')} style={styles.navItem}>
-        <Ionicons name="add-circle-outline" size={24} color="black" />
-        <Text style={styles.navText}>Add Task</Text>
+        <Ionicons name="add-circle-outline" size={30} color="black" />
+    
       </TouchableOpacity>
       <TouchableOpacity onPress={() => handleNavigate('/calendarScreen')} style={styles.navItem}>
-        <Ionicons name="calendar-outline" size={24} color="black" />
-        <Text style={styles.navText}>Calendar</Text>
+        <Ionicons name="calendar-outline" size={30} color="black" />
+       
       </TouchableOpacity>
     </View>
   );
@@ -155,9 +166,13 @@ const BottomNavBar: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'white',
+  },
+  taskcontainer: {
+    flex: 1,
     padding: 20,
     paddingBottom: 80, // Ensure space for the navbar
-    backgroundColor: '#f8f8f8',
+    backgroundColor: 'white',
   },
   title: {
     fontSize: 24,
@@ -170,10 +185,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   dateText: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: 'bold',
+    color: 'black',
+
     marginBottom: 10,
-    color: '#007bff',
+    
   },
   todayText: {
     color: '#f44336', // Red color for "Today"
@@ -184,7 +201,7 @@ const styles = StyleSheet.create({
   futureHeader: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#007bff',
+    color: 'black',
     textAlign: 'center',
     marginBottom: 10,
   },
@@ -209,6 +226,7 @@ const styles = StyleSheet.create({
   navItem: {
     alignItems: 'center',
     padding: 10,
+  
   },
   navText: {
     fontSize: 14,
