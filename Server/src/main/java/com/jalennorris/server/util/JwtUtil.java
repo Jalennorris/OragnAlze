@@ -1,4 +1,5 @@
 package com.jalennorris.server.util;
+
 import com.jalennorris.server.enums.Role;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;

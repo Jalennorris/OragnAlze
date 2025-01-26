@@ -4,6 +4,8 @@ import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Modal from 'react-native-modal';
+import Header from '@/components/header';
+import NavBar from '@/components/Navbar';
 
 // Define types for the task structure
 interface Task {
@@ -44,6 +46,8 @@ const CalendarScreen: React.FC = () => {
     { id: '6', title: 'Task 6', description: 'Task 6 description', dueDate: '2025-01-25', completed: false, priority: 'low' },
     { id: '7', title: 'Task 7', description: 'Task 7 description', dueDate: '2025-01-26', completed: false, priority: 'medium' },
     { id: '8', title: 'Task 8', description: 'Task 8 description', dueDate: '2025-02-02', completed: false, priority: 'high' },
+    { id: '9', title: 'Eating ', description: 'Task 8 description', dueDate: '2025-01-31', completed: false, priority: 'high' },
+    { id: '9', title: 'Eating ', description: 'Task 8 description', dueDate: '2025-01-31', completed: false, priority: 'high' },
     // Add more tasks as needed
   ]);
 
@@ -99,13 +103,10 @@ const CalendarScreen: React.FC = () => {
   );
 
   return (
+
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/')} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerText}>Calendar</Text>
-      </View>
+      <Header/>
+     
       <View style={styles.calendarContainer}>
         <Calendar
           markedDates={markedDates}
@@ -146,6 +147,7 @@ const CalendarScreen: React.FC = () => {
           <Button title="Close" onPress={() => setModalVisible(false)} />
         </View>
       </Modal>
+      <NavBar/>
     </View>
   );
 };
@@ -153,7 +155,7 @@ const CalendarScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: 'white',
   },
   header: {
     flexDirection: 'row',

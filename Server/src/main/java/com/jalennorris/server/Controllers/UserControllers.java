@@ -48,8 +48,9 @@ public class UserControllers {
 
     // Private endpoint
     @GetMapping
-    public CompletableFuture<ResponseEntity<List<UserDTO>>> getUsers(@RequestHeader("Authorization") String token) {
-        log.info("Fetching all users with token: " + token);
+    public CompletableFuture<ResponseEntity<List<UserDTO>>> getUsers() {
+        String token = extractToken();
+        log.info("Fetching all users");
 
         // Log security context details
         log.info("SecurityContext Authentication: " + SecurityContextHolder.getContext().getAuthentication());
@@ -64,20 +65,27 @@ public class UserControllers {
     }
 
     @GetMapping("/{id}")
-    public CompletableFuture<ResponseEntity<UserDTO>> getUser(@PathVariable("id") long id, @RequestHeader("Authorization") String token) {
+    public CompletableFuture<ResponseEntity<UserDTO>> getUser(@PathVariable("id") long id) {
+        String token = extractToken();
         return userService.getUserById(id, token)
                 .thenApply(user -> user != null ? ResponseEntity.ok(user) : ResponseEntity.notFound().build());
     }
 
     @PutMapping("/{id}")
-    public CompletableFuture<ResponseEntity<UserDTO>> updateUser(@PathVariable long id, @RequestBody UserModels updatedUser, @RequestHeader("Authorization") String token) {
+    public CompletableFuture<ResponseEntity<UserDTO>> updateUser(@PathVariable long id, @RequestBody UserModels updatedUser) {
+        String token = extractToken();
         return userService.updateUser(id, updatedUser, token)
                 .thenApply(updated -> updated != null ? ResponseEntity.ok(updated) : ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{id}")
-    public CompletableFuture<ResponseEntity<Void>> deleteUser(@PathVariable long id, @RequestHeader("Authorization") String token) {
+    public CompletableFuture<ResponseEntity<Void>> deleteUser(@PathVariable long id) {
+        String token = extractToken();
         return userService.deleteUser(id, token)
                 .thenApply(isDeleted -> isDeleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build());
+    }
+
+    private String extractToken() {
+        return ((UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal()).getUsername();
     }
 }

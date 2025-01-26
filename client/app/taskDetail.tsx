@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons'; // Make sure to install @expo/vector-icons
+import Header from '@/components/header';
+import NavBar from '@/components/Navbar';
 
 // Define types for the task structure
 interface Task {
@@ -38,6 +40,8 @@ const TaskDetail: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      <Header/>
+      <View style={styles.taskContainer}>
       <View style={styles.card}>
         <Text style={styles.title}>{task.title}</Text>
         <Text style={styles.description}>{task.description}</Text>
@@ -54,16 +58,23 @@ const TaskDetail: React.FC = () => {
           <Text style={styles.completed}>Completed: {task.completed ? 'Yes' : 'No'}</Text>
         </View>
       </View>
+      </View>
+      <NavBar />
     </View>
   );
 };
 
 
 const styles = StyleSheet.create({
+
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#f0f0f0',
+  },
+  taskContainer: {
+   
+    padding: 20,
+
   },
   card: {
     backgroundColor: '#fff',

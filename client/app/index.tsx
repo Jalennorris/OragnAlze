@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import TaskItem from '../components/taskItem';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Header from '../components/header'
+import Header from '../components/header';
 import Greeting from '@/components/Greeting';
 import NavBar from '@/components/Navbar';
-
+import tasksData from '../data/tasks.json';
 
 // Define types for the task structure
 interface Task {
@@ -21,28 +21,35 @@ interface Task {
 const HomeScreen: React.FC = () => {
   const router = useRouter();
   const [showFutureTasks, setShowFutureTasks] = useState(false);
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: '1', title: 'Task 1', description: 'Task 1 description', dueDate: '2025-01-20', completed: false, priority: 'medium' },
-    { id: '2', title: 'Task 2', description: 'Task 2 description', dueDate: '2025-01-21', completed: false, priority: 'high' },
-    { id: '3', title: 'Task 3', description: 'Task 3 description', dueDate: '2025-01-22', completed: false, priority: 'low' },
-    { id: '4', title: 'Task 4', description: 'Task 4 description', dueDate: '2025-01-23', completed: false, priority: 'medium' },
-    { id: '5', title: 'Task 5', description: 'Task 5 description', dueDate: '2025-01-24', completed: false, priority: 'high' },
-    { id: '5', title: 'Task 5', description: 'Task 5 description', dueDate: '2025-01-24', completed: false, priority: 'high' },
-    { id: '6', title: 'Task 6', description: 'Task 6 description', dueDate: '2025-01-25', completed: false, priority: 'low' },
-    { id: '17', title: 'Task 17', description: 'Task 6 description', dueDate: '2025-01-25', completed: false, priority: 'low' },
-    { id: '7', title: 'Task 7', description: 'Task 7 description', dueDate: '2025-01-26', completed: false, priority: 'medium' },
-    { id: '8', title: 'Task 8', description: 'Task 8 description', dueDate: '2025-02-02', completed: false, priority: 'high' },
-    { id: '9', title: 'Task 9', description: 'Task 9 description', dueDate: '2025-02-10', completed: false, priority: 'low' },
-    { id: '10', title: 'Task 10', description: 'Task 10 description', dueDate: '2025-02-15', completed: false, priority: 'medium' },
-    { id: '11', title: 'Task 11', description: 'Task 11 description', dueDate: '2025-02-20', completed: false, priority: 'high' },
-    { id: '12', title: 'Task 12', description: 'Task 12 description', dueDate: '2025-03-01', completed: false, priority: 'low' },
-    { id: '13', title: 'Task 13', description: 'Task 13 description', dueDate: '2025-03-05', completed: false, priority: 'medium' },
-    { id: '14', title: 'Task 14', description: 'Task 14 description', dueDate: '2025-03-10', completed: false, priority: 'high' },
-    { id: '15', title: 'Task 15', description: 'Task 15 description', dueDate: '2025-03-15', completed: false, priority: 'low' },
-  ]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const[error, setError] = useState("");
+  const[loading, setLoading] = useState(true);
+
+
+  useEffect(() => {
+    if (tasksData && Array.isArray(tasksData.tasks)) {
+      setTasks(tasksData.tasks);
+    } else {
+      setLoading(false);
+      setError('Failed to load tasks data');
+      console.error('tasksData is not properly formatted', tasksData);
+    }
+  }, []);
 
   const today = new Date();
+  console.log('Today:', today);
   const todayString = today.toISOString().split('T')[0];
+  console.log('TodayString:', todayString);
+
+  // Calculate the start and end of the current week (Monday to Sunday)
+  const startOfWeek = new Date();
+  
+  console.log('Start of the week:', startOfWeek);
+ startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+  
+  const endOfWeek = new Date(startOfWeek);
+  
+  endOfWeek.setDate(endOfWeek.getDate() + 6);
 
   const handleTaskPress = (taskId: string): void => {
     router.push(`/taskDetail?taskId=${taskId}`);
@@ -90,75 +97,74 @@ const HomeScreen: React.FC = () => {
   };
 
   // Filter tasks for the current week and future
-  const currentWeekTasks = tasks.filter(task => new Date(task.dueDate) >= today && new Date(task.dueDate) <= new Date('2025-01-26'));
-  const futureTasks = tasks.filter(task => new Date(task.dueDate) > new Date('2025-01-26'));
+  const currentWeekTasks = tasks.filter(task => {
+    const taskDate = new Date(task.dueDate);
+    return taskDate >= startOfWeek && taskDate <= endOfWeek;
+  }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+  const futureTasks = tasks.filter(task => new Date(task.dueDate) > endOfWeek);
+
+  const todayTasks = tasks.filter(task => task.dueDate === todayString);
 
   return (
     <View style={styles.container}>
-      <Header/>
-      <Greeting/>
-    <View style={styles.taskcontainer}>
-     
-      <ScrollView>
-        {currentWeekTasks.map(task => (
-          <View key={task.dueDate} style={styles.dateSection}>
-            <Text style={[styles.dateText, task.dueDate === todayString && styles.todayText]}>
-              {task.dueDate === todayString ? 'Today' : getDayName(task.dueDate)}
-            </Text>
-            <TaskItem
-              key={task.id}
-              task={task}
-              onPress={() => handleTaskPress(task.id)}
-              onToggleCompletion={() => toggleTaskCompletion(task.id)}
-              priorityColor={getPriorityColor(task.priority)}
-            />
-          </View>
-        ))}
-        <View style={styles.futureSection}>
-          <TouchableOpacity onPress={() => setShowFutureTasks(!showFutureTasks)}>
-            <Text style={styles.futureHeader}>
-              Future Tasks {showFutureTasks ? <Ionicons name="chevron-up" size={18} color="black" /> : <Ionicons name="chevron-down" size={18} color="black" />}
-            </Text>
-          </TouchableOpacity>
-          {showFutureTasks && futureTasks.map(task => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              onPress={() => handleTaskPress(task.id)}
-              onToggleCompletion={() => toggleTaskCompletion(task.id)}
-              priorityColor={getPriorityColor(task.priority)}
-            />
+      <Header />
+      <Greeting />
+      <View style={styles.taskcontainer}>
+        <ScrollView>
+        
+           {/* Display today's tasks at the top */}
+          {todayTasks.length > 0 ?  (
+            <View style={styles.dateSection}>
+              <Text style={[styles.dateText, styles.todayText]}>Today</Text>
+              {todayTasks.map(task => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  onPress={() => handleTaskPress(task.id)}
+                  onToggleCompletion={() => toggleTaskCompletion(task.id)}
+                  priorityColor={getPriorityColor(task.priority)}
+                />
+              ))}
+            </View>
+          ) : <Text>No tasks for today</Text>}
+
+          {currentWeekTasks.map(task => (
+            <View key={task.dueDate} style={styles.dateSection}>
+              <Text style={[styles.dateText, task.dueDate === todayString && styles.todayText]}>
+                {task.dueDate === todayString ? 'Today' : getDayName(task.dueDate)}
+              </Text>
+              <TaskItem
+                key={task.id}
+                task={task}
+                onPress={() => handleTaskPress(task.id)}
+                onToggleCompletion={() => toggleTaskCompletion(task.id)}
+                priorityColor={getPriorityColor(task.priority)}
+              />
+            </View>
           ))}
-        </View>
-      </ScrollView>
 
-      <BottomNavBar />
-    </View>
-    </View>
-  );
-};
+          
 
-const BottomNavBar: React.FC = () => {
-  const router = useRouter();
-
-  const handleNavigate = (screen: string) => {
-    router.push(screen);
-  };
-
-  return (
-    <View style={styles.navBar}>
-      <TouchableOpacity onPress={() => handleNavigate('/')} style={styles.navItem}>
-        <Ionicons name="home-outline" size={30} color="black" />
-      
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => handleNavigate('/addTaskScreen')} style={styles.navItem}>
-        <Ionicons name="add-circle-outline" size={30} color="black" />
-    
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => handleNavigate('/calendarScreen')} style={styles.navItem}>
-        <Ionicons name="calendar-outline" size={30} color="black" />
-       
-      </TouchableOpacity>
+          <View style={styles.futureSection}>
+            <TouchableOpacity onPress={() => setShowFutureTasks(!showFutureTasks)}>
+              <Text style={styles.futureHeader}>
+                Future Tasks {showFutureTasks ? <Ionicons name="chevron-up" size={18} color="black" /> : <Ionicons name="chevron-down" size={18} color="black" />}
+              </Text>
+            </TouchableOpacity>
+            {showFutureTasks && futureTasks.map(task => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                onPress={() => handleTaskPress(task.id)}
+                onToggleCompletion={() => toggleTaskCompletion(task.id)}
+                priorityColor={getPriorityColor(task.priority)}
+              />
+            ))}
+          </View>
+        </ScrollView>
+        <NavBar />
+      </View>
     </View>
   );
 };
@@ -188,9 +194,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: 'black',
-
     marginBottom: 10,
-    
   },
   todayText: {
     color: '#f44336', // Red color for "Today"
@@ -204,34 +208,6 @@ const styles = StyleSheet.create({
     color: 'black',
     textAlign: 'center',
     marginBottom: 10,
-  },
-  navBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    height: 70,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3, // For Android shadow effect
-  },
-  navItem: {
-    alignItems: 'center',
-    padding: 10,
-  
-  },
-  navText: {
-    fontSize: 14,
-    color: 'black',
-    marginTop: 4,
   },
 });
 

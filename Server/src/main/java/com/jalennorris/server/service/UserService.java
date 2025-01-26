@@ -1,5 +1,4 @@
 package com.jalennorris.server.service;
-
 import com.jalennorris.server.Models.UserModels;
 import com.jalennorris.server.Models.loginModels;
 import com.jalennorris.server.Repository.UserRepository;
@@ -17,12 +16,16 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
+
+
 @Service
 public class UserService {
 
     private static final Logger LOGGER = Logger.getLogger(UserService.class.getName());
 
+
     private final UserRepository userRepository;
+
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
 
@@ -93,7 +96,7 @@ public class UserService {
 
             List<UserModels> users = userRepository.findAll();
             return users.stream()
-                    .map(user -> convertToDto(user, null))
+                    .map(user -> convertToDto(user, token))
                     .toList();
         });
     }
@@ -116,7 +119,7 @@ public class UserService {
                 throw new RuntimeException("Unauthorized access.");
             }
 
-            return convertToDto(user, token);
+            return convertToDto(user, null);
         });
     }
 
@@ -137,7 +140,8 @@ public class UserService {
             }
 
             UserModels existingUser = userRepository.findById(id).orElse(null);
-            if (existingUser != null) {
+            if(existingUser != null) {
+
                 existingUser.setFirstname(user.getFirstname());
                 existingUser.setLastname(user.getLastname());
                 existingUser.setEmail(user.getEmail());
@@ -148,6 +152,8 @@ public class UserService {
             return null;
         });
     }
+
+
 
     // Delete user by ID (Admin or user with token)
     @Async
