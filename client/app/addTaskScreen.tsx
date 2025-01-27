@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Picker } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import moment from 'moment';
 import Header from '../components/header';
 import Navbar from '../components/Navbar';
+import * as Haptics from 'expo-haptics';
 
 const AddTaskScreen: React.FC = () => {
   const [taskName, setTaskName] = useState<string>('');
@@ -14,10 +15,12 @@ const AddTaskScreen: React.FC = () => {
   const [priority, setPriority] = useState<string>('low');
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const router = useRouter();
+  const buttonScale = new Animated.Value(1); // For button press animation
 
   const handleSaveTask = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); // Haptic feedback
     const newTask = {
-      id: Math.random().toString(), 
+      id: Math.random().toString(),
       title: taskName,
       description: taskDescription,
       dueDate: dueDate,
@@ -49,8 +52,23 @@ const AddTaskScreen: React.FC = () => {
     high: '#F44336',
   };
 
-  const handleColorPicker = (priority: string) => {
-    setPriority(priority);
+  const handlePriorityPress = (selectedPriority: string) => {
+    setPriority(selectedPriority);
+  };
+
+  const animateButtonPress = () => {
+    Animated.sequence([
+      Animated.timing(buttonScale, {
+        toValue: 0.95,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonScale, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   return (
@@ -59,8 +77,9 @@ const AddTaskScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollViewContent}>
         <Text style={styles.title}>Create New Task</Text>
 
+        {/* Task Name Input */}
         <View style={styles.inputContainer}>
-          <Ionicons name="clipboard-outline" size={20} color="black" style={styles.icon} />
+          <Ionicons name="clipboard-outline" size={24} color="#6a11cb" style={styles.icon} />
           <TextInput
             style={styles.input}
             placeholder="Task Name"
@@ -70,10 +89,11 @@ const AddTaskScreen: React.FC = () => {
           />
         </View>
 
+        {/* Task Description Input */}
         <View style={styles.inputContainer}>
-          <Ionicons name="document-text-outline" size={20} color="black" style={styles.icon} />
+          <Ionicons name="document-text-outline" size={24} color="#6a11cb" style={styles.icon} />
           <TextInput
-            style={styles.input}
+            style={[styles.input, { height: 100 }]}
             placeholder="Task Description"
             placeholderTextColor="#aaa"
             value={taskDescription}
@@ -82,8 +102,9 @@ const AddTaskScreen: React.FC = () => {
           />
         </View>
 
+        {/* Due Date Picker */}
         <View style={styles.inputContainer}>
-          <Ionicons name="calendar-outline" size={20} color="black" style={styles.icon} />
+          <Ionicons name="calendar-outline" size={24} color="#6a11cb" style={styles.icon} />
           <TouchableOpacity onPress={showDatePicker} style={styles.dateInput}>
             <Text style={styles.dateText}>
               {dueDate ? dueDate : 'Select Due Date'}
@@ -97,21 +118,36 @@ const AddTaskScreen: React.FC = () => {
           />
         </View>
 
-        <View style={styles.inputContainer}>
-          <Ionicons name="alert-outline" size={20} color="black" style={styles.icon} />
-          <Picker
-            selectedValue={priority}
-            style={styles.picker}
-            onValueChange={(itemValue) => handleColorPicker(itemValue)}
-          >
-            <Picker.Item label="Low" value="low" />
-            <Picker.Item label="Medium" value="medium" />
-            <Picker.Item label="High" value="high" />
-          </Picker>
+        {/* Priority Selector */}
+        <View style={styles.priorityContainer}>
+          <Text style={styles.priorityLabel}>Priority:</Text>
+          <View style={styles.priorityButtons}>
+            {Object.entries(priorityColors).map(([key, color]) => (
+              <TouchableOpacity
+                key={key}
+                style={[
+                  styles.priorityButton,
+                  { backgroundColor: color, opacity: priority === key ? 1 : 0.3 },
+                ]}
+                onPress={() => handlePriorityPress(key)}
+              >
+                <Text style={styles.priorityButtonText}>{key.toUpperCase()}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
-        <TouchableOpacity onPress={handleSaveTask} style={styles.saveButton}>
-          <Text style={styles.saveButtonText}>Save Task</Text>
+        {/* Save Task Button */}
+        <TouchableOpacity
+          onPress={() => {
+            animateButtonPress();
+            handleSaveTask();
+          }}
+          style={styles.saveButton}
+        >
+          <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+            <Text style={styles.saveButtonText}>Save Task</Text>
+          </Animated.View>
         </TouchableOpacity>
       </ScrollView>
       <Navbar />
@@ -122,67 +158,90 @@ const AddTaskScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#f8f9fa',
   },
   scrollViewContent: {
     flexGrow: 1,
     padding: 20,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     marginBottom: 20,
-    color: 'black',
+    color: '#333',
+    textAlign: 'center',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 15,
-    borderWidth: 2,
-    borderColor: 'black',
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   icon: {
     marginRight: 10,
-    color: 'black',
   },
   input: {
     flex: 1,
-    height: 40,
-    color: 'black',
-    borderColor: 'gray',
-    borderWidth: 1,
-    borderRadius: 5,
-    padding: 8,
+    color: '#333',
+    fontSize: 16,
   },
   dateInput: {
     flex: 1,
     justifyContent: 'center',
-    borderColor: 'gray',
-    borderWidth: 1,
-    borderRadius: 5,
-    padding: 8,
   },
   dateText: {
-    color: 'black',
+    color: '#333',
+    fontSize: 16,
   },
-  picker: {
+  priorityContainer: {
+    marginBottom: 20,
+  },
+  priorityLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 10,
+  },
+  priorityButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  priorityButton: {
     flex: 1,
-    color: 'black',
-  },
-  saveButton: {
-    backgroundColor: 'blue',
     padding: 15,
     borderRadius: 10,
+    marginHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  priorityButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  saveButton: {
+    backgroundColor: '#6a11cb',
+    padding: 15,
+    borderRadius: 15,
     alignItems: 'center',
     marginTop: 20,
+    shadowColor: '#6a11cb',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
   },
   saveButtonText: {
-    color: 'white',
+    color: '#fff',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 18,
   },
 });
 

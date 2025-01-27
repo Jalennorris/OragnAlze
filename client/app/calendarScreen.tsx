@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Button } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Animated } from 'react-native';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Modal from 'react-native-modal';
 import Header from '@/components/header';
 import NavBar from '@/components/Navbar';
+import * as Haptics from 'expo-haptics';
 
 // Define types for the task structure
 interface Task {
@@ -46,96 +47,97 @@ const CalendarScreen: React.FC = () => {
     { id: '6', title: 'Task 6', description: 'Task 6 description', dueDate: '2025-01-25', completed: false, priority: 'low' },
     { id: '7', title: 'Task 7', description: 'Task 7 description', dueDate: '2025-01-26', completed: false, priority: 'medium' },
     { id: '8', title: 'Task 8', description: 'Task 8 description', dueDate: '2025-02-02', completed: false, priority: 'high' },
-    { id: '9', title: 'Eating ', description: 'Task 8 description', dueDate: '2025-01-31', completed: false, priority: 'high' },
-    { id: '9', title: 'Eating ', description: 'Task 8 description', dueDate: '2025-01-31', completed: false, priority: 'high' },
-    // Add more tasks as needed
+    { id: '9', title: 'Eating', description: 'Task 8 description', dueDate: '2025-01-31', completed: false, priority: 'high' },
   ]);
 
   const [markedDates, setMarkedDates] = useState<{ [key: string]: { dots: { key: string, color: string }[], marked: boolean } }>({});
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isModalVisible, setModalVisible] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in animation
 
   useEffect(() => {
     const datesWithTasks: { [key: string]: { dots: { key: string, color: string }[], marked: boolean } } = {};
 
     tasks.forEach(task => {
       if (datesWithTasks[task.dueDate]) {
-        datesWithTasks[task.dueDate].dots.push({ key: task.id, color: 'blue' });
+        datesWithTasks[task.dueDate].dots.push({ key: task.id, color: getPriorityColor(task.priority) });
       } else {
         datesWithTasks[task.dueDate] = {
           marked: true,
-          dots: [{ key: task.id, color: 'blue' }],
+          dots: [{ key: task.id, color: getPriorityColor(task.priority) }],
         };
       }
     });
 
     setMarkedDates(datesWithTasks);
+
+    // Fade-in animation
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+    }).start();
   }, [tasks]);
 
-  const renderDay = (day: any) => {
-    const dateStr = day.dateString;
-    const tasksForDay = tasks.filter(task => task.dueDate === dateStr);
-
-    return (
-      <TouchableOpacity onPress={() => handleDayPress(dateStr)}>
-        <View style={styles.dayContainer}>
-          <Text style={styles.dayText}>{day.day}</Text>
-          {tasksForDay.map(task => (
-            <View key={task.id} style={styles.taskBlock}>
-              <Text style={styles.taskText}>{task.title}</Text>
-            </View>
-          ))}
-        </View>
-      </TouchableOpacity>
-    );
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'low':
+        return '#8BC34A'; // Green
+      case 'medium':
+        return '#FFC107'; // Yellow
+      case 'high':
+        return '#F44336'; // Red
+      default:
+        return '#00adf5'; // Blue
+    }
   };
 
   const handleDayPress = (date: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // Haptic feedback
     setSelectedDate(date);
     setModalVisible(true);
   };
 
   const renderTaskItem = ({ item }: { item: Task }) => (
-    <View style={styles.taskItem}>
+    <View style={[styles.taskItem, { borderLeftColor: getPriorityColor(item.priority) }]}>
       <Text style={styles.taskTitle}>{item.title}</Text>
-      <Text>{item.description}</Text>
+      <Text style={styles.taskDescription}>{item.description}</Text>
+      <Text style={styles.taskDueDate}>Due: {item.dueDate}</Text>
     </View>
   );
 
   return (
-
     <View style={styles.container}>
-      <Header/>
-     
-      <View style={styles.calendarContainer}>
+      <Header />
+      <Animated.View style={[styles.calendarContainer, { opacity: fadeAnim }]}>
         <Calendar
           markedDates={markedDates}
           markingType={'multi-dot'}
-          dayComponent={({ date }) => renderDay(date)}
+          onDayPress={(day) => handleDayPress(day.dateString)}
           theme={{
             backgroundColor: '#ffffff',
             calendarBackground: '#ffffff',
-            textSectionTitleColor: '#b6c1cd',
-            selectedDayBackgroundColor: '#00adf5',
+            textSectionTitleColor: '#6a11cb',
+            selectedDayBackgroundColor: '#6a11cb',
             selectedDayTextColor: '#ffffff',
-            todayTextColor: '#00adf5',
+            todayTextColor: '#6a11cb',
             dayTextColor: '#2d4150',
             textDisabledColor: '#d9e1e8',
-            dotColor: '#00adf5',
+            dotColor: '#6a11cb',
             selectedDotColor: '#ffffff',
-            arrowColor: 'orange',
+            arrowColor: '#6a11cb',
             disabledArrowColor: '#d9e1e8',
-            monthTextColor: 'blue',
-            indicatorColor: 'blue',
-            textDayFontWeight: '300',
+            monthTextColor: '#6a11cb',
+            indicatorColor: '#6a11cb',
+            textDayFontWeight: '400',
             textMonthFontWeight: 'bold',
-            textDayHeaderFontWeight: '300',
+            textDayHeaderFontWeight: '500',
             textDayFontSize: 16,
-            textMonthFontSize: 16,
-            textDayHeaderFontSize: 16,
+            textMonthFontSize: 18,
+            textDayHeaderFontSize: 14,
           }}
         />
-      </View>
+      </Animated.View>
       <Modal isVisible={isModalVisible} onBackdropPress={() => setModalVisible(false)}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Tasks for {selectedDate}</Text>
@@ -143,11 +145,14 @@ const CalendarScreen: React.FC = () => {
             data={tasks.filter(task => task.dueDate === selectedDate)}
             renderItem={renderTaskItem}
             keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.taskList}
           />
-          <Button title="Close" onPress={() => setModalVisible(false)} />
+          <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+            <Text style={styles.closeButtonText}>Close</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
-      <NavBar/>
+      <NavBar />
     </View>
   );
 };
@@ -155,66 +160,64 @@ const CalendarScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#007bff',
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-  },
-  backButton: {
-    marginRight: 15,
-  },
-  headerText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
+    backgroundColor: '#f8f9fa',
   },
   calendarContainer: {
     paddingHorizontal: 10,
     paddingVertical: 20,
   },
-  dayContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 38,
-    height: 38,
-  },
-  dayText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  taskBlock: {
-    backgroundColor: 'lightblue',
-    borderRadius: 4,
-    padding: 2,
-    marginVertical: 1,
-  },
-  taskText: {
-    fontSize: 10,
-    color: '#000',
-  },
   modalContent: {
-    backgroundColor: 'white',
+    backgroundColor: '#ffffff',
     padding: 20,
-    borderRadius: 10,
-    alignItems: 'center',
+    borderRadius: 15,
+    maxHeight: '80%',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 10,
+    color: '#6a11cb',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  taskList: {
+    paddingBottom: 20,
   },
   taskItem: {
-    backgroundColor: '#f0f0f0',
-    padding: 10,
-    borderRadius: 5,
+    backgroundColor: '#ffffff',
+    padding: 15,
+    borderRadius: 10,
     marginVertical: 5,
-    width: '100%',
+    borderLeftWidth: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   taskTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  taskDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 5,
+  },
+  taskDueDate: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 5,
+  },
+  closeButton: {
+    backgroundColor: '#6a11cb',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  closeButtonText: {
+    color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
   },
