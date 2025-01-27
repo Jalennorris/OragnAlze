@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, Animated } from 'react-native';
 import TaskItem from '../components/taskItem';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,15 +20,33 @@ interface Task {
 
 const HomeScreen: React.FC = () => {
   const router = useRouter();
+  const [showSearch, setShowSearch] = useState(false);
   const [showFutureTasks, setShowFutureTasks] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const[error, setError] = useState("");
-  const[loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
+  const searchAnim = useRef(new Animated.Value(0)).current;
+
+  const toggleSearch = () => {
+    Animated.timing(searchAnim, {
+      toValue: showSearch ? 0 : 1,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+    setShowSearch((prev) => !prev);
+  };
+
+  const searchBarWidth = searchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '75%'],
+  });
 
   useEffect(() => {
     if (tasksData && Array.isArray(tasksData.tasks)) {
       setTasks(tasksData.tasks);
+      setLoading(false);
     } else {
       setLoading(false);
       setError('Failed to load tasks data');
@@ -37,18 +55,13 @@ const HomeScreen: React.FC = () => {
   }, []);
 
   const today = new Date();
-  console.log('Today:', today);
   const todayString = today.toISOString().split('T')[0];
-  console.log('TodayString:', todayString);
 
   // Calculate the start and end of the current week (Monday to Sunday)
   const startOfWeek = new Date();
-  
-  console.log('Start of the week:', startOfWeek);
- startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
-  
+  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+
   const endOfWeek = new Date(startOfWeek);
-  
   endOfWeek.setDate(endOfWeek.getDate() + 6);
 
   const handleTaskPress = (taskId: string): void => {
@@ -106,18 +119,91 @@ const HomeScreen: React.FC = () => {
 
   const todayTasks = tasks.filter(task => task.dueDate === todayString);
 
+  // Filter tasks by search query
+  const filteredTasks = tasks.filter(task =>
+    task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    task.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <View style={styles.container}>
       <Header />
       <Greeting />
       <View style={styles.taskcontainer}>
-        <ScrollView>
-        
-           {/* Display today's tasks at the top */}
-          {todayTasks.length > 0 ?  (
-            <View style={styles.dateSection}>
-              <Text style={[styles.dateText, styles.todayText]}>Today</Text>
-              {todayTasks.map(task => (
+        {loading ? (
+          <ActivityIndicator size="large" color="#0000ff" />
+        ) : error ? (
+          <Text style={styles.errorText}>{error}</Text>
+        ) : (
+          <ScrollView>
+            <View style={styles.iconsContainer}>
+              <Animated.View style={[styles.searchContainer, { width: searchBarWidth }]}>
+                {showSearch && (
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search tasks..."
+                    placeholderTextColor="#888"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                )}
+              </Animated.View>
+              <TouchableOpacity style={styles.iconButton} onPress={toggleSearch}>
+                <Ionicons
+                  name={showSearch ? "close" : "search"}
+                  size={24}
+                  color="#000"
+                />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Display today's tasks at the top */}
+            {todayTasks.length > 0 ? (
+              <View style={styles.dateSection}>
+                <Text style={[styles.dateText, styles.todayText]}>Today</Text>
+                {todayTasks.map(task => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    onPress={() => handleTaskPress(task.id)}
+                    onToggleCompletion={() => toggleTaskCompletion(task.id)}
+                    priorityColor={getPriorityColor(task.priority)}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.dateSection}>
+                <Text style={[styles.dateText, styles.todayText]}>Today</Text>
+                <Text style={styles.noTasksText}>No tasks for today!</Text>
+              </View>
+            )}
+
+            {currentWeekTasks.length > 0 ? currentWeekTasks.map(task => (
+              <View key={task.dueDate} style={styles.dateSection}>
+                <Text style={[styles.dateText, task.dueDate === todayString && styles.todayText]}>
+                  {task.dueDate === todayString ? 'Today' : getDayName(task.dueDate)}
+                </Text>
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  onPress={() => handleTaskPress(task.id)}
+                  onToggleCompletion={() => toggleTaskCompletion(task.id)}
+                  priorityColor={getPriorityColor(task.priority)}
+                />
+              </View>
+            )) : (
+              <View style={styles.dateSection}>
+                <Text style={styles.noTasksText}>No tasks for this week!</Text>
+              </View>
+            )}
+
+            <View style={styles.futureSection}>
+              <TouchableOpacity onPress={() => setShowFutureTasks(!showFutureTasks)}>
+                <Text style={styles.futureHeader}>
+                  Future Tasks {showFutureTasks ? <Ionicons name="chevron-up" size={18} color="black" /> : <Ionicons name="chevron-down" size={18} color="black" />}
+                </Text>
+              </TouchableOpacity>
+              {showFutureTasks && futureTasks.map(task => (
                 <TaskItem
                   key={task.id}
                   task={task}
@@ -127,42 +213,8 @@ const HomeScreen: React.FC = () => {
                 />
               ))}
             </View>
-          ) : <Text>No tasks for today</Text>}
-
-          {currentWeekTasks.map(task => (
-            <View key={task.dueDate} style={styles.dateSection}>
-              <Text style={[styles.dateText, task.dueDate === todayString && styles.todayText]}>
-                {task.dueDate === todayString ? 'Today' : getDayName(task.dueDate)}
-              </Text>
-              <TaskItem
-                key={task.id}
-                task={task}
-                onPress={() => handleTaskPress(task.id)}
-                onToggleCompletion={() => toggleTaskCompletion(task.id)}
-                priorityColor={getPriorityColor(task.priority)}
-              />
-            </View>
-          ))}
-
-          
-
-          <View style={styles.futureSection}>
-            <TouchableOpacity onPress={() => setShowFutureTasks(!showFutureTasks)}>
-              <Text style={styles.futureHeader}>
-                Future Tasks {showFutureTasks ? <Ionicons name="chevron-up" size={18} color="black" /> : <Ionicons name="chevron-down" size={18} color="black" />}
-              </Text>
-            </TouchableOpacity>
-            {showFutureTasks && futureTasks.map(task => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onPress={() => handleTaskPress(task.id)}
-                onToggleCompletion={() => toggleTaskCompletion(task.id)}
-                priorityColor={getPriorityColor(task.priority)}
-              />
-            ))}
-          </View>
-        </ScrollView>
+          </ScrollView>
+        )}
         <NavBar />
       </View>
     </View>
@@ -198,6 +250,40 @@ const styles = StyleSheet.create({
   },
   todayText: {
     color: '#f44336', // Red color for "Today"
+  },
+  noTasksText: {
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: 'black',
+    marginBottom: 40,
+    marginTop: 20,
+    paddingTop: 20,
+    paddingBottom: 20,
+  },
+  errorText: {
+    textAlign: 'center',
+    fontSize: 18,
+    color: 'red',
+  },
+  searchContainer: {
+    overflow: "hidden",
+    height: 40,
+    backgroundColor: "#f1f1f1",
+    borderRadius: 20,
+    justifyContent: "center",
+    paddingHorizontal: 10,
+  },
+  searchInput: {
+    fontSize: 16,
+    color: "#000",
+  },
+  iconsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  iconButton: {
+    marginLeft: 10,
   },
   futureSection: {
     marginBottom: 20,
