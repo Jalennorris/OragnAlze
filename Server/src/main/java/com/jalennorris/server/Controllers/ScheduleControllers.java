@@ -11,6 +11,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+
+@CrossOrigin(
+        origins = {"http://localhost:8081"}
+)
 @RestController
 @RequestMapping("/api/schedules")
 public class ScheduleControllers {

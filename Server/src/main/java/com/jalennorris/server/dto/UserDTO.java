@@ -1,22 +1,22 @@
 package com.jalennorris.server.dto;
 
+import java.io.Serializable;
 import com.jalennorris.server.enums.Role;
 
-public class UserDTO {
+public class UserDTO implements Serializable {
 
-    private long userId;
+    private static final long serialVersionUID = 1L; // Add a serialVersionUID
+
+    private Long userId;
     private String firstname;
     private String lastname;
     private String email;
     private String username;
-    private Role role; // New field for roles
-    private String token; // Token for authentication
+    private Role role;
+    private String token;
 
-    // Default constructor
-    public UserDTO() {}
-
-    // Parameterized constructor
-    public UserDTO(long userId, String firstname, String lastname, String email, String username, Role role, String token) {
+    // Constructor
+    public UserDTO(Long userId, String firstname, String lastname, String email, String username, Role role, String token) {
         this.userId = userId;
         this.firstname = firstname;
         this.lastname = lastname;
@@ -26,12 +26,12 @@ public class UserDTO {
         this.token = token;
     }
 
-    // Getters and setters
-    public long getUserId() {
+    // Getters and Setters
+    public Long getUserId() {
         return userId;
     }
 
-    public void setUserId(long userId) {
+    public void setUserId(Long userId) {
         this.userId = userId;
     }
 

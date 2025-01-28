@@ -7,19 +7,19 @@ import com.jalennorris.server.dto.UserDTO;
 import com.jalennorris.server.enums.Role;
 import com.jalennorris.server.service.UserService;
 import com.jalennorris.server.util.JwtUtil;
-import com.jalennorris.server.service.CustomUserDetailsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+
+@CrossOrigin(
+        origins = {"http://localhost:8081"}
+)
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -28,16 +28,12 @@ public class AuthController {
     private final UserService userService;
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
-    private final AuthenticationManager authenticationManager;
-    private final CustomUserDetailsService userDetailsService;
 
     @Autowired
-    public AuthController(UserService userService, JwtUtil jwtUtil, UserRepository userRepository, AuthenticationManager authenticationManager, CustomUserDetailsService userDetailsService) {
+    public AuthController(UserService userService, JwtUtil jwtUtil, UserRepository userRepository) {
         this.userService = userService;
         this.jwtUtil = jwtUtil;
         this.userRepository = userRepository;
-        this.authenticationManager = authenticationManager;
-        this.userDetailsService = userDetailsService;
     }
 
     @PostMapping("/register")
@@ -59,26 +55,22 @@ public class AuthController {
     public CompletableFuture<ResponseEntity<String>> login(@RequestBody loginModels loginRequest) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                // Authenticate the user
-                authenticationManager.authenticate(
-                        new UsernamePasswordAuthenticationToken(
-                                loginRequest.getUsername(),
-                                loginRequest.getPassword()
-                        )
-                );
+                // Authenticate the user manually
+                Optional<UserModels> userOpt = userRepository.findByUsername(loginRequest.getUsername());
+                if (userOpt.isPresent()) {
+                    UserModels user = userOpt.get();
+                    if (user.getPassword().equals(loginRequest.getPassword())) {
+                        // Load user details and generate token
+                        String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
 
-                // Load user details and generate token
-                UserDetails userDetails = userDetailsService.loadUserByUsername(loginRequest.getUsername());
-                String token = jwtUtil.generateToken(loginRequest.getUsername(), Role.USER); // Assuming default role as USER
-
-                // Retrieve user from repository
-                UserModels user = userRepository.findByUsername(loginRequest.getUsername()).orElse(null);
-
-                if (user != null) {
-                    log.info("User '{}' successfully logged in. Token generated.", loginRequest.getUsername());
-                    log.info("User Role: {}", user.getRole());
-                    log.info("Generated Token: {}", token);
-                    return ResponseEntity.ok("Login successful. Token: " + token + ", Role: " + user.getRole());
+                        log.info("User '{}' successfully logged in. Token generated.", loginRequest.getUsername());
+                        log.info("User Role: {}", user.getRole());
+                        log.info("Generated Token: {}", token);
+                        return ResponseEntity.ok("Login successful. Token: " + token + ", Role: " + user.getRole());
+                    } else {
+                        log.warn("Invalid credentials for user '{}'.", loginRequest.getUsername());
+                        return ResponseEntity.status(401).body("Invalid credentials: Incorrect username or password");
+                    }
                 } else {
                     log.warn("User '{}' not found.", loginRequest.getUsername());
                     return ResponseEntity.status(401).body("Invalid credentials: Incorrect username or password");

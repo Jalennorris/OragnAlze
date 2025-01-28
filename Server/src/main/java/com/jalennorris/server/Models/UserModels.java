@@ -3,16 +3,10 @@ package com.jalennorris.server.Models;
 import com.jalennorris.server.enums.Role;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
-
-import java.util.Collection;
-import java.util.List;
 
 @Entity
 @Table(name = "users")
-public class UserModels implements UserDetails {
+public class UserModels {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -114,31 +108,5 @@ public class UserModels implements UserDetails {
     }
     public void setRole(Role role) {
         this.role = role;
-    }
-
-    // UserDetails interface methods
-    @Override
-    public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority(role.name()));
-    }
-
-    @Override
-    public boolean isAccountNonExpired() {
-        return true;
-    }
-
-    @Override
-    public boolean isAccountNonLocked() {
-        return true;
-    }
-
-    @Override
-    public boolean isCredentialsNonExpired() {
-        return true;
-    }
-
-    @Override
-    public boolean isEnabled() {
-        return true;
     }
 }

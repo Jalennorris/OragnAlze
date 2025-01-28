@@ -6,7 +6,6 @@ import com.jalennorris.server.Repository.UserRepository;
 import com.jalennorris.server.enums.Role;
 import com.jalennorris.server.dto.UserDTO;
 import com.jalennorris.server.util.JwtUtil;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.scheduling.annotation.Async;
@@ -25,12 +24,10 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
-    private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository, JwtUtil jwtUtil, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository, JwtUtil jwtUtil) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
-        this.passwordEncoder = passwordEncoder;
     }
 
     // Helper method to convert UserModels to UserDTO
@@ -57,15 +54,11 @@ public class UserService {
                     throw new RuntimeException("Error creating user: Email already exists");
                 }
 
-                // Encode the password
-                String encodedPassword = passwordEncoder.encode(user.getPassword());
-                user.setPassword(encodedPassword);
-
                 // Save the user
                 UserModels savedUser = userRepository.save(user);
 
                 // Generate a token
-                String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
+                String token = jwtUtil.generateToken(user.getUsername(), Role.USER); // Ensure Role.USER is used
 
                 // Convert to DTO with token
                 return convertToDto(savedUser, token);
@@ -76,105 +69,62 @@ public class UserService {
         });
     }
 
-    // Get all users (Admin access only)
+    // Get all users
     @Async
     @Cacheable(value = "users", unless = "#result == null || #result.isEmpty()")
-    public CompletableFuture<List<UserDTO>> getAllUsers(String token) {
+    public CompletableFuture<List<UserDTO>> getAllUsers() {
         return CompletableFuture.supplyAsync(() -> {
-            Optional<String> usernameOpt = jwtUtil.extractUsername(token);
-            Optional<Role> roleOpt = jwtUtil.extractRole(token);
-
-            if (usernameOpt.isPresent() && roleOpt.isPresent() && jwtUtil.validateToken(token, usernameOpt.get(), roleOpt.get())) {
-                String username = usernameOpt.get();
-                if (!isAdmin(username)) {
-                    throw new RuntimeException("Unauthorized access. Admins only.");
-                }
-
-                List<UserModels> users = userRepository.findAll();
-                return users.stream()
-                        .map(user -> convertToDto(user, token))
-                        .toList();
-            } else {
-                throw new RuntimeException("Invalid token");
-            }
+            List<UserModels> users = userRepository.findAll();
+            return users.stream()
+                    .map(user -> convertToDto(user, null))
+                    .toList();
         });
     }
 
-    // Get user by id (Admin or user with token)
+    // Get user by id
     @Async
     @Cacheable(value = "users", key = "#id", unless = "#result == null")
-    public CompletableFuture<UserDTO> getUserById(Long id, String token) {
+    public CompletableFuture<UserDTO> getUserById(Long id) {
         return CompletableFuture.supplyAsync(() -> {
-            Optional<String> usernameOpt = jwtUtil.extractUsername(token);
-            Optional<Role> roleOpt = jwtUtil.extractRole(token);
+            UserModels user = userRepository.findById(id).orElse(null);
 
-            if (usernameOpt.isPresent() && roleOpt.isPresent() && jwtUtil.validateToken(token, usernameOpt.get(), roleOpt.get())) {
-                String username = usernameOpt.get();
-
-                UserModels user = userRepository.findById(id).orElse(null);
-
-                if (user == null || (!isAdmin(username) && !username.equals(user.getUsername()))) {
-                    throw new RuntimeException("Unauthorized access.");
-                }
-
-                return convertToDto(user, null);
-            } else {
-                throw new RuntimeException("Invalid token");
+            if (user == null) {
+                throw new RuntimeException("User not found");
             }
+
+            return convertToDto(user, null);
         });
     }
 
     // Update user details
     @Async
     @CacheEvict(value = "users", key = "#id")
-    public CompletableFuture<UserDTO> updateUser(Long id, UserModels user, String token) {
+    public CompletableFuture<UserDTO> updateUser(Long id, UserModels user) {
         return CompletableFuture.supplyAsync(() -> {
-            Optional<String> usernameOpt = jwtUtil.extractUsername(token);
-            Optional<Role> roleOpt = jwtUtil.extractRole(token);
-
-            if (usernameOpt.isPresent() && roleOpt.isPresent() && jwtUtil.validateToken(token, usernameOpt.get(), roleOpt.get())) {
-                String usernameFromToken = usernameOpt.get();
-
-                if (!user.getUsername().equals(usernameFromToken) && !isAdmin(usernameFromToken)) {
-                    throw new RuntimeException("Unauthorized to update this user.");
-                }
-
-                UserModels existingUser = userRepository.findById(id).orElse(null);
-                if (existingUser != null) {
-                    existingUser.setFirstname(user.getFirstname());
-                    existingUser.setLastname(user.getLastname());
-                    existingUser.setEmail(user.getEmail());
-                    existingUser.setPassword(passwordEncoder.encode(user.getPassword()));
-                    UserModels updatedUser = userRepository.save(existingUser);
-                    return convertToDto(updatedUser, token);
-                }
-                return null;
-            } else {
-                throw new RuntimeException("Invalid token");
+            UserModels existingUser = userRepository.findById(id).orElse(null);
+            if (existingUser != null) {
+                existingUser.setFirstname(user.getFirstname());
+                existingUser.setLastname(user.getLastname());
+                existingUser.setEmail(user.getEmail());
+                existingUser.setPassword(user.getPassword());
+                UserModels updatedUser = userRepository.save(existingUser);
+                return convertToDto(updatedUser, null);
             }
+            return null;
         });
     }
 
-    // Delete user by ID (Admin or user with token)
+    // Delete user by ID
     @Async
     @CacheEvict(value = "users", key = "#id")
-    public CompletableFuture<Boolean> deleteUser(long id, String token) {
+    public CompletableFuture<Boolean> deleteUser(long id) {
         return CompletableFuture.supplyAsync(() -> {
-            Optional<String> usernameOpt = jwtUtil.extractUsername(token);
-            Optional<Role> roleOpt = jwtUtil.extractRole(token);
-
-            if (usernameOpt.isPresent() && roleOpt.isPresent() && jwtUtil.validateToken(token, usernameOpt.get(), roleOpt.get())) {
-                String usernameFromToken = usernameOpt.get();
-
-                UserModels user = userRepository.findById(id).orElse(null);
-                if (user != null && (isAdmin(usernameFromToken) || usernameFromToken.equals(user.getUsername()))) {
-                    userRepository.deleteById(id);
-                    return true;
-                } else {
-                    throw new RuntimeException("Unauthorized or User not found");
-                }
+            UserModels user = userRepository.findById(id).orElse(null);
+            if (user != null) {
+                userRepository.deleteById(id);
+                return true;
             } else {
-                throw new RuntimeException("Invalid token");
+                throw new RuntimeException("User not found");
             }
         });
     }
@@ -187,7 +137,7 @@ public class UserService {
             LOGGER.log(Level.INFO, "Login attempt for username: {0}", loginRequest.getUsername());
             UserModels user = userRepository.findByUsername(loginRequest.getUsername())
                     .orElseThrow(() -> new RuntimeException("User not found"));
-            if (passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+            if (loginRequest.getPassword().equals(user.getPassword())) {
                 String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
                 LOGGER.log(Level.INFO, "Login successful for user: {0}", user.getUsername());
                 return token;
@@ -196,13 +146,6 @@ public class UserService {
                 throw new RuntimeException("Incorrect username or password");
             }
         });
-    }
-
-    // Check if user is an admin (for access control)
-    private boolean isAdmin(String username) {
-        return userRepository.findByUsername(username)
-                .map(user -> Role.ADMIN.equals(user.getRole()))
-                .orElse(false);
     }
 
     // Method to validate JWT
@@ -244,8 +187,6 @@ public class UserService {
             }
 
             try {
-                String encodedPassword = passwordEncoder.encode(user.getPassword());
-                user.setPassword(encodedPassword);
                 UserModels savedUser = userRepository.save(user);
                 String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
                 return convertToDto(savedUser, token);
@@ -263,8 +204,8 @@ public class UserService {
         } else {
             UserModels newUser = new UserModels();
             newUser.setUsername(loginRequest.getUsername());
-            newUser.setPassword(passwordEncoder.encode(loginRequest.getPassword()));
-            newUser.setRole(Role.USER);
+            newUser.setPassword(loginRequest.getPassword());
+            newUser.setRole(Role.USER); // Ensure Role.USER is used
             userRepository.save(newUser);
             return true;
         }

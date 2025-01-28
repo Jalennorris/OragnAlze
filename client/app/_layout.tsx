@@ -7,6 +7,7 @@ export default function RootLayout() {
       <Stack.Screen name="addTaskScreen"/>
       <Stack.Screen name="taskDetail" />
       <Stack.Screen name="calendarScreen" />
+      <Stack.Screen name="login" />
     </Stack>
   );
 }
