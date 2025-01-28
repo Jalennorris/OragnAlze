@@ -8,6 +8,8 @@ export default function RootLayout() {
       <Stack.Screen name="taskDetail" />
       <Stack.Screen name="calendarScreen" />
       <Stack.Screen name="login" />
+      <Stack.Screen name="signup" />
+      <Stack.Screen name="welcome" />
     </Stack>
   );
 }

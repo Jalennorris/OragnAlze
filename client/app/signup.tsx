@@ -1,35 +1,71 @@
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Animated, Easing } from 'react-native';
-import React, { useState, useEffect, useRef } from 'react';
-import * as Google from 'expo-auth-session/providers/google';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Google from 'expo-auth-session/providers/google';
 
-type Credentials = {
+type SignupCredentials = {
   username: string;
+  email: string;
   password: string;
+  confirmPassword: string;
 };
 
-const Login: React.FC = () => {
+const Signup: React.FC = () => {
   const router = useRouter();
-  const [credentials, setCredentials] = useState<Credentials>({ username: '', password: '' });
+  const [credentials, setCredentials] = useState<SignupCredentials>({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>('');
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: 'neural-cortex-444613-n3', // Replace with your actual client ID
-  });
-
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  // Google Auth
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: 'YOUR_GOOGLE_CLIENT_ID', // Replace with your actual Google Client ID
+  });
+
+  // Handle Google Sign-In response
   useEffect(() => {
     if (response?.type === 'success') {
       const { authentication } = response;
       console.log('Google Authentication Successful: ', authentication);
-      // Handle successful login with Google
+
+      // Handle Google Sign-Up logic here
+      // For example, send the Google token to your backend for user creation
+      handleGoogleSignUp(authentication?.accessToken);
     }
   }, [response]);
 
+  const handleGoogleSignUp = async (token: string | undefined) => {
+    if (!token) {
+      setError('Google Sign-In failed. Please try again.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Send the Google token to your backend for user creation
+      const response = await axios.post('http://localhost:8080/api/users/google-signup', {
+        token,
+      });
+      console.log('Successfully signed up with Google:', response.data);
+      setLoading(false);
+      router.push('/'); // Redirect to home or dashboard after signup
+    } catch (error) {
+      console.error('Google Sign-Up failed:', error);
+      setError('Google Sign-Up failed. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  // Fade-in animation on mount
   useEffect(() => {
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -39,27 +75,39 @@ const Login: React.FC = () => {
     }).start();
   }, [fadeAnim]);
 
-  const handleLogin = async () => {
-    if (!credentials.username || !credentials.password) {
+  const handleSignup = async () => {
+    const { username, email, password, confirmPassword } = credentials;
+
+    // Basic validation
+    if (!username || !email || !password || !confirmPassword) {
       setError('Please fill in all fields');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
       return;
     }
 
     setLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:8080/api/users/login', credentials);
-      console.log('Successfully logged in:', response.data);
+      const response = await axios.post('http://localhost:8080/api/users/signup', {
+        username,
+        email,
+        password,
+      });
+      console.log('Successfully signed up:', response.data);
       setLoading(false);
-      router.push('/');
+      router.push('/'); // Redirect to home or login page after signup
     } catch (error) {
-      console.error('Login failed:', error);
-      setError('Login failed. Please try again.');
+      console.error('Signup failed:', error);
+      setError('Signup failed. Please try again.');
       setLoading(false);
     }
   };
 
-  const handleChange = (name: keyof Credentials, value: string) => {
+  const handleChange = (name: keyof SignupCredentials, value: string) => {
     setCredentials({ ...credentials, [name]: value });
   };
 
@@ -73,7 +121,7 @@ const Login: React.FC = () => {
           onPress={() => router.push('/welcome')}
           style={styles.backButton}
         />
-        <Text style={styles.title}>Hey,{"\n"}Welcome{"\n"}Back.</Text>
+        <Text style={styles.title}>Create{"\n"}Your{"\n"}Account.</Text>
 
         <View style={styles.inputContainer}>
           <TextInput
@@ -84,6 +132,14 @@ const Login: React.FC = () => {
             onChangeText={(text) => handleChange('username', text)}
           />
           <TextInput
+            placeholder="Email"
+            placeholderTextColor="#999"
+            style={styles.input}
+            value={credentials.email}
+            onChangeText={(text) => handleChange('email', text)}
+            keyboardType="email-address"
+          />
+          <TextInput
             placeholder="Password"
             placeholderTextColor="#999"
             secureTextEntry
@@ -91,11 +147,19 @@ const Login: React.FC = () => {
             value={credentials.password}
             onChangeText={(text) => handleChange('password', text)}
           />
+          <TextInput
+            placeholder="Confirm Password"
+            placeholderTextColor="#999"
+            secureTextEntry
+            style={styles.input}
+            value={credentials.confirmPassword}
+            onChangeText={(text) => handleChange('confirmPassword', text)}
+          />
           {loading ? (
             <ActivityIndicator size="large" color="#fff" />
           ) : (
-            <TouchableOpacity style={styles.button} onPress={handleLogin}>
-              <Text style={styles.buttonText}>Log In</Text>
+            <TouchableOpacity style={styles.button} onPress={handleSignup}>
+              <Text style={styles.buttonText}>Sign Up</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -109,13 +173,13 @@ const Login: React.FC = () => {
           disabled={!request}
         >
           <Ionicons name="logo-google" size={24} color="#fff" />
-          <Text style={styles.googleButtonText}>Login with Google</Text>
+          <Text style={styles.googleButtonText}>Sign Up with Google</Text>
         </TouchableOpacity>
 
         <Text style={styles.text}>
-          Don't have an account?{' '}
-          <Text style={styles.linkText} onPress={() => router.push('/signup')}>
-            Sign Up
+          Already have an account?{' '}
+          <Text style={styles.linkText} onPress={() => router.push('/login')}>
+            Log In
           </Text>
         </Text>
       </Animated.View>
@@ -135,7 +199,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    top: -200,
+    top: 50,
     left: 20,
   },
   title: {
@@ -202,4 +266,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Login;
+export default Signup;
