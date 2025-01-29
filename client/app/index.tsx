@@ -30,7 +30,9 @@ interface Task {
   dueDate: string;
   completed: boolean;
   priority: 'low' | 'medium' | 'high';
+  category?: string;
 }
+
 
 // Constants for colors and styles
 const LIGHT_COLORS = {
@@ -69,6 +71,8 @@ const HomeScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPriority, setSelectedPriority] = useState<'all' | 'low' | 'medium' | 'high'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'priority' | 'completed'>('date');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'work' | 'personal' | 'school'| 'other'>('all');
+
 
   const searchAnim = useRef(new Animated.Value(0)).current;
 
@@ -222,18 +226,29 @@ const HomeScreen: React.FC = () => {
   );
 
   // Filter tasks by search query
-  const filteredTasks = useMemo(
-    () =>
-      sortedTasks.filter(
-        (task) =>
-          task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          task.description.toLowerCase().includes(searchQuery.toLowerCase())
-      ),
-    [sortedTasks, searchQuery]
-  );
+
+  
 
   // Task count summary
   const completedTasksCount = useMemo(() => tasks.filter((task) => task.completed).length, [tasks]);
+
+
+  // Filters for Categories
+
+  const filteredTasksByCategory = useMemo(() => {
+    if (selectedCategory === 'all') return filteredTasksByPriority;
+    return filteredTasksByPriority.filter((task) => task.category === selectedCategory);
+  }, [filteredTasksByPriority, selectedCategory]);
+
+  // Filter tasks by search query
+
+  const filteredTasks = useMemo(() => {
+    return filteredTasksByCategory.filter(
+      (task) =>
+        task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        task.description.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [filteredTasksByCategory, searchQuery]);
 
   return (
     <View style={[styles.container, { backgroundColor: COLORS.background }]}>
@@ -303,6 +318,22 @@ const HomeScreen: React.FC = () => {
                     <Text style={selectedPriority === 'high' ? styles.selectedPriority : styles.priorityText}>High</Text>
                   </TouchableOpacity>
                 </View>
+
+                <View style={styles.categoryFilterContainer}>
+                  <TouchableOpacity onPress={() => setSelectedCategory('all')}>
+                    <Text style={selectedCategory === 'all' ? styles.selectedCategory : styles.categoryText}>All</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setSelectedCategory('work')}>
+                    <Text style={selectedCategory === 'work' ? styles.selectedCategory : styles.categoryText}>Work</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setSelectedCategory('personal')}>
+                    <Text style={selectedCategory === 'personal' ? styles.selectedCategory : styles.categoryText}>Personal</Text>
+                  </TouchableOpacity>
+                  {/* Add more categories as needed */}
+                </View>
+
+
+
 
                 <View style={styles.sortContainer}>
                   <Text style={styles.sortLabel}>Sort by:</Text>
@@ -486,13 +517,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     marginBottom: 20,
   },
+  categoryFilterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+  },
+  categoryText: {
+    fontSize: 16,
+    color: '#000',  // Default text color
+  },
+  selectedCategory: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#f44336',  // Red color for the selected category
+  },
   priorityText: {
     fontSize: 16,
   },
   selectedPriority: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#f44336',
+    color: '#f44336',  // Red color for the selected priority
   },
   sortContainer: {
     flexDirection: 'row',
@@ -543,5 +588,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-
 export default HomeScreen;

@@ -1,5 +1,5 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Animated, Easing } from 'react-native';
-import React, { useState, useEffect, useRef } from 'react';
 import * as Google from 'expo-auth-session/providers/google';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,12 +15,13 @@ const Login: React.FC = () => {
   const router = useRouter();
   const [credentials, setCredentials] = useState<Credentials>({ username: '', password: '' });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>('');
+  const [error, setError] = useState<string | null>(null);
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: 'neural-cortex-444613-n3', // Replace with your actual client ID
   });
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(300)).current;
 
   useEffect(() => {
     if (response?.type === 'success') {
@@ -31,15 +32,23 @@ const Login: React.FC = () => {
   }, [response]);
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 1000,
-      easing: Easing.ease,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnim]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.ease,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 1000,
+        easing: Easing.ease,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
-  const handleLogin = async () => {
+  const handleLogin = useCallback(async () => {
     if (!credentials.username || !credentials.password) {
       setError('Please fill in all fields');
       return;
@@ -54,18 +63,18 @@ const Login: React.FC = () => {
       router.push('/');
     } catch (error) {
       console.error('Login failed:', error);
-      setError('Login failed. Please try again.');
+      setError('Login failed. Please check your credentials and try again.');
       setLoading(false);
     }
-  };
+  }, [credentials, router]);
 
-  const handleChange = (name: keyof Credentials, value: string) => {
-    setCredentials({ ...credentials, [name]: value });
-  };
+  const handleChange = useCallback((name: keyof Credentials, value: string) => {
+    setCredentials((prev) => ({ ...prev, [name]: value }));
+  }, []);
 
   return (
     <LinearGradient colors={['#6a11cb', '#2575fc']} style={styles.container}>
-      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+      <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
         <Ionicons
           name="arrow-back"
           size={30}
@@ -82,6 +91,7 @@ const Login: React.FC = () => {
             style={styles.input}
             value={credentials.username}
             onChangeText={(text) => handleChange('username', text)}
+            accessibilityLabel="Username input"
           />
           <TextInput
             placeholder="Password"
@@ -90,11 +100,12 @@ const Login: React.FC = () => {
             style={styles.input}
             value={credentials.password}
             onChangeText={(text) => handleChange('password', text)}
+            accessibilityLabel="Password input"
           />
           {loading ? (
             <ActivityIndicator size="large" color="#fff" />
           ) : (
-            <TouchableOpacity style={styles.button} onPress={handleLogin}>
+            <TouchableOpacity style={styles.button} onPress={handleLogin} accessibilityRole="button">
               <Text style={styles.buttonText}>Log In</Text>
             </TouchableOpacity>
           )}
@@ -107,6 +118,7 @@ const Login: React.FC = () => {
           style={styles.googleButton}
           onPress={() => promptAsync()}
           disabled={!request}
+          accessibilityRole="button"
         >
           <Ionicons name="logo-google" size={24} color="#fff" />
           <Text style={styles.googleButtonText}>Login with Google</Text>
@@ -114,7 +126,7 @@ const Login: React.FC = () => {
 
         <Text style={styles.text}>
           Don't have an account?{' '}
-          <Text style={styles.linkText} onPress={() => router.push('/signup')}>
+          <Text style={styles.linkText} onPress={() => router.push('/signup')} accessibilityRole="link">
             Sign Up
           </Text>
         </Text>

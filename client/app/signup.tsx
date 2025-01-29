@@ -1,5 +1,5 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Animated, Easing } from 'react-native';
-import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -22,25 +22,39 @@ const Signup: React.FC = () => {
     confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>('');
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  // Google Auth
+  const [error, setError] = useState<string | null>(null);
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: 'YOUR_GOOGLE_CLIENT_ID', // Replace with your actual Google Client ID
   });
 
-  // Handle Google Sign-In response
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(300)).current;
+
   useEffect(() => {
     if (response?.type === 'success') {
       const { authentication } = response;
       console.log('Google Authentication Successful: ', authentication);
-
-      // Handle Google Sign-Up logic here
-      // For example, send the Google token to your backend for user creation
+      // Handle successful signup with Google
       handleGoogleSignUp(authentication?.accessToken);
     }
   }, [response]);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.ease,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 1000,
+        easing: Easing.ease,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
   const handleGoogleSignUp = async (token: string | undefined) => {
     if (!token) {
@@ -65,17 +79,7 @@ const Signup: React.FC = () => {
     }
   };
 
-  // Fade-in animation on mount
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 1000,
-      easing: Easing.ease,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnim]);
-
-  const handleSignup = async () => {
+  const handleSignup = useCallback(async () => {
     const { username, email, password, confirmPassword } = credentials;
 
     // Basic validation
@@ -105,15 +109,15 @@ const Signup: React.FC = () => {
       setError('Signup failed. Please try again.');
       setLoading(false);
     }
-  };
+  }, [credentials, router]);
 
-  const handleChange = (name: keyof SignupCredentials, value: string) => {
-    setCredentials({ ...credentials, [name]: value });
-  };
+  const handleChange = useCallback((name: keyof SignupCredentials, value: string) => {
+    setCredentials((prev) => ({ ...prev, [name]: value }));
+  }, []);
 
   return (
     <LinearGradient colors={['#6a11cb', '#2575fc']} style={styles.container}>
-      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+      <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
         <Ionicons
           name="arrow-back"
           size={30}
@@ -130,6 +134,7 @@ const Signup: React.FC = () => {
             style={styles.input}
             value={credentials.username}
             onChangeText={(text) => handleChange('username', text)}
+            accessibilityLabel="Username input"
           />
           <TextInput
             placeholder="Email"
@@ -138,6 +143,7 @@ const Signup: React.FC = () => {
             value={credentials.email}
             onChangeText={(text) => handleChange('email', text)}
             keyboardType="email-address"
+            accessibilityLabel="Email input"
           />
           <TextInput
             placeholder="Password"
@@ -146,6 +152,7 @@ const Signup: React.FC = () => {
             style={styles.input}
             value={credentials.password}
             onChangeText={(text) => handleChange('password', text)}
+            accessibilityLabel="Password input"
           />
           <TextInput
             placeholder="Confirm Password"
@@ -154,11 +161,12 @@ const Signup: React.FC = () => {
             style={styles.input}
             value={credentials.confirmPassword}
             onChangeText={(text) => handleChange('confirmPassword', text)}
+            accessibilityLabel="Confirm Password input"
           />
           {loading ? (
             <ActivityIndicator size="large" color="#fff" />
           ) : (
-            <TouchableOpacity style={styles.button} onPress={handleSignup}>
+            <TouchableOpacity style={styles.button} onPress={handleSignup} accessibilityRole="button">
               <Text style={styles.buttonText}>Sign Up</Text>
             </TouchableOpacity>
           )}
@@ -171,6 +179,7 @@ const Signup: React.FC = () => {
           style={styles.googleButton}
           onPress={() => promptAsync()}
           disabled={!request}
+          accessibilityRole="button"
         >
           <Ionicons name="logo-google" size={24} color="#fff" />
           <Text style={styles.googleButtonText}>Sign Up with Google</Text>
@@ -178,7 +187,7 @@ const Signup: React.FC = () => {
 
         <Text style={styles.text}>
           Already have an account?{' '}
-          <Text style={styles.linkText} onPress={() => router.push('/login')}>
+          <Text style={styles.linkText} onPress={() => router.push('/login')} accessibilityRole="link">
             Log In
           </Text>
         </Text>
@@ -199,7 +208,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    top: 50,
+    top: -125,
     left: 20,
   },
   title: {
