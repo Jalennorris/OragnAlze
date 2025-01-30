@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextStyle, ViewStyle, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextStyle, ViewStyle, Animated, Easing, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 
 // Constants
 const COLORS = {
@@ -51,31 +50,34 @@ const CustomButton: React.FC<CustomButtonProps> = ({
   textStyle,
   variant = 'primary',
 }) => {
-  const opacityValue = useRef(new Animated.Value(1)).current;
+  const pulseValue = useRef(new Animated.Value(1)).current;
 
-  const handlePressIn = () => {
-    Animated.timing(opacityValue, {
-      toValue: 0.8,
-      duration: 100,
-      useNativeDriver: true,
-    }).start();
+  const pulseAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseValue, {
+          toValue: 1.1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseValue, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
   };
 
-  const handlePressOut = () => {
-    Animated.timing(opacityValue, {
-      toValue: 1,
-      duration: 100,
-      useNativeDriver: true,
-    }).start();
-  };
+  useEffect(() => {
+    pulseAnimation();
+  }, []);
 
   return (
-    <Animated.View style={{ opacity: opacityValue }}>
+    <Animated.View style={{ transform: [{ scale: pulseValue }] }}>
       <TouchableOpacity
         style={[getButtonStyle(variant), style]}
         onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
       >
         <Typography variant={variant === 'link' ? 'link' : 'body'} style={textStyle}>
           {title}
@@ -107,36 +109,38 @@ const Welcome: React.FC = () => {
   const logo = 'OrganAIze';
   const typingSpeed = 150; // Faster typing speed
 
-  // Animation for the smiley face
-  const scaleValue = useRef(new Animated.Value(1)).current;
+  // Animation for tasks
+  const slideAnim = useRef(new Animated.Value(-Dimensions.get('window').width)).current;
   const gradientColors = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const tasks = [
+    { id: '1', title: 'Task 1', description: 'Complete the project documentation' },
+    { id: '2', title: 'Task 2', description: 'Review the pull requests' },
+    { id: '3', title: 'Task 3', description: 'Plan the next sprint' },
+  ];
 
   useEffect(() => {
-    const animateSmiley = () => {
+    const slideTasks = () => {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(scaleValue, {
-            toValue: 1.1,
-            duration: 500,
+          Animated.timing(slideAnim, {
+            toValue: Dimensions.get('window').width,
+            duration: 5000,
             easing: Easing.linear,
             useNativeDriver: true,
           }),
-          Animated.timing(scaleValue, {
-            toValue: 1,
-            duration: 500,
-            easing: Easing.linear,
+          Animated.timing(slideAnim, {
+            toValue: -Dimensions.get('window').width,
+            duration: 0,
             useNativeDriver: true,
           }),
         ])
       ).start();
     };
 
-    if (isTalking) {
-      animateSmiley();
-    } else {
-      scaleValue.setValue(1); // Reset scale when not talking
-    }
-  }, [isTalking, scaleValue]);
+    slideTasks();
+  }, [slideAnim]);
 
   // Gradient transition animation
   useEffect(() => {
@@ -166,6 +170,11 @@ const Welcome: React.FC = () => {
         clearInterval(interval);
         setShowCursor(false);
         setIsTalking(true);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }).start();
       }
     }, typingSpeed);
 
@@ -176,18 +185,34 @@ const Welcome: React.FC = () => {
     <Animated.View style={[styles.container, { backgroundColor: gradientInterpolation }]}>
       <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.gradient}>
         <View style={styles.content}>
-          <Animated.View style={{ transform: [{ scale: scaleValue }] }}>
-            <Ionicons
-              name={isTalking ? 'happy' : 'happy-outline'}
-              size={100}
-              color={COLORS.white}
-              style={styles.icon}
-            />
+          <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
+            {tasks.map((task, index) => (
+              <View 
+                key={task.id} 
+                style={[
+                  styles.task, 
+                  { 
+                    transform: [
+                      { translateY: index % 2 === 0 ? 100 : -100 } // Parallax effect
+                    ] 
+                  }
+                ]}
+              >
+                <Typography variant="title" style={styles.taskTitle}>
+                  {task.title}
+                </Typography>
+                <Typography variant="body" style={styles.taskDescription}>
+                  {task.description}
+                </Typography>
+              </View>
+            ))}
           </Animated.View>
-          <Typography variant="title" style={styles.logoText}>
-            {typedText}
-            {showCursor && <Text style={{ opacity: 0.5 }}>|</Text>}
-          </Typography>
+          <Animated.View style={{ opacity: fadeAnim }}>
+            <Typography variant="title" style={styles.logoText}>
+              {typedText}
+              {showCursor && <Text style={{ opacity: 0.5 }}>|</Text>}
+            </Typography>
+          </Animated.View>
           <Typography variant="subtitle" style={styles.subtitle}>
             Join us and explore the exciting features we offer.
           </Typography>
@@ -227,8 +252,25 @@ const styles = StyleSheet.create({
     width: '80%',
     alignItems: 'center',
   },
-  icon: {
-    marginBottom: 20,
+  task: {
+    backgroundColor: COLORS.white,
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  taskTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  taskDescription: {
+    fontSize: 16,
+    color: COLORS.primary,
   },
   logoText: {
     fontSize: 40,

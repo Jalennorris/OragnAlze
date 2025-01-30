@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -8,6 +8,15 @@ import Header from '../components/header';
 import Navbar from '../components/Navbar';
 import * as Haptics from 'expo-haptics';
 
+
+interface Task {
+  id: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  priority: string;
+}
+
 const AddTaskScreen: React.FC = () => {
   const [taskName, setTaskName] = useState<string>('');
   const [taskDescription, setTaskDescription] = useState<string>('');
@@ -15,7 +24,7 @@ const AddTaskScreen: React.FC = () => {
   const [priority, setPriority] = useState<string>('low');
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const router = useRouter();
-  const buttonScale = new Animated.Value(1); // For button press animation
+  const buttonScale = useRef(new Animated.Value(1)).current; // For button press animation
 
   const handleSaveTask = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); // Haptic feedback
@@ -79,7 +88,7 @@ const AddTaskScreen: React.FC = () => {
 
         {/* Task Name Input */}
         <View style={styles.inputContainer}>
-          <Ionicons name="clipboard-outline" size={24} color="#6a11cb" style={styles.icon} />
+          <Ionicons name="clipboard-outline" size={24} color="black" style={styles.icon} />
           <TextInput
             style={styles.input}
             placeholder="Task Name"
@@ -91,7 +100,7 @@ const AddTaskScreen: React.FC = () => {
 
         {/* Task Description Input */}
         <View style={styles.inputContainer}>
-          <Ionicons name="document-text-outline" size={24} color="#6a11cb" style={styles.icon} />
+          <Ionicons name="document-text-outline" size={24} color="black" style={styles.icon} />
           <TextInput
             style={[styles.input, { height: 100 }]}
             placeholder="Task Description"
@@ -104,7 +113,7 @@ const AddTaskScreen: React.FC = () => {
 
         {/* Due Date Picker */}
         <View style={styles.inputContainer}>
-          <Ionicons name="calendar-outline" size={24} color="#6a11cb" style={styles.icon} />
+          <Ionicons name="calendar-outline" size={24} color="black" style={styles.icon} />
           <TouchableOpacity onPress={showDatePicker} style={styles.dateInput}>
             <Text style={styles.dateText}>
               {dueDate ? dueDate : 'Select Due Date'}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Animated, Dimensions } from 'react-native';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import Modal from 'react-native-modal';
 import Header from '@/components/header';
 import NavBar from '@/components/Navbar';
 import * as Haptics from 'expo-haptics';
+import Swiper from 'react-native-swiper';
 
 // Define types for the task structure
 interface Task {
@@ -32,7 +33,7 @@ LocaleConfig.locales['en'] = {
   dayNamesShort: [
     'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'
   ],
-  today: "Today's date"
+  today: "Today"
 };
 LocaleConfig.defaultLocale = 'en';
 
@@ -110,33 +111,67 @@ const CalendarScreen: React.FC = () => {
     <View style={styles.container}>
       <Header />
       <Animated.View style={[styles.calendarContainer, { opacity: fadeAnim }]}>
-        <Calendar
-          markedDates={markedDates}
-          markingType={'multi-dot'}
-          onDayPress={(day) => handleDayPress(day.dateString)}
-          theme={{
-            backgroundColor: '#ffffff',
-            calendarBackground: '#ffffff',
-            textSectionTitleColor: '#6a11cb',
-            selectedDayBackgroundColor: '#6a11cb',
-            selectedDayTextColor: '#ffffff',
-            todayTextColor: '#6a11cb',
-            dayTextColor: '#2d4150',
-            textDisabledColor: '#d9e1e8',
-            dotColor: '#6a11cb',
-            selectedDotColor: '#ffffff',
-            arrowColor: '#6a11cb',
-            disabledArrowColor: '#d9e1e8',
-            monthTextColor: '#6a11cb',
-            indicatorColor: '#6a11cb',
-            textDayFontWeight: '400',
-            textMonthFontWeight: 'bold',
-            textDayHeaderFontWeight: '500',
-            textDayFontSize: 16,
-            textMonthFontSize: 18,
-            textDayHeaderFontSize: 14,
-          }}
-        />
+        <Swiper
+          loop={false}
+          showsPagination={false}
+          index={new Date().getMonth()}
+        >
+          {Array.from({ length: 12 }).map((_, month) => (
+            <Calendar
+              key={month}
+              current={`2025-${String(month + 1).padStart(2, '0')}-01`}
+              markedDates={markedDates}
+              markingType={'multi-dot'}
+              onDayPress={(day) => handleDayPress(day.dateString)}
+              theme={{
+                backgroundColor: '#ffffff',
+                calendarBackground: '#ffffff',
+                textSectionTitleColor: '#6a11cb',
+                selectedDayBackgroundColor: '#6a11cb',
+                selectedDayTextColor: '#ffffff',
+                todayTextColor: '#6a11cb',
+                dayTextColor: '#2d4150',
+                textDisabledColor: '#d9e1e8',
+                dotColor: '#6a11cb',
+                selectedDotColor: '#ffffff',
+                arrowColor: '#6a11cb',
+                disabledArrowColor: '#d9e1e8',
+                monthTextColor: '#6a11cb',
+                indicatorColor: '#6a11cb',
+                textDayFontWeight: '400',
+                textMonthFontWeight: 'bold',
+                textDayHeaderFontWeight: '500',
+                textDayFontSize: 16,
+                textMonthFontSize: 18,
+                textDayHeaderFontSize: 14,
+                'stylesheet.calendar.main': {
+                  container: {
+                    padding: 0,
+                  },
+                },
+                'stylesheet.day.basic': {
+                  base: {
+                    width: 40,
+                    height: 40,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#e0e0e0',
+                  },
+                  selected: {
+                    backgroundColor: '#6a11cb',
+                    borderRadius: 8,
+                  },
+                  today: {
+                    backgroundColor: '#f0e6ff',
+                    borderRadius: 8,
+                  },
+                },
+              }}
+            />
+          ))}
+        </Swiper>
       </Animated.View>
       <Modal isVisible={isModalVisible} onBackdropPress={() => setModalVisible(false)}>
         <View style={styles.modalContent}>

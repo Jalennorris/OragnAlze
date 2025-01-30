@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, Pressable, Animated, Platform } from "react-nat
 import { Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
+import { Route } from "expo-router/build/Route";
+import { useRouter } from "expo-router";
 
 // Load custom fonts
 const loadFonts = async () => {
@@ -17,6 +19,7 @@ SplashScreen.preventAutoHideAsync();
 const Header: React.FC = () => {
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const scaleValue = new Animated.Value(1); // For icon animation
+  const router = useRouter();
 
   useEffect(() => {
     const prepare = async () => {
@@ -54,9 +57,11 @@ const Header: React.FC = () => {
     return null; // Return null or a custom loading indicator
   }
 
+
+
   return (
     <View style={styles.headerContainer}>
-      <Text style={styles.logo}>OrganAIze</Text>
+      <Text style={styles.logo} >OrganAIze</Text>
       <Pressable onPress={handleProfilePress}>
         <Animated.View style={{ transform: [{ scale: scaleValue }] }}>
           <Ionicons name="person-circle-outline" size={30} color="#333" />

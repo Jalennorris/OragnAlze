@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View,
   Text,
-  ScrollView,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
@@ -10,7 +9,6 @@ import {
   Animated,
   RefreshControl,
   FlatList,
-  Image,
   useColorScheme,
 } from 'react-native';
 import TaskItem from '../components/taskItem';
@@ -21,6 +19,7 @@ import Greeting from '@/components/Greeting';
 import NavBar from '@/components/Navbar';
 import tasksData from '../data/tasks.json';
 import Icon from 'react-native-vector-icons/Ionicons';
+import FilterComponent from '@/components/FilterComponent';
 
 // Define types for the task structure
 interface Task {
@@ -33,7 +32,6 @@ interface Task {
   category?: string;
 }
 
-
 // Constants for colors and styles
 const LIGHT_COLORS = {
   low: '#4caf50', // green
@@ -41,7 +39,7 @@ const LIGHT_COLORS = {
   high: '#f44336', // red
   today: '#f44336', // red
   text: '#000',
-  background: '#fff',
+  background: '#blue',
   searchBackground: '#f1f1f1',
   placeholder: '#888',
 };
@@ -72,7 +70,7 @@ const HomeScreen: React.FC = () => {
   const [selectedPriority, setSelectedPriority] = useState<'all' | 'low' | 'medium' | 'high'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'priority' | 'completed'>('date');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'work' | 'personal' | 'school'| 'other'>('all');
-
+  const [showFilterOptions, setShowFilterOptions] = useState(false);
 
   const searchAnim = useRef(new Animated.Value(0)).current;
 
@@ -94,6 +92,8 @@ const HomeScreen: React.FC = () => {
     loadTasks();
   }, []);
 
+  //loading Task
+
   const loadTasks = () => {
     try {
       if (tasksData && Array.isArray(tasksData.tasks)) {
@@ -110,6 +110,8 @@ const HomeScreen: React.FC = () => {
     }
   };
 
+  //refresh
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadTasks();
@@ -119,6 +121,8 @@ const HomeScreen: React.FC = () => {
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   // Helper function to format dates in the user's local timezone
+
+  
   const formatLocalDate = (dateString: string) => {
     const date = new Date(dateString);
     return new Intl.DateTimeFormat('en-US', {
@@ -135,20 +139,26 @@ const HomeScreen: React.FC = () => {
 
   // Calculate the start and end of the current week (Monday to Sunday) in the user's local timezone
   const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)); // Adjust for Monday as start of week
+  startOfWeek.setDate(today.getDate() - today.getDay() );
 
   const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
 
+
+  //Router routes
   const handleTaskPress = useCallback((taskId: string): void => {
     router.push(`/taskDetail?taskId=${taskId}`);
   }, [router]);
+
+  // Function to toggle task completion
 
   const toggleTaskCompletion = useCallback((taskId: string) => {
     setTasks((prevTasks) =>
       prevTasks.map((task) => (task.id === taskId ? { ...task, completed: !task.completed } : task))
     );
   }, []);
+
+  //delete task function
 
   const deleteTask = useCallback((taskId: string) => {
     setTasks((prevTasks) => prevTasks.filter((task) => task.id !== taskId));
@@ -187,9 +197,15 @@ const HomeScreen: React.FC = () => {
     return tasks.filter((task) => task.priority === selectedPriority);
   }, [tasks, selectedPriority]);
 
+  // Filter tasks by category
+  const filteredTasksByCategory = useMemo(() => {
+    if (selectedCategory === 'all') return filteredTasksByPriority;
+    return filteredTasksByPriority.filter((task) => task.category === selectedCategory);
+  }, [filteredTasksByPriority, selectedCategory]);
+
   // Sort tasks
   const sortedTasks = useMemo(() => {
-    const tasksToSort = [...filteredTasksByPriority];
+    const tasksToSort = [...filteredTasksByCategory];
     switch (sortBy) {
       case 'date':
         return tasksToSort.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
@@ -201,7 +217,7 @@ const HomeScreen: React.FC = () => {
       default:
         return tasksToSort;
     }
-  }, [filteredTasksByPriority, sortBy]);
+  }, [filteredTasksByCategory, sortBy]);
 
   // Filter tasks for the current week and future
   const currentWeekTasks = useMemo(
@@ -226,29 +242,18 @@ const HomeScreen: React.FC = () => {
   );
 
   // Filter tasks by search query
-
-  
+  const filteredTasks = useMemo(
+    () =>
+      sortedTasks.filter(
+        (task) =>
+          task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          task.description.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [sortedTasks, searchQuery]
+  );
 
   // Task count summary
   const completedTasksCount = useMemo(() => tasks.filter((task) => task.completed).length, [tasks]);
-
-
-  // Filters for Categories
-
-  const filteredTasksByCategory = useMemo(() => {
-    if (selectedCategory === 'all') return filteredTasksByPriority;
-    return filteredTasksByPriority.filter((task) => task.category === selectedCategory);
-  }, [filteredTasksByPriority, selectedCategory]);
-
-  // Filter tasks by search query
-
-  const filteredTasks = useMemo(() => {
-    return filteredTasksByCategory.filter(
-      (task) =>
-        task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.description.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [filteredTasksByCategory, searchQuery]);
 
   return (
     <View style={[styles.container, { backgroundColor: COLORS.background }]}>
@@ -265,182 +270,157 @@ const HomeScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         ) : (
-          <FlatList
-            data={filteredTasks}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <TaskItem
-                task={item}
-                onPress={() => handleTaskPress(item.id)}
-                onToggleCompletion={() => toggleTaskCompletion(item.id)}
-                onDelete={() => deleteTask(item.id)}
-                priorityColor={getPriorityColor(item.priority)}
-              />
-            )}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            ListHeaderComponent={
-              <>
-                <View style={styles.iconsContainer}>
-                  <Animated.View style={[styles.searchContainer, { width: searchBarWidth }]}>
-                    {showSearch && (
-                      <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search tasks..."
-                        placeholderTextColor={COLORS.placeholder}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        accessibilityLabel="...Search tasks"
-                      />
-                    )}
-                  </Animated.View>
-                  <TouchableOpacity
-                    style={styles.iconButton}
-                    onPress={toggleSearch}
-                    accessibilityLabel={showSearch ? 'Close search' : 'Open search'}
-                  >
-                    <Ionicons name={showSearch ? 'close' : 'search'} size={24} color={COLORS.text} />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.priorityFilterContainer}>
-                  <TouchableOpacity onPress={() => setSelectedPriority('all')}>
-                    <Text style={selectedPriority === 'all' ? styles.selectedPriority : styles.priorityText}>All</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setSelectedPriority('low')}>
-                    <Text style={selectedPriority === 'low' ? styles.selectedPriority : styles.priorityText}>Low</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setSelectedPriority('medium')}>
-                    <Text style={selectedPriority === 'medium' ? styles.selectedPriority : styles.priorityText}>
-                      Medium
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setSelectedPriority('high')}>
-                    <Text style={selectedPriority === 'high' ? styles.selectedPriority : styles.priorityText}>High</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.categoryFilterContainer}>
-                  <TouchableOpacity onPress={() => setSelectedCategory('all')}>
-                    <Text style={selectedCategory === 'all' ? styles.selectedCategory : styles.categoryText}>All</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setSelectedCategory('work')}>
-                    <Text style={selectedCategory === 'work' ? styles.selectedCategory : styles.categoryText}>Work</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setSelectedCategory('personal')}>
-                    <Text style={selectedCategory === 'personal' ? styles.selectedCategory : styles.categoryText}>Personal</Text>
-                  </TouchableOpacity>
-                  {/* Add more categories as needed */}
-                </View>
-
-
-
-
-                <View style={styles.sortContainer}>
-                  <Text style={styles.sortLabel}>Sort by:</Text>
-                  <TouchableOpacity onPress={() => setSortBy('date')}>
-                    <Text style={sortBy === 'date' ? styles.selectedSort : styles.sortText}>Date</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setSortBy('priority')}>
-                    <Text style={sortBy === 'priority' ? styles.selectedSort : styles.sortText}>Priority</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setSortBy('completed')}>
-                    <Text style={sortBy === 'completed' ? styles.selectedSort : styles.sortText}>Completed</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={styles.taskSummary}>
-                  {tasks.length} tasks total, {completedTasksCount} completed
-                </Text>
-
-                {/* Display today's tasks at the top */}
-                {todayTasks.length > 0 ? (
-                  <View style={styles.dateSection}>
-                    <Text style={[styles.dateText, styles.todayText]}>Today</Text>
-                    {todayTasks.map((task) => (
-                      <TaskItem
-                        key={task.id}
-                        task={task}
-                        onPress={() => handleTaskPress(task.id)}
-                        onToggleCompletion={() => toggleTaskCompletion(task.id)}
-                        onDelete={() => deleteTask(task.id)}
-                        priorityColor={getPriorityColor(task.priority)}
-                      />
-                    ))}
-                  </View>
-                ) : (
-                  <View style={styles.dateSection}>
-                    <Text style={[styles.dateText, styles.todayText]}>Today</Text>
-                    <View style={styles.emptyStateContainer}>
-                    <Icon name="md-checkmark-circle-outline" size={50} color="#000"  />
-                      <Text style={styles.emptyStateText}>No tasks for today!</Text>
-                    </View>
-                  </View>
+          <>
+            <View style={styles.iconsContainer}>
+              <Animated.View style={[styles.searchContainer, { width: searchBarWidth }]}>
+                {showSearch && (
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search tasks..."
+                    placeholderTextColor={COLORS.placeholder}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    accessibilityLabel="Search tasks"
+                  />
                 )}
+              </Animated.View>
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={toggleSearch}
+                accessibilityLabel={showSearch ? 'Close search' : 'Open search'}
+              >
+                <Ionicons name={showSearch ? 'close' : 'search'} size={24} color={COLORS.text} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() => setShowFilterOptions((prev) => !prev)}
+                accessibilityLabel="Filter tasks"
+              >
+                <Ionicons name="filter" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
 
-                {currentWeekTasks.length > 0 ? (
-                  currentWeekTasks.map((task) => (
-                    <View key={task.dueDate} style={styles.dateSection}>
-                      <Text style={[styles.dateText, formatLocalDate(task.dueDate) === todayString && styles.todayText]}>
-                        {formatLocalDate(task.dueDate) === todayString ? 'Today' : getDayName(task.dueDate)}
-                      </Text>
-                      <TaskItem
-                        key={task.id}
-                        task={task}
-                        onPress={() => handleTaskPress(task.id)}
-                        onToggleCompletion={() => toggleTaskCompletion(task.id)}
-                        onDelete={() => deleteTask(task.id)}
-                        priorityColor={getPriorityColor(task.priority)}
-                      />
-                    </View>
-                  ))
-                ) : (
-                  <View style={styles.dateSection}>
-                    <View style={styles.emptyStateContainer}>
-                    <Icon name="md-checkmark-circle-outline" size={50} color="#000" />
-                      <Text style={styles.emptyStateText}>No tasks for this week!</Text>
-                    </View>
-                  </View>
-                )}
-
-<View style={styles.futureSection}>
-  <TouchableOpacity
-    onPress={() => setShowFutureTasks(!showFutureTasks)}
-    accessibilityLabel={showFutureTasks ? 'Hide future tasks' : 'Show future tasks'}
-  >
-    <Text style={styles.futureHeader}>
-      Future Tasks{' '}
-      {showFutureTasks ? (
-        <Ionicons name="chevron-up" size={18} color={COLORS.text} />
-      ) : (
-        <Ionicons name="chevron-down" size={18} color={COLORS.text} />
-      )}
-    </Text>
-  </TouchableOpacity>
-  {showFutureTasks && (
-    futureTasks.length > 0 ? (
-      futureTasks.map((task) => (
-        <TaskItem
-          key={task.id}
-          task={task}
-          onPress={() => handleTaskPress(task.id)}
-          onToggleCompletion={() => toggleTaskCompletion(task.id)}
-          onDelete={() => deleteTask(task.id)}
-          priorityColor={getPriorityColor(task.priority)}
-        />
-      ))
-    ) : (
-      <View style={styles.emptyStateContainer}>
-        <Icon name="md-checkmark-circle-outline" size={50} color={COLORS.text} />
-        <Text style={styles.emptyStateText}>No future tasks!</Text>
-      </View>
-    )
-  )}
-</View>
-              </>
+            {showFilterOptions && 
+               <FilterComponent
+        selectedPriority={selectedPriority}
+        setSelectedPriority={setSelectedPriority}
+        selectedCategory={selectedCategory}
+        setSelectedCategory={setSelectedCategory}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+        colors={COLORS}
+      />
             }
-          />
+
+            <FlatList
+              data={filteredTasks}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TaskItem
+                  task={item}
+                  onPress={() => handleTaskPress(item.id)}
+                  onToggleCompletion={() => toggleTaskCompletion(item.id)}
+                  onDelete={() => deleteTask(item.id)}
+                  priorityColor={getPriorityColor(item.priority)}
+                />
+              )}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+              ListHeaderComponent={
+                <>
+                  <Text style={styles.taskSummary}>
+                    {tasks.length} tasks total, {completedTasksCount} completed
+                  </Text>
+
+                  {/* Display today's tasks at the top */}
+                  {todayTasks.length > 0 ? (
+                    <View style={styles.dateSection}>
+                      <Text style={[styles.dateText, styles.todayText]}>Today</Text>
+                      {todayTasks.map((task) => (
+                        <TaskItem
+                          key={task.id}
+                          task={task}
+                          onPress={() => handleTaskPress(task.id)}
+                          onToggleCompletion={() => toggleTaskCompletion(task.id)}
+                          onDelete={() => deleteTask(task.id)}
+                          priorityColor={getPriorityColor(task.priority)}
+                        />
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={styles.dateSection}>
+                      <Text style={[styles.dateText, styles.todayText]}>Today</Text>
+                      <View style={styles.emptyStateContainer}>
+                        <Icon name="md-checkmark-circle-outline" size={50} color="#000" />
+                        <Text style={styles.emptyStateText}>No tasks for today!</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {currentWeekTasks.length > 0 ? (
+                    currentWeekTasks.map((task) => (
+                      <View key={task.dueDate} style={styles.dateSection}>
+                        <Text style={[styles.dateText, formatLocalDate(task.dueDate) === todayString && styles.todayText]}>
+                          {formatLocalDate(task.dueDate) === todayString ? 'Today' : getDayName(task.dueDate)}
+                        </Text>
+                        <TaskItem
+                          key={task.id}
+                          task={task}
+                          onPress={() => handleTaskPress(task.id)}
+                          onToggleCompletion={() => toggleTaskCompletion(task.id)}
+                          onDelete={() => deleteTask(task.id)}
+                          priorityColor={getPriorityColor(task.priority)}
+                        />
+                      </View>
+                    ))
+                  ) : (
+                    <View style={styles.dateSection}>
+                      <View style={styles.emptyStateContainer}>
+                        <Icon name="md-checkmark-circle-outline" size={50} color="#000" />
+                        <Text style={styles.emptyStateText}>No tasks for this week!</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  <View style={styles.futureSection}>
+                    <TouchableOpacity
+                      onPress={() => setShowFutureTasks(!showFutureTasks)}
+                      accessibilityLabel={showFutureTasks ? 'Hide future tasks' : 'Show future tasks'}
+                    >
+                      <Text style={styles.futureHeader}>
+                        Future Tasks{' '}
+                        {showFutureTasks ? (
+                          <Ionicons name="chevron-up" size={18} color={COLORS.text} />
+                        ) : (
+                          <Ionicons name="chevron-down" size={18} color={COLORS.text} />
+                        )}
+                      </Text>
+                    </TouchableOpacity>
+                    {showFutureTasks && (
+                      futureTasks.length > 0 ? (
+                        futureTasks.map((task) => (
+                          <TaskItem
+                            key={task.id}
+                            task={task}
+                            onPress={() => handleTaskPress(task.id)}
+                            onToggleCompletion={() => toggleTaskCompletion(task.id)}
+                            onDelete={() => deleteTask(task.id)}
+                            priorityColor={getPriorityColor(task.priority)}
+                          />
+                        ))
+                      ) : (
+                        <View style={styles.emptyStateContainer}>
+                          <Icon name="md-checkmark-circle-outline" size={50} color={COLORS.text} />
+                          <Text style={styles.emptyStateText}>No future tasks!</Text>
+                        </View>
+                      )
+                    )}
+                  </View>
+                </>
+              }
+            />
+          </>
         )}
-        <NavBar />
+        <NavBar />  
       </View>
     </View>
   );
@@ -490,6 +470,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     height: 40,
     borderRadius: 20,
+    borderColor: '#ccc',
+    borderWidth: 2,
     justifyContent: 'center',
     paddingHorizontal: 10,
   },

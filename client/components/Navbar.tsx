@@ -29,7 +29,7 @@ const NavBar: React.FC = () => {
   };
 
   const getIconColor = (screen: string) => {
-    return activeTab === screen ? '#6a11cb' : '#333'; // Active tab color: purple
+    return activeTab === screen ? '#6200EA' : '#ccc'; // Active tab color: purple
   };
 
   return (
