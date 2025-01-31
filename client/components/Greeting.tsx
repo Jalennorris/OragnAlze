@@ -3,8 +3,11 @@ import { View, Text, StyleSheet, Animated, Easing, TextInput, TouchableOpacity }
 import { Ionicons } from '@expo/vector-icons';
 
 const Greeting: React.FC = () => {
+    const userName= localStorage.getItem('username');
+    console.log(`Greeting ${userName}`);
+    
     const [greeting, setGreeting] = useState<string>('');
-    const [username, setUsername] = useState<string>('Jalen');
+    const [username, setUsername] = useState<string>(userName || 'Jalen');
     const [isEditing, setIsEditing] = useState<boolean>(false);
     const [tempUsername, setTempUsername] = useState<string>('Jalen');
     

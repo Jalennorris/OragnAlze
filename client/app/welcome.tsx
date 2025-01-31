@@ -160,16 +160,22 @@ const Welcome: React.FC = () => {
   // Typewriter effect for logo text
   useEffect(() => {
     if (!logo) return;
-
+  
     let index = 0;
+    setTypedText(""); // Reset text when logo changes
+    setShowCursor(true); // Ensure cursor shows initially
+  
     const interval = setInterval(() => {
       if (index < logo.length) {
         setTypedText((prev) => prev + logo[index]);
         index++;
+
       } else {
         clearInterval(interval);
         setShowCursor(false);
         setIsTalking(true);
+        
+        // Ensure fadeAnim is properly animated
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 1000,
@@ -177,9 +183,12 @@ const Welcome: React.FC = () => {
         }).start();
       }
     }, typingSpeed);
-
-    return () => clearInterval(interval);
-  }, [logo]);
+  
+    return () => {
+      clearInterval(interval); // Cleanup interval
+      setShowCursor(false); // Hide cursor on unmount
+    };
+  }, [logo, typingSpeed, fadeAnim]); ;
 
   return (
     <Animated.View style={[styles.container, { backgroundColor: gradientInterpolation }]}>

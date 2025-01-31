@@ -7,6 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Google from 'expo-auth-session/providers/google';
 
 type SignupCredentials = {
+  firstname: string;
+  lastname: string;
   username: string;
   email: string;
   password: string;
@@ -16,6 +18,8 @@ type SignupCredentials = {
 const Signup: React.FC = () => {
   const router = useRouter();
   const [credentials, setCredentials] = useState<SignupCredentials>({
+    firstname: '',
+    lastname: '',
     username: '',
     email: '',
     password: '',
@@ -80,10 +84,10 @@ const Signup: React.FC = () => {
   };
 
   const handleSignup = useCallback(async () => {
-    const { username, email, password, confirmPassword } = credentials;
+    const { firstname, lastname, username, email, password, confirmPassword } = credentials;
 
     // Basic validation
-    if (!username || !email || !password || !confirmPassword) {
+    if (!firstname || !lastname || !username || !email || !password || !confirmPassword) {
       setError('Please fill in all fields');
       return;
     }
@@ -96,11 +100,15 @@ const Signup: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:8080/api/users/signup', {
+      const response = await axios.post('http://localhost:8080/api/auth/register', {
+        firstname,
+        lastname,
         username,
         email,
         password,
+        role: 'USER',
       });
+      
       console.log('Successfully signed up:', response.data);
       setLoading(false);
       router.push('/'); // Redirect to home or login page after signup
@@ -128,6 +136,22 @@ const Signup: React.FC = () => {
         <Text style={styles.title}>Create{"\n"}Your{"\n"}Account.</Text>
 
         <View style={styles.inputContainer}>
+          <TextInput
+            placeholder="First Name"
+            placeholderTextColor="#999"
+            style={styles.input}
+            value={credentials.firstname}
+            onChangeText={(text) => handleChange('firstname', text)}
+            accessibilityLabel="First Name input"
+          />
+          <TextInput
+            placeholder="Last Name"
+            placeholderTextColor="#999"
+            style={styles.input}
+            value={credentials.lastname}
+            onChangeText={(text) => handleChange('lastname', text)}
+            accessibilityLabel="Last Name input"
+          />
           <TextInput
             placeholder="Username"
             placeholderTextColor="#999"

@@ -15,7 +15,7 @@ const Login: React.FC = () => {
   const router = useRouter();
   const [credentials, setCredentials] = useState<Credentials>({ username: '', password: '' });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>('');
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: 'neural-cortex-444613-n3', // Replace with your actual client ID
   });
@@ -57,8 +57,11 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:8080/api/users/login', credentials);
+      const response = await axios.post('http://localhost:8080/api/auth/login', credentials);
       console.log('Successfully logged in:', response.data);
+      localStorage.setItem('userId', response.data.user_id);
+      
+      localStorage.setItem('username', response.data.username);
       setLoading(false);
       router.push('/');
     } catch (error) {
