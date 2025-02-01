@@ -50,7 +50,10 @@ const Header: React.FC = () => {
         duration: 100,
         useNativeDriver: true,
       }),
-    ]).start();
+
+    ]).start(() => {
+      router.push("/settings");
+    });
   };
 
   if (!fontsLoaded) {

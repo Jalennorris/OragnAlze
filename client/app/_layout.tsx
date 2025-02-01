@@ -26,6 +26,14 @@ export default function RootLayout() {
       <Stack.Screen name="login" />
       <Stack.Screen name="signup" />
       <Stack.Screen name="welcome" />
+      <Stack.Screen name="settings" />
+
+      {/* Settings sections */}
+      <Stack.Screen name="sections/editProfile" />
+      <Stack.Screen name="sections/changePassword" />
+      <Stack.Screen name="sections/updateEmail" />
+      
+
     </Stack>
   );
 }

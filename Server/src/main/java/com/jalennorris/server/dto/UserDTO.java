@@ -14,6 +14,7 @@ public class UserDTO implements Serializable {
     private String username;
     private Role role;
     private String token;
+    
 
     // Constructor
     public UserDTO(Long userId, String firstname, String lastname, String email, String username, Role role, String token) {

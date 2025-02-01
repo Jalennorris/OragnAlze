@@ -41,17 +41,22 @@ public class UserModels {
     @Column(name = "role", nullable = false)
     private Role role;
 
+    private String display_name;
+    private String profile_pic;
+
     // Default constructor
     public UserModels() {}
 
     // Parameterized constructor
-    public UserModels(String firstname, String lastname, String email, String username, String password, Role role) {
+    public UserModels(String firstname, String lastname, String email, String username, String password, Role role, String display_name, String profile_pic) {
         this.firstname = firstname;
         this.lastname = lastname;
         this.email = email;
         this.username = username;
         this.password = password;
         this.role = role;
+        this.display_name = display_name;
+        this.profile_pic = profile_pic;
     }
 
     // Getters and setters
@@ -108,5 +113,21 @@ public class UserModels {
     }
     public void setRole(Role role) {
         this.role = role;
+    }
+
+    public String getDisplay_name() {
+        return display_name;
+    }
+
+    public void setDisplay_name(String display_name) {
+        this.display_name = display_name;
+    }
+
+    public String getProfile_pic() {
+        return profile_pic;
+    }
+
+    public void setProfile_pic(String profile_pic) {
+        this.profile_pic = profile_pic;
     }
 }

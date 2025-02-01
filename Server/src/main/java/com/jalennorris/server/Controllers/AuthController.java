@@ -1,5 +1,6 @@
 package com.jalennorris.server.Controllers;
 
+import com.jalennorris.server.LoginResponse;
 import com.jalennorris.server.Models.UserModels;
 import com.jalennorris.server.Models.loginModels;
 import com.jalennorris.server.Repository.UserRepository;
@@ -52,7 +53,7 @@ public class AuthController {
 
     // User login
     @PostMapping("/login")
-    public CompletableFuture<ResponseEntity<String>> login(@RequestBody loginModels loginRequest) {
+    public CompletableFuture<ResponseEntity<LoginResponse>> login(@RequestBody loginModels loginRequest) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 // Authenticate the user manually
@@ -66,18 +67,22 @@ public class AuthController {
                         log.info("User '{}' successfully logged in. Token generated.", loginRequest.getUsername());
                         log.info("User Role: {}", user.getRole());
                         log.info("Generated Token: {}", token);
-                        return ResponseEntity.ok("Login successful. Token: " + token + ", Role: " + user.getRole());
+
+                        // Create the response object
+                        LoginResponse loginResponse = new LoginResponse(token, user.getRole(), user.getUsername(), user.getUserId());
+
+                        return ResponseEntity.ok(loginResponse);
                     } else {
                         log.warn("Invalid credentials for user '{}'.", loginRequest.getUsername());
-                        return ResponseEntity.status(401).body("Invalid credentials: Incorrect username or password");
+                        return ResponseEntity.status(401).body(null);
                     }
                 } else {
                     log.warn("User '{}' not found.", loginRequest.getUsername());
-                    return ResponseEntity.status(401).body("Invalid credentials: Incorrect username or password");
+                    return ResponseEntity.status(401).body(null);
                 }
             } catch (Exception ex) {
                 log.error("Error during login attempt for username '{}': {}", loginRequest.getUsername(), ex.getMessage(), ex);
-                return ResponseEntity.status(500).body("Server error: An unexpected error occurred");
+                return ResponseEntity.status(500).body(null);
             }
         });
     }

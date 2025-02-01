@@ -3,14 +3,17 @@ import { View, Text, StyleSheet, Animated, Easing, TextInput, TouchableOpacity }
 import { Ionicons } from '@expo/vector-icons';
 
 const Greeting: React.FC = () => {
-    const userName= localStorage.getItem('username');
+    const userName = localStorage.getItem('username');
+    
+
+   
     console.log(`Greeting ${userName}`);
-    
+
     const [greeting, setGreeting] = useState<string>('');
-    const [username, setUsername] = useState<string>(userName || 'Jalen');
+    const [username, setUsername] = useState<string>(userName);
     const [isEditing, setIsEditing] = useState<boolean>(false);
-    const [tempUsername, setTempUsername] = useState<string>('Jalen');
-    
+    const [tempUsername, setTempUsername] = useState<string>(username);
+
     const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in animation
     const scaleAnim = useRef(new Animated.Value(0.8)).current; // For scale animation
 
@@ -47,6 +50,7 @@ const Greeting: React.FC = () => {
     const handleEditUsername = () => {
         if (isEditing) {
             setUsername(tempUsername);
+            localStorage.setItem('displayName', tempUsername);
         }
         setIsEditing(!isEditing);
     };

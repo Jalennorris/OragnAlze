@@ -58,9 +58,10 @@ const Login: React.FC = () => {
 
     try {
       const response = await axios.post('http://localhost:8080/api/auth/login', credentials);
+
       console.log('Successfully logged in:', response.data);
       localStorage.setItem('userId', response.data.user_id);
-      
+
       localStorage.setItem('username', response.data.username);
       setLoading(false);
       router.push('/');
