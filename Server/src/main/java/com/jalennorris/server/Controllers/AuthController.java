@@ -69,7 +69,7 @@ public class AuthController {
                         log.info("Generated Token: {}", token);
 
                         // Create the response object
-                        LoginResponse loginResponse = new LoginResponse(token, user.getRole(), user.getUsername(), user.getUserId());
+                        LoginResponse loginResponse = new LoginResponse(token, user.getRole(), user.getUsername(), user.getUserId(),user.getDisplay_name(), user.getProfile_pic(), user.getPassword());
 
                         return ResponseEntity.ok(loginResponse);
                     } else {

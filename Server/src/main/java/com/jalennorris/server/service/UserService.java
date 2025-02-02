@@ -10,12 +10,15 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.Map;
+
 
 @Service
 public class UserService {
@@ -39,6 +42,8 @@ public class UserService {
                 userModel.getEmail(),
                 userModel.getUsername(),
                 userModel.getRole(),
+                userModel.getDisplay_name(),
+                userModel.getProfile_pic(),
                 token
         );
     }
@@ -97,20 +102,43 @@ public class UserService {
     }
 
     // Update user details
+    @Transactional
     @Async
     @CacheEvict(value = "users", key = "#id")
-    public CompletableFuture<UserDTO> updateUser(Long id, UserModels user) {
+    public CompletableFuture<UserDTO> updateUser(Long id, Map<String, Object> updates) {
         return CompletableFuture.supplyAsync(() -> {
-            UserModels existingUser = userRepository.findById(id).orElse(null);
-            if (existingUser != null) {
-                existingUser.setFirstname(user.getFirstname());
-                existingUser.setLastname(user.getLastname());
-                existingUser.setEmail(user.getEmail());
-                existingUser.setPassword(user.getPassword());
-                UserModels updatedUser = userRepository.save(existingUser);
-                return convertToDto(updatedUser, null);
-            }
-            return null;
+            UserModels existingUser = userRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            updates.forEach((key, value) -> {
+                switch (key) {
+                    case "firstname":
+                        existingUser.setFirstname((String) value);
+                        break;
+                    case "lastname":
+                        existingUser.setLastname((String) value);
+                        break;
+                    case "email":
+                        existingUser.setEmail((String) value);
+                        break;
+                    case "password":
+                        existingUser.setPassword((String) value);
+                        break;
+                    case "display_name":
+                        existingUser.setDisplay_name((String) value);
+                    case "username":
+                        existingUser.setUsername((String) value);
+                        break;
+                    case "profile_pic":
+                        existingUser.setProfile_pic((String) value);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Invalid field: " + key);
+                }
+            });
+
+            UserModels updatedUser = userRepository.save(existingUser);
+            return convertToDto(updatedUser, null);
         });
     }
 

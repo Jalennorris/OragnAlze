@@ -60,9 +60,13 @@ const Login: React.FC = () => {
       const response = await axios.post('http://localhost:8080/api/auth/login', credentials);
 
       console.log('Successfully logged in:', response.data);
-      localStorage.setItem('userId', response.data.user_id);
-
+      localStorage.setItem('userId', response.data.userId);
+      console.log('userId:', localStorage.getItem('userId'));
       localStorage.setItem('username', response.data.username);
+      localStorage.setItem('displayName', response.data.display_name);
+      localStorage.setItem('profilePic', response.data.profile_pic);
+
+
       setLoading(false);
       router.push('/');
     } catch (error) {

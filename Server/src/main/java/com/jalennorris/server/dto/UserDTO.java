@@ -14,10 +14,12 @@ public class UserDTO implements Serializable {
     private String username;
     private Role role;
     private String token;
-    
+    private String displayName;
+    private String profilePic;
+
 
     // Constructor
-    public UserDTO(Long userId, String firstname, String lastname, String email, String username, Role role, String token) {
+    public UserDTO(Long userId, String firstname, String lastname, String email, String username, Role role, String token, String displayName, String profilePic) {
         this.userId = userId;
         this.firstname = firstname;
         this.lastname = lastname;
@@ -25,6 +27,8 @@ public class UserDTO implements Serializable {
         this.username = username;
         this.role = role;
         this.token = token;
+        this.displayName = displayName;
+        this.profilePic = profilePic;
     }
 
     // Getters and Setters
@@ -82,5 +86,21 @@ public class UserDTO implements Serializable {
 
     public void setToken(String token) {
         this.token = token;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    public String getProfilePic() {
+        return profilePic;
+    }
+
+    public void setProfilePic(String profilePic) {
+        this.profilePic = profilePic;
     }
 }

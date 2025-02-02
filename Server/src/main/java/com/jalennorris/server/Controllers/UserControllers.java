@@ -1,23 +1,20 @@
 package com.jalennorris.server.Controllers;
 
-import com.jalennorris.server.Models.UserModels;
 import com.jalennorris.server.dto.UserDTO;
 import com.jalennorris.server.service.UserService;
 import com.jalennorris.server.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.bind.annotation.CrossOrigin;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-@CrossOrigin(
-        origins = {"http://localhost:8081"}
-)
+@CrossOrigin(origins = {"http://localhost:8081"})
 @RestController
 @RequestMapping("/api/users")
 public class UserControllers {
@@ -67,9 +64,9 @@ public class UserControllers {
                 .thenApply(user -> user != null ? ResponseEntity.ok(user) : ResponseEntity.notFound().build());
     }
 
-    @PutMapping("/{id}")
-    public CompletableFuture<ResponseEntity<UserDTO>> updateUser(@PathVariable long id, @RequestBody UserModels updatedUser) {
-        return userService.updateUser(id, updatedUser)
+    @PatchMapping("/{id}")
+    public CompletableFuture<ResponseEntity<UserDTO>> updateUser(@PathVariable long id, @RequestBody Map<String, Object> updates) {
+        return userService.updateUser(id, updates)
                 .thenApply(updated -> updated != null ? ResponseEntity.ok(updated) : ResponseEntity.notFound().build());
     }
 
