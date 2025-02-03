@@ -35,16 +35,21 @@ public class UserService {
 
     // Helper method to convert UserModels to UserDTO
     private UserDTO convertToDto(UserModels userModel, String token) {
+        LOGGER.log(Level.INFO, "Converting UserModels to UserDTO: {0}", userModel);
         return new UserDTO(
+
+                //aways make sure this in order
                 userModel.getUserId(),
                 userModel.getFirstname(),
                 userModel.getLastname(),
                 userModel.getEmail(),
                 userModel.getUsername(),
+                userModel.getPassword(),
                 userModel.getRole(),
-                userModel.getDisplay_name(),
-                userModel.getProfile_pic(),
-                token
+
+                token, // Ensure token is passed correctly
+                userModel.getDisplay_name(),// Set display_name as a concatenation of first and last name
+                userModel.getProfile_pic() // Ensure this field is correctly mapped
         );
     }
 
@@ -126,6 +131,7 @@ public class UserService {
                         break;
                     case "display_name":
                         existingUser.setDisplay_name((String) value);
+                        break;
                     case "username":
                         existingUser.setUsername((String) value);
                         break;

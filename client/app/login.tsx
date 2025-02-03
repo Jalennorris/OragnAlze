@@ -69,9 +69,7 @@ const Login: React.FC = () => {
       console.log('lastname:', localStorage.getItem('lastname'));
       localStorage.setItem('email', response.data.email);
       console.log('email:', localStorage.getItem('email'));
-
-      localStorage.setItem('displayName', response.data.display_name);
-      localStorage.setItem('profilePic', response.data.profile_pic);
+      localStorage.setItem('token', response.data.token);
 
 
       setLoading(false);

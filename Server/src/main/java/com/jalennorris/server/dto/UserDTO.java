@@ -12,23 +12,25 @@ public class UserDTO implements Serializable {
     private String lastname;
     private String email;
     private String username;
+    private String password;
     private Role role;
     private String token;
-    private String displayName;
-    private String profilePic;
+    private String display_name;
+    private String profile_pic;
 
 
     // Constructor
-    public UserDTO(Long userId, String firstname, String lastname, String email, String username, Role role, String token, String displayName, String profilePic) {
+    public UserDTO(Long userId, String firstname, String lastname, String email, String username,  String password,Role role, String token, String display_name, String profile_pic) {
         this.userId = userId;
         this.firstname = firstname;
         this.lastname = lastname;
         this.email = email;
         this.username = username;
+        this.password = password;
         this.role = role;
         this.token = token;
-        this.displayName = displayName;
-        this.profilePic = profilePic;
+        this.display_name = display_name;
+        this.profile_pic = profile_pic;
     }
 
     // Getters and Setters
@@ -72,6 +74,14 @@ public class UserDTO implements Serializable {
         this.username = username;
     }
 
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
     public Role getRole() {
         return role;
     }
@@ -88,19 +98,19 @@ public class UserDTO implements Serializable {
         this.token = token;
     }
 
-    public String getDisplayName() {
-        return displayName;
+    public String getDisplay_name() {
+        return display_name;
     }
 
-    public void setDisplayName(String displayName) {
-        this.displayName = displayName;
+    public void setDisplay_name(String display_name) {
+        this.display_name = display_name;
     }
 
-    public String getProfilePic() {
-        return profilePic;
+    public String getProfile_pic() {
+        return profile_pic;
     }
 
-    public void setProfilePic(String profilePic) {
-        this.profilePic = profilePic;
+    public void setProfile_pic(String profile_pic) {
+        this.profile_pic = profile_pic;
     }
 }

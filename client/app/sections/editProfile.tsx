@@ -26,6 +26,8 @@ interface Credentials {
   firstName: string;
   lastName: string;
   email: string;
+  profilePic: string;
+  displayName: string;
 }
 
 // Constants
@@ -84,6 +86,8 @@ const EditProfile: React.FC<{ }> = () => {
     firstName: '',
     lastName: '',
     email: '',
+    profilePic: '',
+    displayName: '',
   });
 
   const navigation = useNavigation();
@@ -123,7 +127,11 @@ const EditProfile: React.FC<{ }> = () => {
         firstName: data.firstname,
         lastName: data.lastname,
         email: data.email,
+        profilePic: data.profile_pic,
+        displayName: data.username // Use the username as the display name
       });
+      console.log('display name:', data.username);
+      console.log('profile_pic:', data.profile_pic);
       console.log(data);
     } catch (error) {
       console.error('Failed to fetch user info:', error);
@@ -143,6 +151,7 @@ const EditProfile: React.FC<{ }> = () => {
         email: values.email,
         profile_pic: profileImage || selectedColor,
       });
+
       Alert.alert('Success', 'Profile updated successfully!');
     } catch (error) {
       Alert.alert('Error', 'Failed to update profile. Please try again.');

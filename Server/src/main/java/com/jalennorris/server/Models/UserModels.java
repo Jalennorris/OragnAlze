@@ -41,8 +41,13 @@ public class UserModels {
     @Column(name = "role", nullable = false)
     private Role role;
 
+    @Column(name = "display_name")
     private String display_name;
+
+    @Column(name = "profile_pic")
     private String profile_pic;
+
+
 
     // Default constructor
     public UserModels() {}
@@ -111,6 +116,7 @@ public class UserModels {
     public Role getRole() {
         return role;
     }
+
     public void setRole(Role role) {
         this.role = role;
     }

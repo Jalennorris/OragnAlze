@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons'; // For icons
 import { useNavigation } from '@react-navigation/native'; // For navigation
+import axios from 'axios';
+import jwtDecode from 'jwt-decode';
 
 const ChangePassword: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -23,16 +25,42 @@ const ChangePassword: React.FC = () => {
     return true;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) return;
 
     setIsSaving(true);
 
-    // Simulate saving data (you can replace this with an API call)
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      const token = localStorage.getItem('jwtToken'); // Assuming JWT is stored in localStorage
+      if (!token) {
+        throw new Error('User not authenticated');
+      }
+
+      const decodedToken = jwtDecode(token);
+      const userId = decodedToken.userId;
+
+      // Verify current password and update new password
+      const response = await axios.patch(`http://localhost:8080/api/users/${userId}`, {
+        currentPassword,
+        newPassword
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      // Assuming the response contains the new JWT
+      const newToken = response.data.token;
+      localStorage.setItem('jwtToken', newToken); // Store the new JWT
+
       Alert.alert('Success', 'Password updated successfully!');
-    }, 2000);
+      navigation.goBack();
+    } catch (error) {
+      console.error('Error updating password:', error);
+      Alert.alert('Error', 'Failed to update password. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -82,7 +110,7 @@ const ChangePassword: React.FC = () => {
 
       {/* Save Button */}
       <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={isSaving}>
-        <Text style={styles.saveButtonText}>{isSaving ? 'Saving...' : 'Save Changes'}</Text>
+        {isSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Changes</Text>}
       </TouchableOpacity>
     </View>
   );

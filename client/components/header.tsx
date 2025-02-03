@@ -60,11 +60,12 @@ const Header: React.FC = () => {
   const getUserInfo = async () => {
     try {
       const userId = localStorage.getItem('userId'); // Assuming userId is stored in localStorage
+      console.log(userId);
       const response = await axios.get(`http://localhost:8080/api/users/${userId}`);
       const data = response.data;
 
       setCredentials({
-        profile_pic: response.data.profile_pic
+        profile_pic: data.profile_pic,
         
       });
       console.log('Successfully fetched user info:', );
