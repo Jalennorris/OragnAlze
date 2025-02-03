@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,12 @@ import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
+
+interface Credentials {
+  firstName: string;
+  lastName: string;
+  email: string;
+}
 
 // Constants
 const COLORS = {
@@ -73,13 +79,18 @@ const EditProfile: React.FC<{ }> = () => {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const userId = localStorage.getItem('userId')
-  const password = localStorage.getItem('password')
-  console.log(userId);
   const [isModalVisible, setIsModalVisible] = useState(false);
- 
+  const [credentials, setCredentials] = useState<Credentials>({
+    firstName: '',
+    lastName: '',
+    email: '',
+  });
+
   const navigation = useNavigation();
-  
+
+  useEffect(() => {
+    getUserInfo();
+  }, []);
 
   const handleImageUpload = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -102,15 +113,35 @@ const EditProfile: React.FC<{ }> = () => {
     }
   }, []);
 
+  const getUserInfo = async () => {
+    try {
+      const userId = localStorage.getItem('userId'); // Assuming userId is stored in localStorage
+      const response = await axios.get(`http://localhost:8080/api/users/${userId}`);
+      const data = response.data;
+
+      setCredentials({
+        firstName: data.firstname,
+        lastName: data.lastname,
+        email: data.email,
+      });
+      console.log(data);
+    } catch (error) {
+      console.error('Failed to fetch user info:', error);
+    }
+  };
+
   const handleSave = async (values: { firstName: string; lastName: string; email: string }) => {
     setIsLoading(true);
     try {
-      const response = await axios.patch(`http://localhost:8080/api/users/${userId}`, {
+      const userId = localStorage.getItem('userId'); // Assuming userId is stored in localStorage
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+      await axios.patch(`http://localhost:8080/api/users/${userId}`, {
         firstname: values.firstName,
         lastname: values.lastName,
         email: values.email,
         profile_pic: profileImage || selectedColor,
-   
       });
       Alert.alert('Success', 'Profile updated successfully!');
     } catch (error) {
@@ -138,7 +169,11 @@ const EditProfile: React.FC<{ }> = () => {
           <BackButton onPress={() => navigation.goBack()} />
           <Text style={styles.title}>Edit Profile</Text>
 
-          <ProfileImage uri={profileImage} color={selectedColor} onPress={() => setIsModalVisible(true)} />
+          <ProfileImage 
+            uri={profileImage ? profileImage : undefined} 
+            color={!profileImage && selectedColor ? selectedColor : undefined} 
+            onPress={() => setIsModalVisible(true)} 
+          />
 
           <Modal visible={isModalVisible} animationType="slide" transparent>
             <View style={styles.modalOverlay}>
@@ -161,14 +196,19 @@ const EditProfile: React.FC<{ }> = () => {
             </View>
           </Modal>
 
-          <Formik initialValues={{ firstName: '', lastName: '', email: '' }} validationSchema={profileSchema} onSubmit={handleSave}>
+          <Formik
+            initialValues={credentials}
+            validationSchema={profileSchema}
+            enableReinitialize
+            onSubmit={handleSave}
+          >
             {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
               <View style={styles.formContainer}>
                 <View style={styles.inputContainer}>
                   <Icon name="person" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="First Name"
+                    placeholder={credentials.firstName || "First Name"}
                     value={values.firstName}
                     onChangeText={handleChange('firstName')}
                     onBlur={handleBlur('firstName')}
@@ -180,7 +220,7 @@ const EditProfile: React.FC<{ }> = () => {
                   <Icon name="person" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Last Name"
+                    placeholder={credentials.lastName || "Last Name"}
                     value={values.lastName}
                     onChangeText={handleChange('lastName')}
                     onBlur={handleBlur('lastName')}
@@ -192,7 +232,7 @@ const EditProfile: React.FC<{ }> = () => {
                   <Icon name="email" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Email"
+                    placeholder={credentials.email || "Email"}
                     value={values.email}
                     onChangeText={handleChange('email')}
                     onBlur={handleBlur('email')}

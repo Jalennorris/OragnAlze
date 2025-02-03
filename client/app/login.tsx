@@ -63,6 +63,13 @@ const Login: React.FC = () => {
       localStorage.setItem('userId', response.data.userId);
       console.log('userId:', localStorage.getItem('userId'));
       localStorage.setItem('username', response.data.username);
+      localStorage.setItem('firstname', response.data.firstname);
+      console.log('firstname:', localStorage.getItem('firstname'));
+      localStorage.setItem('lastname', response.data.lastname);
+      console.log('lastname:', localStorage.getItem('lastname'));
+      localStorage.setItem('email', response.data.email);
+      console.log('email:', localStorage.getItem('email'));
+
       localStorage.setItem('displayName', response.data.display_name);
       localStorage.setItem('profilePic', response.data.profile_pic);
 
