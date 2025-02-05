@@ -1,6 +1,6 @@
 import { Stack } from "expo-router";
 import React, { useState, useEffect } from 'react';
-import LoadingPage from './LoadingPage'; // Ensure the path is correct
+import LoadingPage from './LoadingPage'; // Ensure this path is correct
 
 export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
@@ -32,8 +32,6 @@ export default function RootLayout() {
       <Stack.Screen name="sections/editProfile" />
       <Stack.Screen name="sections/changePassword" />
       <Stack.Screen name="sections/updateEmail" />
-      
-
     </Stack>
   );
 }

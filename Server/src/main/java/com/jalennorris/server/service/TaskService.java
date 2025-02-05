@@ -24,7 +24,6 @@ public class TaskService {
         this.tasksRepository = tasksRepository;
     }
 
-    // Asynchronously fetch all tasks and cache the result
     @Async
     @Cacheable(value = "tasks")
     public CompletableFuture<List<TasksDTO>> getAllTasks() {
@@ -34,7 +33,6 @@ public class TaskService {
                 .collect(Collectors.toList()));
     }
 
-    // Asynchronously fetch a task by its ID and cache the result
     @Async
     @Cacheable(value = "tasks", key = "#id")
     public CompletableFuture<TasksDTO> getTaskById(long id) {
@@ -44,17 +42,16 @@ public class TaskService {
         });
     }
 
-    // Asynchronously create a new task and evict all cached entries
     @Async
     @CacheEvict(value = "tasks", allEntries = true)
     public CompletableFuture<TasksDTO> createTask(TasksModels task) {
         return CompletableFuture.supplyAsync(() -> {
+            validateTask(task);
             TasksModels savedTask = tasksRepository.save(task);
             return convertToDTO(savedTask);
         });
     }
 
-    // Asynchronously update a task and evict the cache entry for the updated task
     @Async
     @CacheEvict(value = "tasks", key = "#id")
     public CompletableFuture<TasksDTO> updateTask(long id, TasksModels task) {
@@ -69,6 +66,7 @@ public class TaskService {
                 existingTask.setDeadline(task.getDeadline());
                 existingTask.setStatus(task.getStatus());
                 existingTask.setCreated_at(task.getCreated_at()); // Keep snake_case
+                validateTask(existingTask);
                 TasksModels updatedTask = tasksRepository.save(existingTask);
                 return convertToDTO(updatedTask);
             }
@@ -76,7 +74,6 @@ public class TaskService {
         });
     }
 
-    // Asynchronously delete a task by ID and evict the cache entry for the deleted task
     @Async
     @CacheEvict(value = "tasks", key = "#id")
     public CompletableFuture<Boolean> deleteTask(long id) {
@@ -89,10 +86,16 @@ public class TaskService {
         });
     }
 
-    // Helper method to convert TasksModels to TasksDTO
+    private void validateTask(TasksModels task) {
+        if (task.getTask_name() == null || task.getTask_name().isEmpty()) {
+            throw new IllegalArgumentException("Task name must not be null or empty");
+        }
+    }
+
     private TasksDTO convertToDTO(TasksModels task) {
         TasksDTO taskDTO = new TasksDTO();
         taskDTO.setTaskId(task.getTask_id()); // Map snake_case field to camelCase
+        taskDTO.setUserId(task.getUser_id());
         taskDTO.setTaskName(task.getTask_name()); // Map snake_case field to camelCase
         taskDTO.setTaskDescription(task.getTask_description()); // Map snake_case field to camelCase
         taskDTO.setPriority(task.getPriority());

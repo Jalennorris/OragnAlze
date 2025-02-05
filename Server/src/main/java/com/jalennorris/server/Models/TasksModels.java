@@ -10,8 +10,8 @@ public class TasksModels {
     @GeneratedValue(strategy = GenerationType.IDENTITY) // Automatically generate the task_id
     private long task_id;
 
-    private long user_id;
-
+    private long userId;
+    @Column(name="task_name")
     private String task_name;
 
     private String task_description;
@@ -29,10 +29,10 @@ public class TasksModels {
     // Default constructor (required for JPA)
     public TasksModels() {}
 
-    public TasksModels(long task_id, long user_id, String task_name, String task_description, String priority,
+    public TasksModels(long task_id, long userId, String task_name, String task_description, String priority,
                        String estimated_duration, String deadline, String status, String created_at) {
         this.task_id = task_id;
-        this.user_id = user_id;
+        this.userId = userId;
         this.task_name = task_name;
         this.task_description = task_description;
         this.priority = priority;
@@ -51,11 +51,11 @@ public class TasksModels {
     }
 
     public long getUser_id() {
-        return user_id;
+        return userId;
     }
 
-    public void setUser_id(long user_id) {
-        this.user_id = user_id;
+    public void setUser_id(long userId) {
+        this.userId = userId;
     }
 
     public String getTask_name() {

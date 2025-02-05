@@ -9,13 +9,14 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@CrossOrigin(
-        origins = {"http://localhost:8081"}
-)
+@CrossOrigin(origins = {"http://localhost:8081"})
 @RestController
 @RequestMapping("/api/tasks")
 public class TasksControllers {
+    private static final Logger logger = LoggerFactory.getLogger(TasksControllers.class);
 
     private final TaskService taskService;
 
@@ -47,33 +48,27 @@ public class TasksControllers {
     // Asynchronously create a new task
     @PostMapping
     public CompletableFuture<ResponseEntity<TasksDTO>> createTask(@RequestBody TasksDTO newTask) {
-        // Convert the incoming DTO to a TasksModels entity
-        TasksModels taskEntity = new TasksModels();
-        taskEntity.setTask_name(newTask.getTaskName()); // Mapping camelCase to snake_case
-        taskEntity.setTask_description(newTask.getTaskDescription()); // Mapping camelCase to snake_case
-        taskEntity.setPriority(newTask.getPriority());
-        taskEntity.setEstimated_duration(newTask.getEstimatedDuration()); // Mapping camelCase to snake_case
-        taskEntity.setDeadline(newTask.getDeadline());
-        taskEntity.setStatus(newTask.getStatus());
-        taskEntity.setCreated_at(newTask.getCreatedAt()); // Mapping camelCase to snake_case
+        try {
+            TasksModels taskEntity = convertToEntity(newTask);
+            validateTask(taskEntity); // Validate task before saving
 
-        // Call service to save the task
-        return taskService.createTask(taskEntity)
-                .thenApply(task -> ResponseEntity.status(201).body(task)); // Return 201 Created
+            // Call service to save the task
+            return taskService.createTask(taskEntity)
+                    .thenApply(task -> ResponseEntity.status(201).body(task)); // Return 201 Created
+        } catch (IllegalArgumentException e) {
+            logger.error("Validation failed: {}", e.getMessage());
+            return CompletableFuture.completedFuture(ResponseEntity.badRequest().body(null));
+        } catch (Exception e) {
+            logger.error("Failed to create task: {}", e.getMessage());
+            return CompletableFuture.completedFuture(ResponseEntity.status(500).body(null));
+        }
     }
 
     // Asynchronously update a task
     @PutMapping("/{id}")
     public CompletableFuture<ResponseEntity<TasksDTO>> updateTask(@PathVariable long id, @RequestBody TasksDTO updatedTask) {
-        // Convert the incoming DTO to a TasksModels entity
-        TasksModels taskEntity = new TasksModels();
-        taskEntity.setTask_name(updatedTask.getTaskName()); // Mapping camelCase to snake_case
-        taskEntity.setTask_description(updatedTask.getTaskDescription()); // Mapping camelCase to snake_case
-        taskEntity.setPriority(updatedTask.getPriority());
-        taskEntity.setEstimated_duration(updatedTask.getEstimatedDuration()); // Mapping camelCase to snake_case
-        taskEntity.setDeadline(updatedTask.getDeadline());
-        taskEntity.setStatus(updatedTask.getStatus());
-        taskEntity.setCreated_at(updatedTask.getCreatedAt()); // Mapping camelCase to snake_case
+        TasksModels taskEntity = convertToEntity(updatedTask);
+        validateTask(taskEntity); // Validate task before updating
 
         // Call service to update the task
         return taskService.updateTask(id, taskEntity)
@@ -97,5 +92,26 @@ public class TasksControllers {
                         return ResponseEntity.notFound().build();
                     }
                 });
+    }
+
+    // Helper method to convert DTO to entity
+    private TasksModels convertToEntity(TasksDTO taskDTO) {
+        TasksModels taskEntity = new TasksModels();
+        taskEntity.setUser_id(taskDTO.getUserId());
+        taskEntity.setTask_name(taskDTO.getTaskName()); // Mapping camelCase to snake_case
+        taskEntity.setTask_description(taskDTO.getTaskDescription()); // Mapping camelCase to snake_case
+        taskEntity.setPriority(taskDTO.getPriority());
+        taskEntity.setEstimated_duration(taskDTO.getEstimatedDuration()); // Mapping camelCase to snake_case
+        taskEntity.setDeadline(taskDTO.getDeadline());
+        taskEntity.setStatus(taskDTO.getStatus());
+        taskEntity.setCreated_at(taskDTO.getCreatedAt()); // Mapping camelCase to snake_case
+        return taskEntity;
+    }
+
+    // Helper method to validate task entity
+    private void validateTask(TasksModels task) {
+        if (task.getTask_name() == null || task.getTask_name().isEmpty()) {
+            throw new IllegalArgumentException("Task name must not be null or empty");
+        }
     }
 }

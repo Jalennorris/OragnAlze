@@ -1,30 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Greeting: React.FC = () => {
-    const userName = localStorage.getItem('username');
-    
-
-   
-    console.log(`Greeting ${userName}`);
-
+    const [displayName, setDisplayName] = useState<string>('');
     const [greeting, setGreeting] = useState<string>('');
-    const [username, setUsername] = useState<string>(userName);
     const [isEditing, setIsEditing] = useState<boolean>(false);
-    const [tempUsername, setTempUsername] = useState<string>(username);
+    const [loading, setIsLoading] = useState<boolean>(false);
 
     const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in animation
     const scaleAnim = useRef(new Animated.Value(0.8)).current; // For scale animation
 
     useEffect(() => {
-        handleGreeting(username);
+        const loadDisplayName = async () => {
+            const storedDisplayName = await AsyncStorage.getItem('displayName');
+            if (storedDisplayName) {
+                setDisplayName(storedDisplayName);
+                handleGreeting(storedDisplayName);
+            }
+        };
+
+        loadDisplayName();
+
         // Fade-in animation
         Animated.timing(fadeAnim, {
             toValue: 1,
             duration: 1000,
             useNativeDriver: true,
         }).start();
+
         // Scale animation
         Animated.timing(scaleAnim, {
             toValue: 1,
@@ -32,25 +38,41 @@ const Greeting: React.FC = () => {
             easing: Easing.elastic(1.2),
             useNativeDriver: true,
         }).start();
-    }, [username]);
+    }, []);
 
-    const handleGreeting = (username: string) => {
-        const currentHour = new Date().getHours();
-        if (currentHour < 12) {
-            setGreeting(`Good Morning, ${username}! 🌞`);
-        } else if (currentHour >= 12 && currentHour < 18) {
-            setGreeting(`Good Afternoon, ${username}! 🌤️`);
-        } else if (currentHour >= 18 && currentHour < 24) {
-            setGreeting(`Good Evening, ${username}! 🌙`);
-        } else {
-            setGreeting(`Hi, ${username}! 👋`);
+    const handleSave = async () => {
+        setIsLoading(true);
+        try {
+            const userId = await AsyncStorage.getItem('userId');
+            if (!userId) return;
+
+            await axios.patch(`http://localhost:8080/api/users/${userId}`, {
+                display_name: displayName,
+            });
+
+            await AsyncStorage.setItem('displayName', displayName);
+            handleGreeting(displayName);
+        } catch (error) {
+            console.error('Error saving display name:', error);
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const handleEditUsername = () => {
+    const handleGreeting = (name: string) => {
+        const currentHour = new Date().getHours();
+        if (currentHour < 12) {
+            setGreeting(`Good Morning, ${name}! 🌞`);
+        } else if (currentHour < 18) {
+            setGreeting(`Good Afternoon, ${name}! 🌤️`);
+        } else {
+            setGreeting(`Good Evening, ${name}! 🌙`);
+        }
+    };
+
+    const handleEditDisplayName = async () => {
         if (isEditing) {
-            setUsername(tempUsername);
-            localStorage.setItem('displayName', tempUsername);
+            await handleSave();
         }
         setIsEditing(!isEditing);
     };
@@ -62,15 +84,19 @@ const Greeting: React.FC = () => {
                 {isEditing ? (
                     <TextInput
                         style={styles.input}
-                        value={tempUsername}
-                        onChangeText={setTempUsername}
+                        value={displayName}
+                        onChangeText={setDisplayName}
                         autoFocus
                         placeholder="Enter your name"
                         placeholderTextColor="#999"
                     />
                 ) : null}
-                <TouchableOpacity onPress={handleEditUsername} style={styles.editButton}>
-                    <Ionicons name={isEditing ? 'checkmark-circle' : 'pencil'} size={24} color="#333" />
+                <TouchableOpacity onPress={handleEditDisplayName} style={styles.editButton}>
+                    {loading ? (
+                        <ActivityIndicator color="#333" />
+                    ) : (
+                        <Ionicons name={isEditing ? 'checkmark-circle' : 'pencil'} size={24} color="#333" />
+                    )}
                 </TouchableOpacity>
             </View>
         </Animated.View>

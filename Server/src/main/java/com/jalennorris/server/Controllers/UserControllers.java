@@ -5,7 +5,10 @@ import com.jalennorris.server.service.UserService;
 import com.jalennorris.server.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.web.bind.annotation.*;
+import  com.jalennorris.server.dto.ChangePasswordRequest;
+import  com.jalennorris.server.Response.ChangePasswordResponse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,11 +25,13 @@ public class UserControllers {
     private static final Logger log = LoggerFactory.getLogger(UserControllers.class);
     private final UserService userService;
     private final JwtUtil jwtUtil;
+    private final StringHttpMessageConverter stringHttpMessageConverter;
 
     @Autowired
-    public UserControllers(UserService userService, JwtUtil jwtUtil) {
+    public UserControllers(UserService userService, JwtUtil jwtUtil, StringHttpMessageConverter stringHttpMessageConverter) {
         this.userService = userService;
         this.jwtUtil = jwtUtil;
+        this.stringHttpMessageConverter = stringHttpMessageConverter;
     }
 
     @GetMapping("/welcome")
@@ -74,5 +79,12 @@ public class UserControllers {
     public CompletableFuture<ResponseEntity<Void>> deleteUser(@PathVariable long id) {
         return userService.deleteUser(id)
                 .thenApply(isDeleted -> isDeleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/{id}/change-password")
+    public ResponseEntity<ChangePasswordResponse> changePassword(@PathVariable Long id, @RequestBody ChangePasswordRequest request) {
+        String newToken = userService.changePassword(id, request.getCurrentPassword(), request.getNewPassword())
+                .join();
+        return ResponseEntity.ok(new ChangePasswordResponse(newToken));
     }
 }

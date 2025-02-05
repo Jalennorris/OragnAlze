@@ -6,6 +6,7 @@ import com.jalennorris.server.Repository.UserRepository;
 import com.jalennorris.server.enums.Role;
 import com.jalennorris.server.dto.UserDTO;
 import com.jalennorris.server.util.JwtUtil;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.scheduling.annotation.Async;
@@ -27,11 +28,15 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
+    private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository, JwtUtil jwtUtil) {
+    public UserService(UserRepository userRepository, JwtUtil jwtUtil, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
+        this.passwordEncoder = passwordEncoder;
     }
+
+
 
     // Helper method to convert UserModels to UserDTO
     private UserDTO convertToDto(UserModels userModel, String token) {
@@ -244,4 +249,26 @@ public class UserService {
             return true;
         }
     }
+
+    //change password method
+
+    @Async
+    @Transactional
+    public CompletableFuture<String> changePassword(long userId, String currentPassword, String newPassword) {
+        return CompletableFuture.supplyAsync(() -> {
+            UserModels user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            if (!currentPassword.matches(user.getPassword())) {
+                throw new RuntimeException("Current password is incorrect.");
+            }
+
+            user.setPassword(newPassword);
+            userRepository.save(user);
+
+            // Generate a new token
+            return jwtUtil.generateToken(user.getUsername(), user.getRole());
+        });
+    }
+
 }

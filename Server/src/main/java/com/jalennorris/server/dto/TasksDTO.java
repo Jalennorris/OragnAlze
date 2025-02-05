@@ -2,6 +2,10 @@ package com.jalennorris.server.dto;
 
 public class TasksDTO {
 
+
+    //when you are creating / testing use thses instead of models
+
+
     private long taskId;
     private long userId;
     private String taskName;
