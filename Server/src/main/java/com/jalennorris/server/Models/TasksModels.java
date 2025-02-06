@@ -26,11 +26,17 @@ public class TasksModels {
 
     private String created_at;
 
+    @Column(name = "completed" )
+    private boolean completed;
+
+    @Column(name = "category" )
+    private String category;
+
     // Default constructor (required for JPA)
     public TasksModels() {}
 
     public TasksModels(long task_id, long userId, String task_name, String task_description, String priority,
-                       String estimated_duration, String deadline, String status, String created_at) {
+                       String estimated_duration, String deadline, String status, boolean completed, String category ,String created_at) {
         this.task_id = task_id;
         this.userId = userId;
         this.task_name = task_name;
@@ -39,7 +45,10 @@ public class TasksModels {
         this.estimated_duration = estimated_duration;
         this.deadline = deadline;
         this.status = status;
+        this.completed = completed;
+        this.category = category;
         this.created_at = created_at;
+
     }
 
     public long getTask_id() {
@@ -113,4 +122,28 @@ public class TasksModels {
     public void setCreated_at(String created_at) {
         this.created_at = created_at;
     }
+
+    public long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(long userId) {
+        this.userId = userId;
+    }
+    public boolean isCompleted() {
+        return completed;
+    }
+
+    public void setCompleted(boolean completed) {
+        this.completed = completed;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
 }

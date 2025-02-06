@@ -20,14 +20,19 @@ import NavBar from '@/components/Navbar';
 import tasksData from '../data/tasks.json';
 import Icon from 'react-native-vector-icons/Ionicons';
 import FilterComponent from '@/components/FilterComponent';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Define types for the task structure
 interface Task {
-  id: string;
-  title: string;
-  description: string;
-  dueDate: string;
+  taskId: Number;
+  userId: Number;
+  taskName: string;
+  taskDescription: string;
+  estimatedDuration: Number;
+  deadline: Date;
   completed: boolean;
+  status: string;
+  createdAt: Date;
   priority: 'low' | 'medium' | 'high';
   category?: string;
 }
@@ -63,6 +68,7 @@ const HomeScreen: React.FC = () => {
   const [showSearch, setShowSearch] = useState(false);
   const [showFutureTasks, setShowFutureTasks] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [data, setData] = useState<Task[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,8 +77,54 @@ const HomeScreen: React.FC = () => {
   const [sortBy, setSortBy] = useState<'date' | 'priority' | 'completed'>('date');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'work' | 'personal' | 'school'| 'other'>('all');
   const [showFilterOptions, setShowFilterOptions] = useState(false);
+ 
+  
 
   const searchAnim = useRef(new Animated.Value(0)).current;
+
+
+
+  const getTasks = async () => {
+    try {
+      console.log('Fetching userId from AsyncStorage...');
+      const userId = await AsyncStorage.getItem('userId'); // Await is needed
+  
+      if (!userId) {
+        console.error("User ID not found in AsyncStorage. Redirecting to login...");
+        router.push('/login'); // Redirect before throwing error
+        throw new Error("User ID not found in AsyncStorage");
+      }
+      
+      console.log(`User ID retrieved: ${userId}`);
+      console.log(`Fetching tasks from: http://localhost:8080/api/tasks/user/${userId}`);
+  
+      const response = await fetch(`http://localhost:8080/api/tasks/user/${userId}`);
+  
+      console.log(`Response status: ${response.status}`);
+  
+      if (!response.ok) {
+        console.error(`HTTP Error! Status: ${response.status}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+  
+      const data = await response.json();
+      console.log('Raw response JSON:', JSON.stringify(data, null, 2));
+  
+      setData(data);
+      console.log('Data successfully stored in state.');
+  
+      loadTasks(data);
+      console.log('loadTasks function executed with fetched data.');
+  
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to load tasks:', err);
+    } finally {
+      console.log('getTasks execution completed.');
+      setLoading(false);
+    }
+  };
+  
 
   const toggleSearch = useCallback(() => {
     Animated.timing(searchAnim, {
@@ -89,15 +141,17 @@ const HomeScreen: React.FC = () => {
   });
 
   useEffect(() => {
-    loadTasks();
+    getTasks();
   }, []);
 
   //loading Task
 
-  const loadTasks = () => {
+
+  const loadTasks = (tasksData?: Task[]) => {
     try {
-      if (tasksData && Array.isArray(tasksData.tasks)) {
-        setTasks(tasksData.tasks);
+      if (tasksData && Array.isArray(tasksData)) {
+        setTasks(tasksData);
+        
       } else {
         throw new Error('Tasks data is not properly formatted');
       }
@@ -124,14 +178,31 @@ const HomeScreen: React.FC = () => {
 
   
   const formatLocalDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-      timeZone: userTimezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(date);
+    try {
+      if (!dateString) {
+        console.error('❌ Error: dateString is null or undefined');
+        return 'Invalid Date';
+      }
+  
+      const date = new Date(dateString);
+  
+      if (isNaN(date.getTime())) {
+        console.error(`❌ Error: Invalid date received: ${dateString}`);
+        return 'Invalid Date';
+      }
+  
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: userTimezone || 'UTC', // Fallback to UTC if userTimezone is undefined
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(date);
+    } catch (err) {
+      console.error('❌ Error formatting date:', err);
+      return 'Invalid Date';
+    }
   };
+  
 
   // Get today's date in the user's local timezone
   const today = new Date();
@@ -152,16 +223,16 @@ const HomeScreen: React.FC = () => {
 
   // Function to toggle task completion
 
-  const toggleTaskCompletion = useCallback((taskId: string) => {
+  const toggleTaskCompletion = useCallback((taskId: number) => {
     setTasks((prevTasks) =>
-      prevTasks.map((task) => (task.id === taskId ? { ...task, completed: !task.completed } : task))
+      prevTasks.map((task) => (task.taskId === taskId ? { ...task, completed: !task.completed } : task))
     );
   }, []);
 
   //delete task function
 
-  const deleteTask = useCallback((taskId: string) => {
-    setTasks((prevTasks) => prevTasks.filter((task) => task.id !== taskId));
+  const deleteTask = useCallback((taskId: number) => {
+    setTasks((prevTasks) => prevTasks.filter((task) => task.taskId !== taskId));
   }, []);
 
   const getPriorityColor = useCallback((priority: 'low' | 'medium' | 'high') => {
@@ -172,7 +243,7 @@ const HomeScreen: React.FC = () => {
   const groupTasksByDate = useCallback((tasks: Task[]) => {
     const groupedTasks: { [date: string]: Task[] } = {};
     tasks.forEach((task) => {
-      const localDate = formatLocalDate(task.dueDate);
+      const localDate = formatLocalDate(task.deadline);
       if (!groupedTasks[localDate]) {
         groupedTasks[localDate] = [];
       }
@@ -208,7 +279,7 @@ const HomeScreen: React.FC = () => {
     const tasksToSort = [...filteredTasksByCategory];
     switch (sortBy) {
       case 'date':
-        return tasksToSort.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+        return tasksToSort.sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
       case 'priority':
         const priorityOrder = { high: 1, medium: 2, low: 3 };
         return tasksToSort.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
@@ -224,20 +295,20 @@ const HomeScreen: React.FC = () => {
     () =>
       sortedTasks
         .filter((task) => {
-          const taskDate = new Date(task.dueDate);
+          const taskDate = new Date(task.deadline);
           return taskDate >= startOfWeek && taskDate <= endOfWeek;
         })
-        .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()),
+        .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()),
     [sortedTasks, startOfWeek, endOfWeek]
   );
 
   const futureTasks = useMemo(
-    () => sortedTasks.filter((task) => new Date(task.dueDate) > endOfWeek),
+    () => sortedTasks.filter((task) => new Date(task.deadline) > endOfWeek),
     [sortedTasks, endOfWeek]
   );
 
   const todayTasks = useMemo(
-    () => sortedTasks.filter((task) => formatLocalDate(task.dueDate) === todayString),
+    () => sortedTasks.filter((task) => formatLocalDate(task.deadline) === todayString),
     [sortedTasks, todayString]
   );
 
@@ -246,11 +317,12 @@ const HomeScreen: React.FC = () => {
     () =>
       sortedTasks.filter(
         (task) =>
-          task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          task.description.toLowerCase().includes(searchQuery.toLowerCase())
+          task.taskName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          task.taskDescription.toLowerCase().includes(searchQuery.toLowerCase())
       ),
     [sortedTasks, searchQuery]
   );
+
 
   // Task count summary
   const completedTasksCount = useMemo(() => tasks.filter((task) => task.completed).length, [tasks]);

@@ -44,7 +44,19 @@ public class TasksControllers {
                     }
                 });
     }
+    //fetching all tasks by user Id
 
+    @GetMapping("/user/{userId}")
+    public CompletableFuture<ResponseEntity<List<TasksDTO>>> getTasksByUserId(@PathVariable("userId") long userId) {
+        return taskService.getTasksByUserId(userId)
+                .thenApply(tasks -> {
+                    if (tasks != null && !tasks.isEmpty()) {
+                        return ResponseEntity.ok(tasks);
+                    } else {
+                        return ResponseEntity.notFound().build();
+                    }
+                });
+    }
     // Asynchronously create a new task
     @PostMapping
     public CompletableFuture<ResponseEntity<TasksDTO>> createTask(@RequestBody TasksDTO newTask) {
@@ -104,6 +116,8 @@ public class TasksControllers {
         taskEntity.setEstimated_duration(taskDTO.getEstimatedDuration()); // Mapping camelCase to snake_case
         taskEntity.setDeadline(taskDTO.getDeadline());
         taskEntity.setStatus(taskDTO.getStatus());
+        taskEntity.setCompleted(taskDTO.isCompleted());
+        taskEntity.setCategory(taskDTO.getCategory());
         taskEntity.setCreated_at(taskDTO.getCreatedAt()); // Mapping camelCase to snake_case
         return taskEntity;
     }

@@ -1,10 +1,11 @@
 package com.jalennorris.server.dto;
 
-public class TasksDTO {
+import java.io.Serializable;
 
+public class TasksDTO implements Serializable {
 
-    //when you are creating / testing use thses instead of models
-
+    // When you are creating/testing use these instead of models
+    private static final long serialVersionUID = 1L;
 
     private long taskId;
     private long userId;
@@ -14,6 +15,8 @@ public class TasksDTO {
     private String estimatedDuration;
     private String deadline;
     private String status;
+    private boolean completed;
+    private String category;
     private String createdAt;
 
     // Default constructor
@@ -21,7 +24,7 @@ public class TasksDTO {
 
     // Constructor with parameters
     public TasksDTO(long taskId, long userId, String taskName, String taskDescription, String priority,
-                    String estimatedDuration, String deadline, String status, String createdAt) {
+                    String estimatedDuration, String deadline, String status, boolean completed, String category, String createdAt) {
         this.taskId = taskId;
         this.userId = userId;
         this.taskName = taskName;
@@ -30,6 +33,8 @@ public class TasksDTO {
         this.estimatedDuration = estimatedDuration;
         this.deadline = deadline;
         this.status = status;
+        this.completed = completed;
+        this.category = category;
         this.createdAt = createdAt;
     }
 
@@ -104,5 +109,21 @@ public class TasksDTO {
 
     public void setCreatedAt(String createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public boolean isCompleted() {
+        return completed;
+    }
+
+    public void setCompleted(boolean completed) {
+        this.completed = completed;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
     }
 }

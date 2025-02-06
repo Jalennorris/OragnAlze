@@ -42,6 +42,18 @@ public class TaskService {
         });
     }
 
+    // getting all tasks by userId
+    @Async
+    @Cacheable(value = "tasks", key = "#userId")
+    public CompletableFuture<List<TasksDTO>> getTasksByUserId(long userId) {
+        return CompletableFuture.supplyAsync(() -> {
+            List<TasksModels> tasks = tasksRepository.findByUserId(userId);
+            return tasks.stream()
+                    .map(this::convertToDTO)
+                    .collect(Collectors.toList());
+        });
+    }
+
     @Async
     @CacheEvict(value = "tasks", allEntries = true)
     public CompletableFuture<TasksDTO> createTask(TasksModels task) {
@@ -62,9 +74,13 @@ public class TaskService {
                 existingTask.setTask_name(task.getTask_name()); // Keep snake_case as in TasksModels
                 existingTask.setTask_description(task.getTask_description()); // Keep snake_case
                 existingTask.setPriority(task.getPriority());
-                existingTask.setEstimated_duration(task.getEstimated_duration()); // Keep snake_case
+                existingTask.setEstimated_duration(task.getEstimated_duration());
+                existingTask.setCompleted(task.isCompleted());
+                existingTask.setCategory(task.getCategory());
+                // Keep snake_case
                 existingTask.setDeadline(task.getDeadline());
                 existingTask.setStatus(task.getStatus());
+
                 existingTask.setCreated_at(task.getCreated_at()); // Keep snake_case
                 validateTask(existingTask);
                 TasksModels updatedTask = tasksRepository.save(existingTask);
@@ -101,6 +117,8 @@ public class TaskService {
         taskDTO.setPriority(task.getPriority());
         taskDTO.setEstimatedDuration(task.getEstimated_duration()); // Map snake_case field to camelCase
         taskDTO.setDeadline(task.getDeadline());
+        taskDTO.setCompleted(task.isCompleted());
+        taskDTO.setCategory(task.getCategory());
         taskDTO.setStatus(task.getStatus());
         taskDTO.setCreatedAt(task.getCreated_at()); // Map snake_case field to camelCase
         return taskDTO;
