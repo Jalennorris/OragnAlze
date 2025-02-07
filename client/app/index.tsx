@@ -24,12 +24,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Define types for the task structure
 interface Task {
-  taskId: Number;
-  userId: Number;
+  taskId: number; // Use 'number' instead of 'Number'
+  userId: number; // Use 'number' instead of 'Number'
   taskName: string;
   taskDescription: string;
-  estimatedDuration: Number;
-  deadline: Date;
+  estimatedDuration: number; // Use 'number' instead of 'Number'
+  deadline: string;
   completed: boolean;
   status: string;
   createdAt: Date;
@@ -44,7 +44,7 @@ const LIGHT_COLORS = {
   high: '#f44336', // red
   today: '#f44336', // red
   text: '#000',
-  background: '#blue',
+  background: '#ADD8E6', // light blue
   searchBackground: '#f1f1f1',
   placeholder: '#888',
 };
@@ -77,12 +77,8 @@ const HomeScreen: React.FC = () => {
   const [sortBy, setSortBy] = useState<'date' | 'priority' | 'completed'>('date');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'work' | 'personal' | 'school'| 'other'>('all');
   const [showFilterOptions, setShowFilterOptions] = useState(false);
- 
   
-
   const searchAnim = useRef(new Animated.Value(0)).current;
-
-
 
   const getTasks = async () => {
     try {
@@ -124,7 +120,6 @@ const HomeScreen: React.FC = () => {
       setLoading(false);
     }
   };
-  
 
   const toggleSearch = useCallback(() => {
     Animated.timing(searchAnim, {
@@ -146,12 +141,10 @@ const HomeScreen: React.FC = () => {
 
   //loading Task
 
-
   const loadTasks = (tasksData?: Task[]) => {
     try {
       if (tasksData && Array.isArray(tasksData)) {
         setTasks(tasksData);
-        
       } else {
         throw new Error('Tasks data is not properly formatted');
       }
@@ -175,8 +168,6 @@ const HomeScreen: React.FC = () => {
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   // Helper function to format dates in the user's local timezone
-
-  
   const formatLocalDate = (dateString: string) => {
     try {
       if (!dateString) {
@@ -202,7 +193,6 @@ const HomeScreen: React.FC = () => {
       return 'Invalid Date';
     }
   };
-  
 
   // Get today's date in the user's local timezone
   const today = new Date();
@@ -210,11 +200,10 @@ const HomeScreen: React.FC = () => {
 
   // Calculate the start and end of the current week (Monday to Sunday) in the user's local timezone
   const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay() );
+  startOfWeek.setDate(today.getDate() - today.getDay());
 
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(startOfWeek.getDate() + 7);
-
 
   //Router routes
   const handleTaskPress = useCallback((taskId: string): void => {
@@ -222,7 +211,6 @@ const HomeScreen: React.FC = () => {
   }, [router]);
 
   // Function to toggle task completion
-
   const toggleTaskCompletion = useCallback((taskId: number) => {
     setTasks((prevTasks) =>
       prevTasks.map((task) => (task.taskId === taskId ? { ...task, completed: !task.completed } : task))
@@ -230,11 +218,11 @@ const HomeScreen: React.FC = () => {
   }, []);
 
   //delete task function
-
   const deleteTask = useCallback((taskId: number) => {
     setTasks((prevTasks) => prevTasks.filter((task) => task.taskId !== taskId));
   }, []);
 
+  //priority color function
   const getPriorityColor = useCallback((priority: 'low' | 'medium' | 'high') => {
     return COLORS[priority] || COLORS.text;
   }, [COLORS]);
@@ -264,19 +252,22 @@ const HomeScreen: React.FC = () => {
 
   // Filter tasks by priority
   const filteredTasksByPriority = useMemo(() => {
+    if (!tasks) return [];
     if (selectedPriority === 'all') return tasks;
     return tasks.filter((task) => task.priority === selectedPriority);
   }, [tasks, selectedPriority]);
 
   // Filter tasks by category
   const filteredTasksByCategory = useMemo(() => {
+    if (!filteredTasksByPriority) return [];
     if (selectedCategory === 'all') return filteredTasksByPriority;
     return filteredTasksByPriority.filter((task) => task.category === selectedCategory);
   }, [filteredTasksByPriority, selectedCategory]);
 
   // Sort tasks
   const sortedTasks = useMemo(() => {
-    const tasksToSort = [...filteredTasksByCategory];
+    if (!filteredTasksByCategory) return [];
+    const tasksToSort = Array.isArray(filteredTasksByCategory) ? [...filteredTasksByCategory] : [];
     switch (sortBy) {
       case 'date':
         return tasksToSort.sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
@@ -291,41 +282,42 @@ const HomeScreen: React.FC = () => {
   }, [filteredTasksByCategory, sortBy]);
 
   // Filter tasks for the current week and future
-  const currentWeekTasks = useMemo(
-    () =>
-      sortedTasks
-        .filter((task) => {
-          const taskDate = new Date(task.deadline);
-          return taskDate >= startOfWeek && taskDate <= endOfWeek;
-        })
-        .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()),
-    [sortedTasks, startOfWeek, endOfWeek]
-  );
+  const currentWeekTasks = useMemo(() => {
+    if (!sortedTasks) return [];
+    return Array.isArray(sortedTasks)
+      ? sortedTasks
+          .filter((task) => {
+            const taskDate = new Date(task.deadline);
+            return taskDate >= startOfWeek && taskDate <= endOfWeek;
+          })
+          .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+      : [];
+  }, [sortedTasks, startOfWeek, endOfWeek]);
 
-  const futureTasks = useMemo(
-    () => sortedTasks.filter((task) => new Date(task.deadline) > endOfWeek),
-    [sortedTasks, endOfWeek]
-  );
+  const futureTasks = useMemo(() => {
+    if (!sortedTasks) return [];
+    return Array.isArray(sortedTasks) ? sortedTasks.filter((task) => new Date(task.deadline) > endOfWeek) : [];
+  }, [sortedTasks, endOfWeek]);
 
-  const todayTasks = useMemo(
-    () => sortedTasks.filter((task) => formatLocalDate(task.deadline) === todayString),
-    [sortedTasks, todayString]
-  );
+  const todayTasks = useMemo(() => {
+    if (!sortedTasks) return [];
+    return Array.isArray(sortedTasks) ? sortedTasks.filter((task) => formatLocalDate(task.deadline) === todayString) : [];
+  }, [sortedTasks, todayString]);
 
   // Filter tasks by search query
-  const filteredTasks = useMemo(
-    () =>
-      sortedTasks.filter(
-        (task) =>
-          task.taskName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          task.taskDescription.toLowerCase().includes(searchQuery.toLowerCase())
-      ),
-    [sortedTasks, searchQuery]
-  );
-
+  const filteredTasks = useMemo(() => {
+    if (!sortedTasks) return [];
+    return Array.isArray(sortedTasks)
+      ? sortedTasks.filter(
+          (task) =>
+            task.taskName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            task.taskDescription.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : [];
+  }, [sortedTasks, searchQuery]);
 
   // Task count summary
-  const completedTasksCount = useMemo(() => tasks.filter((task) => task.completed).length, [tasks]);
+  const completedTasksCount = useMemo(() => (Array.isArray(tasks) ? tasks.filter((task) => task.completed).length : 0), [tasks]);
 
   return (
     <View style={[styles.container, { backgroundColor: COLORS.background }]}>
@@ -373,26 +365,26 @@ const HomeScreen: React.FC = () => {
             </View>
 
             {showFilterOptions && 
-               <FilterComponent
-        selectedPriority={selectedPriority}
-        setSelectedPriority={setSelectedPriority}
-        selectedCategory={selectedCategory}
-        setSelectedCategory={setSelectedCategory}
-        sortBy={sortBy}
-        setSortBy={setSortBy}
-        colors={COLORS}
-      />
+              <FilterComponent
+                selectedPriority={selectedPriority}
+                setSelectedPriority={setSelectedPriority}
+                selectedCategory={selectedCategory}
+                setSelectedCategory={setSelectedCategory}
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                colors={COLORS}
+              />
             }
 
             <FlatList
               data={filteredTasks}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item.taskId.toString()}
               renderItem={({ item }) => (
                 <TaskItem
                   task={item}
-                  onPress={() => handleTaskPress(item.id)}
-                  onToggleCompletion={() => toggleTaskCompletion(item.id)}
-                  onDelete={() => deleteTask(item.id)}
+                  onPress={() => handleTaskPress(item.taskId.toString())}
+                  onToggleCompletion={() => toggleTaskCompletion(item.taskId)}
+                  onDelete={() => deleteTask(item.taskId)}
                   priorityColor={getPriorityColor(item.priority)}
                 />
               )}
@@ -409,11 +401,11 @@ const HomeScreen: React.FC = () => {
                       <Text style={[styles.dateText, styles.todayText]}>Today</Text>
                       {todayTasks.map((task) => (
                         <TaskItem
-                          key={task.id}
+                          key={task.taskId}
                           task={task}
-                          onPress={() => handleTaskPress(task.id)}
-                          onToggleCompletion={() => toggleTaskCompletion(task.id)}
-                          onDelete={() => deleteTask(task.id)}
+                          onPress={() => handleTaskPress(task.taskId.toString())}
+                          onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
+                          onDelete={() => deleteTask(task.taskId)}
                           priorityColor={getPriorityColor(task.priority)}
                         />
                       ))}
@@ -430,16 +422,16 @@ const HomeScreen: React.FC = () => {
 
                   {currentWeekTasks.length > 0 ? (
                     currentWeekTasks.map((task) => (
-                      <View key={task.dueDate} style={styles.dateSection}>
-                        <Text style={[styles.dateText, formatLocalDate(task.dueDate) === todayString && styles.todayText]}>
-                          {formatLocalDate(task.dueDate) === todayString ? 'Today' : getDayName(task.dueDate)}
+                      <View key={task.taskId.toString()} style={styles.dateSection}>
+                        <Text style={[styles.dateText, formatLocalDate(task.deadline) === todayString && styles.todayText]}>
+                          {formatLocalDate(task.deadline) === todayString ? 'Today' : getDayName(task.deadline)}
                         </Text>
                         <TaskItem
-                          key={task.id}
+                          key={task.taskId.toString()}
                           task={task}
-                          onPress={() => handleTaskPress(task.id)}
-                          onToggleCompletion={() => toggleTaskCompletion(task.id)}
-                          onDelete={() => deleteTask(task.id)}
+                          onPress={() => handleTaskPress(task.taskId.toString())}
+                          onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
+                          onDelete={() => deleteTask(task.taskId)}
                           priorityColor={getPriorityColor(task.priority)}
                         />
                       </View>
@@ -471,11 +463,11 @@ const HomeScreen: React.FC = () => {
                       futureTasks.length > 0 ? (
                         futureTasks.map((task) => (
                           <TaskItem
-                            key={task.id}
+                            key={task.taskId.toString()}
                             task={task}
-                            onPress={() => handleTaskPress(task.id)}
-                            onToggleCompletion={() => toggleTaskCompletion(task.id)}
-                            onDelete={() => deleteTask(task.id)}
+                            onPress={() => handleTaskPress(task.taskId.toString())}
+                            onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
+                            onDelete={() => deleteTask(task.taskId)}
                             priorityColor={getPriorityColor(task.priority)}
                           />
                         ))
@@ -514,6 +506,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   dateSection: {
+   
     marginBottom: 20,
   },
   dateText: {

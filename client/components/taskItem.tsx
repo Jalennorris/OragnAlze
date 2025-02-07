@@ -7,12 +7,17 @@ import * as Haptics from 'expo-haptics';
 
 // Define types for the task structure
 interface Task {
-  id: string;
-  title: string;
-  description: string;
-  dueDate: string;
+  taskId: number;
+  userId: number;
+  taskName: string;
+  taskDescription: string;
+  estimatedDuration: number;
+  deadline: string;
   completed: boolean;
+  status: string;
+  createdAt: Date;
   priority: 'low' | 'medium' | 'high';
+  category?: string;
 }
 
 interface TaskItemProps {
@@ -31,12 +36,12 @@ const TaskItem: React.FC<TaskItemProps> = ({
   priorityColor,
 }) => {
   // Format due date for better readability
-  const formattedDueDate = task.dueDate
-    ? new Date(task.dueDate).toLocaleDateString()
+  const formattedDueDate = task
+    ? new Date(task.deadline).toLocaleDateString()
     : 'No due date';
 
   // Check if the task is overdue
-  const isOverdue = task.dueDate ? new Date(task.dueDate) < new Date() : false;
+  const isOverdue = task.deadline ? new Date(task.deadline) < new Date() : false;
 
   // Define gradient colors based on priority
   const gradientColors: { [key: string]: string[] } = {
@@ -44,6 +49,9 @@ const TaskItem: React.FC<TaskItemProps> = ({
     medium: ['#FF9800', '#FFC107'], // Orange gradient
     high: ['#F44336', '#E57373'], // Red gradient
   };
+
+  // Ensure the gradient colors for the task priority exist
+  const taskGradientColors = gradientColors[task.priority] || ['#FFFFFF', '#FFFFFF'];
 
   // Swipeable delete action
   const renderRightActions = (progress: Animated.AnimatedInterpolation, dragX: Animated.AnimatedInterpolation) => {
@@ -81,10 +89,10 @@ const TaskItem: React.FC<TaskItemProps> = ({
         style={styles.container}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`Task: ${task.title}. Due: ${formattedDueDate}. Priority: ${task.priority}`}
+        accessibilityLabel={`Task: ${task.taskName}. Due: ${formattedDueDate}. Priority: ${task.priority}`}
       >
         <LinearGradient
-          colors={gradientColors[task.priority]}
+          colors={taskGradientColors}
           style={styles.gradientBackground}
           start={[0, 0]}
           end={[1, 1]}
@@ -93,7 +101,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
           <View style={styles.taskInfo}>
             <View style={styles.header}>
               <Text style={[styles.title, { color: priorityColor }]} numberOfLines={1} ellipsizeMode="tail">
-                {task.title}
+                {task.taskName}
               </Text>
               <Ionicons
                 name={task.priority === 'high' ? 'alert-circle' : task.priority === 'medium' ? 'alert' : 'checkmark-circle'}
@@ -102,7 +110,10 @@ const TaskItem: React.FC<TaskItemProps> = ({
               />
             </View>
             <Text style={styles.description} numberOfLines={2} ellipsizeMode="tail">
-              {task.description}
+              {task.taskDescription}
+            </Text>
+            <Text style={styles.category} numberOfLines={1} ellipsizeMode="tail">
+              {task.category}
             </Text>
             <View style={styles.dueDateContainer}>
               <Ionicons name="time-outline" size={14} color={isOverdue ? '#FF4444' : '#FFF'} />
@@ -172,6 +183,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 5,
     opacity: 0.9,
+  },
+  category: {
+    fontSize: 12,
+    color: '#fff',
+    marginBottom: 5,
+    opacity: 0.8,
   },
   dueDateContainer: {
     flexDirection: 'row',
