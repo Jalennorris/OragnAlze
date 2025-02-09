@@ -44,7 +44,7 @@ const LIGHT_COLORS = {
   high: '#f44336', // red
   today: '#f44336', // red
   text: '#000',
-  background: '#ADD8E6', // light blue
+  background: '#fff', // light blue
   searchBackground: '#f1f1f1',
   placeholder: '#888',
 };
@@ -54,7 +54,7 @@ const DARK_COLORS = {
   medium: '#f57c00', // dark orange
   high: '#d32f2f', // dark red
   today: '#d32f2f', // dark red
-  text: '#fff',
+  text: '#feefe9',
   background: '#121212',
   searchBackground: '#333',
   placeholder: '#888',
@@ -63,7 +63,8 @@ const DARK_COLORS = {
 const HomeScreen: React.FC = () => {
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const COLORS = colorScheme === 'dark' ? DARK_COLORS : LIGHT_COLORS;
+  console.log(colorScheme)
+  const COLORS = colorScheme === 'light' ? LIGHT_COLORS : DARK_COLORS;
 
   const [showSearch, setShowSearch] = useState(false);
   const [showFutureTasks, setShowFutureTasks] = useState(false);
@@ -196,16 +197,29 @@ const HomeScreen: React.FC = () => {
 
   // Get today's date in the user's local timezone
   const today = new Date();
+  console.log('Today:', today.toDateString());
   const todayString = formatLocalDate(today.toISOString());
+  console.log('Today in local timezone:', todayString);
 
   // Calculate the start and end of the current week (Monday to Sunday) in the user's local timezone
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay());
+  const startOfWeek = new Date(today);// Clone today's date
+  startOfWeek.setDate(today.getDate() - today.getDay());  
+  //getDate = day of the month and getDate is the number of week   [ feb 9 - 0(sunday )]
 
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+
+  //get the end of the month
+const endOfWeek = new Date(startOfWeek);
+
+endOfWeek.setDate(startOfWeek.getDate() + 6);
+console.log('Start of week:', startOfWeek.toDateString());
+console.log('End of week:', endOfWeek.toDateString());
+
+
+
 
   //Router routes
+  //
   const handleTaskPress = useCallback((taskId: string): void => {
     router.push(`/taskDetail?taskId=${taskId}`);
   }, [router]);
@@ -246,8 +260,12 @@ const HomeScreen: React.FC = () => {
   // Helper function to get the name of the day from a date string
   const getDayName = useCallback((dateString: string) => {
     const date = new Date(dateString);
+    if(isNaN(date.getTime())) return 'Invalid Date';
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    //0-6
     return days[date.getDay()];
+    // get day 0-6 sun-sat
+    //getDay
   }, []);
 
   // Filter tasks by priority
@@ -283,10 +301,13 @@ const HomeScreen: React.FC = () => {
 
   // Filter tasks for the current week and future
   const currentWeekTasks = useMemo(() => {
+    //is no sortTask return empty array
     if (!sortedTasks) return [];
+    
     return Array.isArray(sortedTasks)
       ? sortedTasks
           .filter((task) => {
+
             const taskDate = new Date(task.deadline);
             return taskDate >= startOfWeek && taskDate <= endOfWeek;
           })
@@ -298,7 +319,7 @@ const HomeScreen: React.FC = () => {
     if (!sortedTasks) return [];
     return Array.isArray(sortedTasks) ? sortedTasks.filter((task) => new Date(task.deadline) > endOfWeek) : [];
   }, [sortedTasks, endOfWeek]);
-
+  // Filter tasks for today
   const todayTasks = useMemo(() => {
     if (!sortedTasks) return [];
     return Array.isArray(sortedTasks) ? sortedTasks.filter((task) => formatLocalDate(task.deadline) === todayString) : [];
@@ -419,11 +440,16 @@ const HomeScreen: React.FC = () => {
                       </View>
                     </View>
                   )}
-
+                    {/* Display tasks for the current week */
+                    
+                    
+                    
+                    }
                   {currentWeekTasks.length > 0 ? (
                     currentWeekTasks.map((task) => (
                       <View key={task.taskId.toString()} style={styles.dateSection}>
                         <Text style={[styles.dateText, formatLocalDate(task.deadline) === todayString && styles.todayText]}>
+          
                           {formatLocalDate(task.deadline) === todayString ? 'Today' : getDayName(task.deadline)}
                         </Text>
                         <TaskItem

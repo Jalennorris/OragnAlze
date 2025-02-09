@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '@/components/header';
 import NavBar from '@/components/Navbar';
@@ -21,20 +22,25 @@ const TaskDetail: React.FC = () => {
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
 
+
+
   // Simulate fetching task data based on taskId
   useEffect(() => {
     const fetchTask = async () => {
       try {
-        // Simulate an API call or data fetch
-        const fakeTask: Task = {
-          id: taskId!,
-          title: 'Task Title',
-          description: 'Task Description',
-          dueDate: '2025-01-30',
-          completed: false,
-          priority: 'medium',
+
+
+       const response = await axios.get(`http://localhost:8080/api/tasks/${taskId}`);
+       const data =response.data;
+        const TaskDetail: Task = {
+          id: taskId,
+          title: data.taskName,
+          description: data.taskDescription,
+          dueDate: data.deadline,
+          completed: data.completed,
+          priority: data.priority,
         };
-        setTask(fakeTask);
+        setTask(TaskDetail);
       } catch (error) {
         console.error('Failed to fetch task:', error);
       } finally {

@@ -39,6 +39,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
   const formattedDueDate = task
     ? new Date(task.deadline).toLocaleDateString()
     : 'No due date';
+    
 
   // Check if the task is overdue
   const isOverdue = task.deadline ? new Date(task.deadline) < new Date() : false;
@@ -113,11 +114,11 @@ const TaskItem: React.FC<TaskItemProps> = ({
               {task.taskDescription}
             </Text>
             <Text style={styles.category} numberOfLines={1} ellipsizeMode="tail">
-              {task.category}
+              {`#${task.category}`}
             </Text>
             <View style={styles.dueDateContainer}>
-              <Ionicons name="time-outline" size={14} color={isOverdue ? '#FF4444' : '#FFF'} />
-              <Text style={[styles.dueDate, { color: isOverdue ? '#FF4444' : '#FFF' }]}>
+              <Ionicons name="time-outline" size={14} color={isOverdue ? '#000' : '#000'} />
+              <Text style={[styles.dueDate, { color: isOverdue ? '#000' : '#000' }]}>
                 Due: {formattedDueDate}
               </Text>
             </View>
@@ -150,14 +151,16 @@ const TaskItem: React.FC<TaskItemProps> = ({
 
 const styles = StyleSheet.create({
   container: {
+    marginLeft: 10,
     marginVertical: 8,
     borderRadius: 12,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.5,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 6,
     elevation: 3,
+    width: '95%',
   },
   gradientBackground: {
     flexDirection: 'row',
@@ -180,22 +183,26 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 14,
-    color: '#fff',
+    lineHeight: 20,
+    color: '#000',
     marginBottom: 5,
     opacity: 0.9,
   },
   category: {
-    fontSize: 12,
-    color: '#fff',
-    marginBottom: 5,
+    fontSize: 14,
+    color: '#C0C0C0',
+   transform: [{translateY:20}],
     opacity: 0.8,
+    fontWeight: 'bold',
   },
   dueDateContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignSelf: 'flex-end',
   },
   dueDate: {
-    fontSize: 12,
+    fontFamily: 'Helvetica',
+    fontWeight: 'bold',
+    fontSize: 14,
     marginLeft: 4,
     opacity: 0.8,
   },
