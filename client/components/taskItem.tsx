@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import * as Haptics from 'expo-haptics';
+import { zonedTimeToUtc, utcToZonedTime, format } from 'date-fns-tz';
 
 // Define types for the task structure
 interface Task {
@@ -21,6 +22,7 @@ interface Task {
 }
 
 interface TaskItemProps {
+  key: string; 
   task: Task; // Make the task prop required
   onPress: () => void;
   onToggleCompletion: () => void;
@@ -36,14 +38,24 @@ const TaskItem: React.FC<TaskItemProps> = ({
   priorityColor,
 }) => {
   // Format due date for better readability
-  const formattedDueDate = task
-    ? new Date(task.deadline).toLocaleDateString()
-    : 'No due date';
-    
+
+  
+  const formattedDueDate = task.deadline
+  ? new Date(task.deadline).toLocaleDateString('en-US', {
+      timeZone: 'America/Chicago', // Adjust this to your desired timezone
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  : 'No due date';
+  
+  console.log('Raw deadline:', task.deadline);
+  console.log('Parsed deadline:', new Date(task.deadline));
+
+
 
   // Check if the task is overdue
   const isOverdue = task.deadline ? new Date(task.deadline) < new Date() : false;
-
   // Define gradient colors based on priority
   const gradientColors: { [key: string]: string[] } = {
     low: ['#8BC34A', '#CDDC39'], // Green gradient
@@ -119,7 +131,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
             <View style={styles.dueDateContainer}>
               <Ionicons name="time-outline" size={14} color={isOverdue ? '#000' : '#000'} />
               <Text style={[styles.dueDate, { color: isOverdue ? '#000' : '#000' }]}>
-                Due: {formattedDueDate}
+                Due: {task.deadline ?   formattedDueDate : 'No due date'}
               </Text>
             </View>
           </View>

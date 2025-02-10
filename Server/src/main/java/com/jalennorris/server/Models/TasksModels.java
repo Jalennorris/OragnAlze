@@ -1,6 +1,7 @@
 package com.jalennorris.server.Models;
 
 import jakarta.persistence.*;
+import java.time.ZonedDateTime;
 
 @Entity
 @Table(name = "tasks") // Ensure this matches your database table name
@@ -20,11 +21,11 @@ public class TasksModels {
 
     private String estimated_duration;
 
-    private String deadline;
+    private ZonedDateTime deadline;
 
     private String status;
 
-    private String created_at;
+    private ZonedDateTime created_at;
 
     @Column(name = "completed" )
     private boolean completed;
@@ -36,7 +37,7 @@ public class TasksModels {
     public TasksModels() {}
 
     public TasksModels(long task_id, long userId, String task_name, String task_description, String priority,
-                       String estimated_duration, String deadline, String status, boolean completed, String category ,String created_at) {
+                       String estimated_duration, ZonedDateTime deadline, String status, boolean completed, String category ,ZonedDateTime created_at) {
         this.task_id = task_id;
         this.userId = userId;
         this.task_name = task_name;
@@ -99,11 +100,11 @@ public class TasksModels {
         this.estimated_duration = estimated_duration;
     }
 
-    public String getDeadline() { // Changed from int to String for consistency with the class definition
+    public ZonedDateTime getDeadline() {
         return deadline;
     }
 
-    public void setDeadline(String deadline) {
+    public void setDeadline(ZonedDateTime deadline) {
         this.deadline = deadline;
     }
 
@@ -115,11 +116,11 @@ public class TasksModels {
         this.status = status;
     }
 
-    public String getCreated_at() {
+    public ZonedDateTime getCreated_at() {
         return created_at;
     }
 
-    public void setCreated_at(String created_at) {
+    public void setCreated_at(ZonedDateTime created_at) {
         this.created_at = created_at;
     }
 

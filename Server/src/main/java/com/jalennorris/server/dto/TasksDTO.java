@@ -1,5 +1,6 @@
 package com.jalennorris.server.dto;
 
+import java.time.ZonedDateTime;
 import java.io.Serializable;
 
 public class TasksDTO implements Serializable {
@@ -13,18 +14,18 @@ public class TasksDTO implements Serializable {
     private String taskDescription;
     private String priority;
     private String estimatedDuration;
-    private String deadline;
+    private ZonedDateTime deadline;
     private String status;
     private boolean completed;
     private String category;
-    private String createdAt;
+    private ZonedDateTime createdAt;
 
     // Default constructor
     public TasksDTO() {}
 
     // Constructor with parameters
     public TasksDTO(long taskId, long userId, String taskName, String taskDescription, String priority,
-                    String estimatedDuration, String deadline, String status, boolean completed, String category, String createdAt) {
+                    String estimatedDuration, ZonedDateTime deadline, String status, boolean completed, String category, ZonedDateTime createdAt) {
         this.taskId = taskId;
         this.userId = userId;
         this.taskName = taskName;
@@ -87,11 +88,11 @@ public class TasksDTO implements Serializable {
         this.estimatedDuration = estimatedDuration;
     }
 
-    public String getDeadline() {
+    public ZonedDateTime getDeadline() {
         return deadline;
     }
 
-    public void setDeadline(String deadline) {
+    public void setDeadline(ZonedDateTime deadline) {
         this.deadline = deadline;
     }
 
@@ -103,11 +104,11 @@ public class TasksDTO implements Serializable {
         this.status = status;
     }
 
-    public String getCreatedAt() {
+    public ZonedDateTime getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(String createdAt) {
+    public void setCreatedAt(ZonedDateTime createdAt) {
         this.createdAt = createdAt;
     }
 

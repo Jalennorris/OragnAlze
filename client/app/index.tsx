@@ -175,46 +175,36 @@ const HomeScreen: React.FC = () => {
         console.error('❌ Error: dateString is null or undefined');
         return 'Invalid Date';
       }
-  
+      
       const date = new Date(dateString);
-  
+      
       if (isNaN(date.getTime())) {
         console.error(`❌ Error: Invalid date received: ${dateString}`);
         return 'Invalid Date';
       }
-  
-      return new Intl.DateTimeFormat('en-US', {
-        timeZone: userTimezone || 'UTC', // Fallback to UTC if userTimezone is undefined
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(date);
+      
+      return date.toLocaleDateString('en-US', { timeZone: 'America/Chicago' });
     } catch (err) {
       console.error('❌ Error formatting date:', err);
       return 'Invalid Date';
     }
   };
-
+  
   // Get today's date in the user's local timezone
   const today = new Date();
   console.log('Today:', today.toDateString());
-  const todayString = formatLocalDate(today.toISOString());
+  const todayString = today.toLocaleDateString('en-US', { timeZone: 'America/Chicago' });
   console.log('Today in local timezone:', todayString);
-
-  // Calculate the start and end of the current week (Monday to Sunday) in the user's local timezone
-  const startOfWeek = new Date(today);// Clone today's date
-  startOfWeek.setDate(today.getDate() - today.getDay());  
-  //getDate = day of the month and getDate is the number of week   [ feb 9 - 0(sunday )]
-
-
-
-  //get the end of the month
-const endOfWeek = new Date(startOfWeek);
-
-endOfWeek.setDate(startOfWeek.getDate() + 6);
-console.log('Start of week:', startOfWeek.toDateString());
-console.log('End of week:', endOfWeek.toDateString());
-
+  
+  // Calculate the start and end of the current week (Monday to Sunday)
+  const startOfWeek = new Date(today);
+  const dayOfWeek = startOfWeek.getDay();
+  startOfWeek.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  console.log('Start of the week:', startOfWeek.toDateString());
+  
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  console.log('End of week:', endOfWeek.toDateString());
 
 
 
@@ -243,19 +233,30 @@ console.log('End of week:', endOfWeek.toDateString());
 
   // Helper function to group tasks by date
   const groupTasksByDate = useCallback((tasks: Task[]) => {
-    const groupedTasks: { [date: string]: Task[] } = {};
+    const groupedTasks: { today: Task[]; week: { [date: string]: Task[] } } = {
+      today: [],
+      week: {},
+    };
+  
     tasks.forEach((task) => {
       const localDate = formatLocalDate(task.deadline);
-      if (!groupedTasks[localDate]) {
-        groupedTasks[localDate] = [];
+  
+      if (localDate === todayString) {
+        groupedTasks.today.push(task);
+      } else if (new Date(task.deadline) >= startOfWeek && new Date(task.deadline) <= endOfWeek) {
+        if (!groupedTasks.week[localDate]) {
+          groupedTasks.week[localDate] = [];
+        }
+        groupedTasks.week[localDate].push(task);
       }
-      groupedTasks[localDate].push(task);
     });
+  
     return groupedTasks;
-  }, []);
-
+  }, [todayString, startOfWeek, endOfWeek]);
+  
   // Group tasks by date
   const groupedTasks = useMemo(() => groupTasksByDate(tasks), [tasks]);
+  
 
   // Helper function to get the name of the day from a date string
   const getDayName = useCallback((dateString: string) => {
