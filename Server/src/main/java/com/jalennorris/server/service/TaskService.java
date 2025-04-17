@@ -6,22 +6,29 @@ import com.jalennorris.server.Repository.TasksRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import java.util.Map;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeParseException;
 
 @Service
 public class TaskService {
 
     private final TasksRepository tasksRepository;
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Autowired
-    public TaskService(TasksRepository tasksRepository) {
+    public TaskService(TasksRepository tasksRepository, StringRedisTemplate stringRedisTemplate) {
         this.tasksRepository = tasksRepository;
+        this.stringRedisTemplate = stringRedisTemplate;
     }
 
     @Async
@@ -89,6 +96,102 @@ public class TaskService {
             return null;
         });
     }
+
+
+    @Transactional
+    @Async
+    @CacheEvict(value = "tasks", key = "#id")
+    public CompletableFuture<TasksDTO> updateTask(long id, Map<String, Object> task) {
+        return CompletableFuture.supplyAsync(() -> {
+            TasksModels existingTask = tasksRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Task not found"));
+
+            task.forEach((key, value) -> {
+                switch (key) {
+                    case "taskName":
+                        if (value instanceof String) {
+                            existingTask.setTask_name((String) value);
+                        } else {
+                            throw new IllegalArgumentException("Invalid value for taskName");
+                        }
+                        break;
+
+                    case "taskDescription":
+                        if (value instanceof String) {
+                            existingTask.setTask_description((String) value);
+                        } else {
+                            throw new IllegalArgumentException("Invalid value for taskDescription");
+                        }
+                        break;
+
+                    case "priority":
+                        if (value instanceof String) {
+                            existingTask.setPriority((String) value);
+                        } else {
+                            throw new IllegalArgumentException("Invalid value for priority");
+                        }
+                        break;
+
+                    case "estimatedDuration":
+                        if (value instanceof String) {
+                            existingTask.setEstimated_duration((String) value);
+                        } else {
+                            throw new IllegalArgumentException("Invalid value for estimatedDuration");
+                        }
+                        break;
+
+                    case "deadline":
+                        try {
+                            existingTask.setDeadline(ZonedDateTime.parse((String) value));
+                        } catch (Exception e) {
+                            throw new IllegalArgumentException("Invalid value for deadline. Must be an ISO-8601 date-time string.", e);
+                        }
+                        break;
+
+                    case "status":
+                        if (value instanceof String) {
+                            existingTask.setStatus((String) value);
+                        } else {
+                            throw new IllegalArgumentException("Invalid value for status");
+                        }
+                        break;
+
+                    case "completed":
+                        if (value instanceof String) {
+                            existingTask.setCompleted(Boolean.parseBoolean((String) value));
+                        } else if (value instanceof Boolean) {
+                            existingTask.setCompleted((Boolean) value);
+                        } else {
+                            throw new IllegalArgumentException("Invalid value for completed");
+                        }
+                        break;
+
+                    case "category":
+                        if (value instanceof String) {
+                            existingTask.setCategory((String) value);
+                        } else {
+                            throw new IllegalArgumentException("Invalid value for category");
+                        }
+                        break;
+
+                    case "createdAt":
+                        try {
+                            existingTask.setCreated_at(ZonedDateTime.parse((String) value));
+                        } catch (Exception e) {
+                            throw new IllegalArgumentException("Invalid value for createdAt. Must be an ISO-8601 date-time string.", e);
+                        }
+                        break;
+
+                    default:
+                        throw new IllegalArgumentException("Invalid field: " + key);
+                }
+            });
+
+            TasksModels updatedTask = tasksRepository.save(existingTask);
+            return convertToDTO(updatedTask);
+        });
+    }
+
 
     @Async
     @CacheEvict(value = "tasks", key = "#id")

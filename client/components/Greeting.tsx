@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, TextInput, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,14 +27,14 @@ const Greeting: React.FC = () => {
         // Fade-in animation
         Animated.timing(fadeAnim, {
             toValue: 1,
-            duration: 1000,
+            duration: 2000, // Slower fade-in
             useNativeDriver: true,
         }).start();
 
         // Scale animation
         Animated.timing(scaleAnim, {
             toValue: 1,
-            duration: 500,
+            duration: 1000, // Slower scale animation
             easing: Easing.elastic(1.2),
             useNativeDriver: true,
         }).start();
@@ -109,22 +109,22 @@ const styles = StyleSheet.create({
     container: {
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
+        padding: Platform.OS === 'ios' ? 15 : 10, // Smaller padding
         backgroundColor: '#f8f9fa',
-        borderRadius: 20,
-        margin: 20,
+        borderRadius: 15, // Smaller border radius
+        margin: 15, // Smaller margin
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 2 }, // Reduced shadow
+        shadowOpacity: 0.08,
+        shadowRadius: 5,
+        elevation: 3,
     },
     greeting: {
-        fontSize: 32,
+        fontSize: Platform.OS === 'ios' ? 28 : 26, // Smaller font size
         fontWeight: 'bold',
         color: '#333',
         textAlign: 'center',
-        marginBottom: 20,
+        marginBottom: 15, // Smaller margin
     },
     editContainer: {
         flexDirection: 'row',
@@ -134,17 +134,17 @@ const styles = StyleSheet.create({
     input: {
         borderWidth: 1,
         borderColor: '#ccc',
-        borderRadius: 10,
-        padding: 10,
-        fontSize: 16,
+        borderRadius: 8, // Smaller border radius
+        padding: Platform.OS === 'ios' ? 8 : 6, // Smaller padding
+        fontSize: Platform.OS === 'ios' ? 14 : 12, // Smaller font size
         color: '#333',
-        marginRight: 10,
-        width: 150,
+        marginRight: 8, // Smaller margin
+        width: 120, // Smaller width
     },
     editButton: {
-        padding: 10,
+        padding: Platform.OS === 'ios' ? 8 : 6, // Smaller padding
         backgroundColor: '#e9ecef',
-        borderRadius: 50,
+        borderRadius: 40, // Smaller border radius
         justifyContent: 'center',
         alignItems: 'center',
     },

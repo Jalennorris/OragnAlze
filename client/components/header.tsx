@@ -5,6 +5,13 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
 import { useRouter } from "expo-router";
 import axios from "axios";
+import { useNavigation} from "expo-router";
+
+
+
+
+
+
 
 // Load custom fonts
 const loadFonts = async () => {
@@ -34,6 +41,7 @@ const Header: React.FC = () => {
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const scaleValue = new Animated.Value(1); // For icon animation
   const router = useRouter();
+  const navigation = useNavigation();
   const [credentials, setCredentials] = useState<Credentials>({
     profile_pic: '',
   });
@@ -91,7 +99,7 @@ const Header: React.FC = () => {
         useNativeDriver: true,
       }),
     ]).start(() => {
-      router.push("/settings");
+      navigation.navigate("settings");
     });
   };
 

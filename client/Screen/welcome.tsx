@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextStyle, ViewStyle, Animated, Easing, Dimensions } from 'react-native';
-import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from 'expo-router';
 
 // Constants
 const COLORS = {
@@ -102,7 +103,7 @@ const getButtonStyle = (variant: string): ViewStyle => {
 
 // Main Welcome Component
 const Welcome: React.FC = () => {
-  const router = useRouter();
+  const navigation = useNavigation();
   const [typedText, setTypedText] = useState('');
   const [showCursor, setShowCursor] = useState(true);
   const [isTalking, setIsTalking] = useState(false);
@@ -191,61 +192,67 @@ const Welcome: React.FC = () => {
   }, [logo, typingSpeed, fadeAnim]); ;
 
   return (
-    <Animated.View style={[styles.container, { backgroundColor: gradientInterpolation }]}>
-      <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.gradient}>
-        <View style={styles.content}>
-          <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
-            {tasks.map((task, index) => (
-              <View 
-                key={task.id} 
-                style={[
-                  styles.task, 
-                  { 
-                    transform: [
-                      { translateY: index % 2 === 0 ? 100 : -100 } // Parallax effect
-                    ] 
-                  }
-                ]}
-              >
-                <Typography variant="title" style={styles.taskTitle}>
-                  {task.title}
-                </Typography>
-                <Typography variant="body" style={styles.taskDescription}>
-                  {task.description}
-                </Typography>
-              </View>
-            ))}
-          </Animated.View>
-          <Animated.View style={{ opacity: fadeAnim }}>
-            <Typography variant="title" style={styles.logoText}>
-              {typedText}
-              {showCursor && <Text style={{ opacity: 0.5 }}>|</Text>}
+    <SafeAreaView style={styles.safeArea}>
+      <Animated.View style={[styles.container, { backgroundColor: gradientInterpolation }]}>
+        <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.gradient}>
+          <View style={styles.content}>
+            <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
+              {tasks.map((task, index) => (
+                <View 
+                  key={task.id} 
+                  style={[
+                    styles.task, 
+                    { 
+                      transform: [
+                        { translateY: index % 2 === 0 ? 100 : -100 } // Parallax effect
+                      ] 
+                    }
+                  ]}
+                >
+                  <Typography variant="title" style={styles.taskTitle}>
+                    {task.title}
+                  </Typography>
+                  <Typography variant="body" style={styles.taskDescription}>
+                    {task.description}
+                  </Typography>
+                </View>
+              ))}
+            </Animated.View>
+            <Animated.View style={{ opacity: fadeAnim }}>
+              <Typography variant="title" style={styles.logoText}>
+                {typedText}
+                {showCursor && <Text style={{ opacity: 0.5 }}>|</Text>}
+              </Typography>
+            </Animated.View>
+            <Typography variant="subtitle" style={styles.subtitle}>
+              Join us and explore the exciting features we offer.
             </Typography>
-          </Animated.View>
-          <Typography variant="subtitle" style={styles.subtitle}>
-            Join us and explore the exciting features we offer.
-          </Typography>
 
-          <CustomButton
-            title="Get Started"
-            onPress={() => router.push('/signup')}
-            variant="primary"
-            textStyle={{ color: COLORS.primary }}
-          />
+            <CustomButton
+              title="Get Started"
+              onPress={() => navigation.navigate('signup')}
+              variant="primary"
+              textStyle={{ color: COLORS.primary }}
+            />
 
-          <CustomButton
-            title="Already have an account? Log In"
-            onPress={() => router.push('/login')}
-            variant="link"
-          />
-        </View>
-      </LinearGradient>
-    </Animated.View>
+            <CustomButton
+              title="Already have an account? Log In"
+              onPress={() => navigation.navigate('login')}
+              variant="link"
+            />
+          </View>
+        </LinearGradient>
+      </Animated.View>
+    </SafeAreaView>
   );
 };
 
 // Styles
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.primary, // Match the gradient's starting color
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -258,71 +265,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   content: {
-    width: '80%',
+    width: '90%',
     alignItems: 'center',
   },
   task: {
     backgroundColor: COLORS.white,
-    padding: 10,
-    borderRadius: 10,
-    marginBottom: 10,
+    padding: 8, // Reduced padding
+    borderRadius: 8, // Reduced border radius
+    marginBottom: 8, // Reduced margin
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 2,
+    elevation: 2,
   },
   taskTitle: {
-    fontSize: 20,
+    fontSize: 16, // Reduced font size
     fontWeight: 'bold',
     color: COLORS.primary,
   },
   taskDescription: {
-    fontSize: 16,
+    fontSize: 14, // Reduced font size
     color: COLORS.primary,
   },
   logoText: {
-    fontSize: 40,
+    fontSize: 32, // Reduced font size
     fontWeight: 'bold',
     color: COLORS.white,
-    marginBottom: 10,
+    marginBottom: 8, // Reduced margin
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14, // Reduced font size
     color: COLORS.white,
-    marginBottom: 30,
+    marginBottom: 20, // Reduced margin
     textAlign: 'center',
   },
   primaryButton: {
     backgroundColor: COLORS.white,
-    padding: 15,
-    borderRadius: 25,
-    width: '100%',
+    padding: 10, // Reduced padding
+    borderRadius: 20, // Reduced border radius
+    width: '90%', // Adjusted width
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8, // Reduced margin
   },
   secondaryButton: {
     backgroundColor: COLORS.secondary,
-    padding: 15,
-    borderRadius: 25,
-    width: '100%',
+    padding: 10, // Reduced padding
+    borderRadius: 20, // Reduced border radius
+    width: '90%', // Adjusted width
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8, // Reduced margin
   },
   linkButton: {
-    marginTop: 10,
+    marginTop: 8, // Reduced margin
   },
   title: {
-    fontSize: 24,
+    fontSize: 20, // Reduced font size
     fontWeight: 'bold',
     color: COLORS.white,
   },
   body: {
-    fontSize: 16,
+    fontSize: 14, // Reduced font size
     color: COLORS.white,
   },
   link: {
-    fontSize: 16,
+    fontSize: 14, // Reduced font size
     color: COLORS.white,
     textDecorationLine: 'underline',
   },

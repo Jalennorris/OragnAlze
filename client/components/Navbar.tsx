@@ -1,25 +1,29 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useNavigation } from '@react-navigation/native'; // Import navigation hook
 
 const NavBar: React.FC = () => {
-  const router = useRouter();
-  const [activeTab, setActiveTab] = useState<string>('/');
-  const scaleAnim = new Animated.Value(1); // For button press animation
+  const navigation = useNavigation(); // Use navigation instead of router
+  const [activeTab, setActiveTab] = useState<string>('index'); // Default active tab
+  const scaleAnims = {
+    home: new Animated.Value(1),
+    addTask: new Animated.Value(1),
+    calendar: new Animated.Value(1),
+  };
 
-  const handleNavigate = (screen: string) => {
+  const handleNavigate = (screen: string, animKey: keyof typeof scaleAnims) => {
     setActiveTab(screen);
-    router.push(screen);
+    navigation.navigate(screen); // Use navigation.navigate instead of router.push
 
     // Button press animation
     Animated.sequence([
-      Animated.timing(scaleAnim, {
+      Animated.timing(scaleAnims[animKey], {
         toValue: 0.9,
         duration: 50,
         useNativeDriver: true,
       }),
-      Animated.timing(scaleAnim, {
+      Animated.timing(scaleAnims[animKey], {
         toValue: 1,
         duration: 100,
         easing: Easing.elastic(1.2),
@@ -34,22 +38,22 @@ const NavBar: React.FC = () => {
 
   return (
     <View style={styles.navBar}>
-      <TouchableOpacity onPress={() => handleNavigate('/')} style={styles.navItem}>
-        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-          <Ionicons name="home-outline" size={30} color={getIconColor('/')} />
-          <Text style={[styles.navText, { color: getIconColor('/') }]}>Home</Text>
+      <TouchableOpacity onPress={() => handleNavigate('index', 'home')} style={styles.navItem}>
+        <Animated.View style={{ transform: [{ scale: scaleAnims.home }] }}>
+          <Ionicons name="home-outline" size={30} color={getIconColor('index')} />
+          <Text style={[styles.navText, { color: getIconColor('index') }]}>Home</Text>
         </Animated.View>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => handleNavigate('/addTaskScreen')} style={styles.navItem}>
-        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-          <Ionicons name="add-circle-outline" size={30} color={getIconColor('/addTaskScreen')} />
-          <Text style={[styles.navText, { color: getIconColor('/addTaskScreen') }]}>Add Task</Text>
+      <TouchableOpacity onPress={() => handleNavigate('addTaskScreen', 'addTask')} style={styles.navItem}>
+        <Animated.View style={{ transform: [{ scale: scaleAnims.addTask }] }}>
+          <Ionicons name="add-circle-outline" size={30} color={getIconColor('addTaskScreen')} />
+          <Text style={[styles.navText, { color: getIconColor('addTaskScreen') }]}>Add Task</Text>
         </Animated.View>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => handleNavigate('/calendarScreen')} style={styles.navItem}>
-        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-          <Ionicons name="calendar-outline" size={30} color={getIconColor('/calendarScreen')} />
-          <Text style={[styles.navText, { color: getIconColor('/calendarScreen') }]}>Calendar</Text>
+      <TouchableOpacity onPress={() => handleNavigate('calendarScreen', 'calendar')} style={styles.navItem}>
+        <Animated.View style={{ transform: [{ scale: scaleAnims.calendar }] }}>
+          <Ionicons name="calendar-outline" size={30} color={getIconColor('calendarScreen')} />
+          <Text style={[styles.navText, { color: getIconColor('calendarScreen') }]}>Calendar</Text>
         </Animated.View>
       </TouchableOpacity>
     </View>

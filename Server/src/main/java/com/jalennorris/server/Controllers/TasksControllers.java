@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,20 +78,10 @@ public class TasksControllers {
     }
 
     // Asynchronously update a task
-    @PutMapping("/{id}")
-    public CompletableFuture<ResponseEntity<TasksDTO>> updateTask(@PathVariable long id, @RequestBody TasksDTO updatedTask) {
-        TasksModels taskEntity = convertToEntity(updatedTask);
-        validateTask(taskEntity); // Validate task before updating
-
-        // Call service to update the task
-        return taskService.updateTask(id, taskEntity)
-                .thenApply(task -> {
-                    if (task != null) {
-                        return ResponseEntity.ok(task);
-                    } else {
-                        return ResponseEntity.notFound().build();
-                    }
-                });
+    @PatchMapping("/{id}")
+    public CompletableFuture<ResponseEntity<TasksDTO>> updateTask(@PathVariable long id, @RequestBody Map<String, Object> updatedTask) {
+        return taskService.updateTask(id, updatedTask)
+                .thenApply(updated -> updated != null ? ResponseEntity.ok(updated) : ResponseEntity.notFound().build());
     }
 
     // Asynchronously delete a task by ID

@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import * as Haptics from 'expo-haptics';
 import { zonedTimeToUtc, utcToZonedTime, format } from 'date-fns-tz';
+import axios from 'axios';
 
 // Define types for the task structure
 interface Task {
@@ -66,6 +67,30 @@ const TaskItem: React.FC<TaskItemProps> = ({
   // Ensure the gradient colors for the task priority exist
   const taskGradientColors = gradientColors[task.priority] || ['#FFFFFF', '#FFFFFF'];
 
+  // Handle task deletion with Axios
+  const handleDelete = async () => {
+    try {
+      await axios.delete(`http://localhost:8080/api/tasks/${task.taskId}`); // Fixed endpoint
+      onDelete();
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      Alert.alert('Error', 'Failed to delete the task. Please try again.');
+    }
+  };
+
+  // Handle task completion toggle with Axios
+  const handleToggleCompletion = async () => {
+    try {
+      await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}`, {
+        completed: !task.completed,
+      }); // Ensured consistency
+      onToggleCompletion();
+    } catch (error) {
+      console.error('Error toggling task completion:', error);
+      Alert.alert('Error', 'Failed to update the task. Please try again.');
+    }
+  };
+
   // Swipeable delete action
   const renderRightActions = (progress: Animated.AnimatedInterpolation, dragX: Animated.AnimatedInterpolation) => {
     const scale = dragX.interpolate({
@@ -83,7 +108,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
             'Are you sure you want to delete this task?',
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Delete', onPress: onDelete, style: 'destructive' },
+              { text: 'Delete', onPress: handleDelete, style: 'destructive' },
             ]
           );
         }}
@@ -142,7 +167,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
             <TouchableOpacity
               onPress={() => {
                 Haptics.selectionAsync();
-                onToggleCompletion();
+                handleToggleCompletion();
               }}
               style={styles.actionButton}
               accessibilityRole="button"
