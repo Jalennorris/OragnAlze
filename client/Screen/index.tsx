@@ -142,18 +142,22 @@ const HomeScreen: React.FC = () => {
       }
       
       console.log(`User ID retrieved: ${userId}`);
-      console.log(`Fetching tasks from: http://localhost:8080/api/tasks/user/${userId}`);
+      const apiUrl = `http://localhost:8080/api/tasks/user/${userId}`;
+      console.log(`Fetching tasks from: ${apiUrl}`);
   
       // Clear tasks state before fetching new data
       setTasks([]);
       setData([]);
+      setError(''); // Clear any existing error before fetching
   
-      const response = await fetch(`http://localhost:8080/api/tasks/user/${userId}`);
+      const response = await fetch(apiUrl);
   
       console.log(`Response status: ${response.status}`);
   
       if (!response.ok) {
-        console.error(`HTTP Error! Status: ${response.status}`);
+        if (response.status === 404) {
+          throw new Error("No tasks found for the user. Please add tasks.");
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
   
@@ -167,8 +171,9 @@ const HomeScreen: React.FC = () => {
       console.log('loadTasks function executed with fetched data.');
   
     } catch (err) {
-      setError((err as Error).message);
-      console.error('Failed to load tasks:', err);
+      const errorMessage = (err as Error).message || 'An unknown error occurred';
+      setError(errorMessage); // Set a user-friendly error message
+      console.error('Failed to load tasks:', errorMessage);
     } finally {
       console.log('getTasks execution completed.');
       setLoading(false);
@@ -437,9 +442,9 @@ const DateSection: React.FC<{
               }} 
               colors={COLORS} 
             />
-          ) : (
+          ) : tasks.length > 0 ? ( // Show tasks only if there are tasks
             <>
-             <View style={styles.iconsContainer}>
+              <View style={styles.iconsContainer}>
                 <SearchBar 
                   searchQuery={searchQuery} 
                   setSearchQuery={setSearchQuery} 
@@ -476,7 +481,7 @@ const DateSection: React.FC<{
                 onRefresh={onRefresh}
                 ListHeaderComponent={
                   <>
-                        <TaskSummary 
+                    <TaskSummary 
                       totalTasks={tasks.length} 
                       completedTasks={completedTasksCount} 
                       colors={COLORS} 
@@ -511,7 +516,7 @@ const DateSection: React.FC<{
                 }
               />
             </>
-          )}
+          ) : null /* Render nothing if there are no tasks */}
           <NavBar />  
         </View>
       </SafeAreaView>

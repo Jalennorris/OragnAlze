@@ -70,7 +70,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
   // Handle task deletion with Axios
   const handleDelete = async () => {
     try {
-      await axios.delete(`http://localhost:8080/api/tasks/${task.taskId}`); // Fixed endpoint
+      await axios.delete(`http://localhost:8080/api/tasks/${task.taskId}`);
       onDelete();
     } catch (error) {
       console.error('Error deleting task:', error);
@@ -83,7 +83,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
     try {
       await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}`, {
         completed: !task.completed,
-      }); // Ensured consistency
+      });
       onToggleCompletion();
     } catch (error) {
       console.error('Error toggling task completion:', error);
@@ -186,6 +186,31 @@ const TaskItem: React.FC<TaskItemProps> = ({
   );
 };
 
+const TaskList: React.FC<{ tasks: Task[] }> = ({ tasks }) => {
+  if (!tasks || tasks.length === 0) {
+    return (
+      <View style={styles.noTasksContainer}>
+        <Text style={styles.noTasksText}>No tasks available. Add a new task to get started!</Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      {tasks.map((task) => (
+        <TaskItem
+          key={task.taskId.toString()}
+          task={task}
+          onPress={() => console.log('Task pressed')}
+          onToggleCompletion={() => console.log('Toggle completion')}
+          onDelete={() => console.log('Delete task')}
+          priorityColor="#000"
+        />
+      ))}
+    </>
+  );
+};
+
 const styles = StyleSheet.create({
   container: {
     marginLeft: 10,
@@ -258,6 +283,17 @@ const styles = StyleSheet.create({
     width: 80,
     borderRadius: 12,
     marginVertical: 8,
+  },
+  noTasksContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  noTasksText: {
+    fontSize: 16,
+    color: '#888',
+    fontStyle: 'italic',
   },
 });
 

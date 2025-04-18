@@ -49,15 +49,22 @@ public class TasksControllers {
 
     @GetMapping("/user/{userId}")
     public CompletableFuture<ResponseEntity<List<TasksDTO>>> getTasksByUserId(@PathVariable("userId") long userId) {
+        logger.info("Fetching tasks for userId: {}", userId);
         return taskService.getTasksByUserId(userId)
                 .thenApply(tasks -> {
                     if (tasks != null && !tasks.isEmpty()) {
+                        logger.info("Found {} tasks for userId: {}", tasks.size(), userId);
                         return ResponseEntity.ok(tasks);
                     } else {
+                        logger.warn("No tasks found for userId: {}", userId);
                         return ResponseEntity.notFound().build();
                     }
                 });
     }
+
+    // Fetch tasks by status
+
+
     // Asynchronously create a new task
     @PostMapping
     public CompletableFuture<ResponseEntity<TasksDTO>> createTask(@RequestBody TasksDTO newTask) {
@@ -87,14 +94,19 @@ public class TasksControllers {
     // Asynchronously delete a task by ID
     @DeleteMapping("/{id}")
     public CompletableFuture<ResponseEntity<Void>> deleteTask(@PathVariable long id) {
-        return taskService.deleteTask(id)
-                .thenApply(success -> {
-                    if (success) {
-                        return ResponseEntity.noContent().build();
-                    } else {
-                        return ResponseEntity.notFound().build();
-                    }
-                });
+        try {
+            return taskService.deleteTask(id)
+                    .thenApply(success -> {
+                        if (success) {
+                            return ResponseEntity.noContent().build();
+                        } else {
+                            return ResponseEntity.notFound().build();
+                        }
+                    });
+        } catch (Exception e) {
+            logger.error("Failed to delete task with ID {}: {}", id, e.getMessage());
+            return CompletableFuture.completedFuture(ResponseEntity.status(500).build());
+        }
     }
 
     // Helper method to convert DTO to entity

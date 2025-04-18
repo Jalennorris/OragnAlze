@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import TaskItem from './taskItem'
+import TaskItem from './taskItem';
 
 interface Task {
   taskId: number;

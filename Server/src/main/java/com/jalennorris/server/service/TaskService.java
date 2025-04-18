@@ -51,9 +51,10 @@ public class TaskService {
 
     // getting all tasks by userId
     @Async
-    @Cacheable(value = "tasks", key = "#userId")
+
     public CompletableFuture<List<TasksDTO>> getTasksByUserId(long userId) {
         return CompletableFuture.supplyAsync(() -> {
+            // Always fetch fresh data from the database
             List<TasksModels> tasks = tasksRepository.findByUserId(userId);
             return tasks.stream()
                     .map(this::convertToDTO)
@@ -197,11 +198,39 @@ public class TaskService {
     @CacheEvict(value = "tasks", key = "#id")
     public CompletableFuture<Boolean> deleteTask(long id) {
         return CompletableFuture.supplyAsync(() -> {
-            if (tasksRepository.existsById(id)) {
+            Optional<TasksModels> taskOptional = tasksRepository.findById(id);
+            if (taskOptional.isPresent()) {
+                TasksModels task = taskOptional.get();
+                long userId = task.getUser_id(); // Retrieve the userId of the task
                 tasksRepository.deleteById(id);
+
+                // Explicitly evict cache for getTasksByUserId and all tasks
+                evictCache("tasks::" + userId); // Evict cache for getTasksByUserId
+                evictCache("tasks"); // Evict cache for all tasks
+
+                // Refresh the cache for getTasksByUserId to ensure no stale data
+                refreshTasksByUserIdCache(userId);
+
                 return true;
             }
             return false;
+        });
+    }
+
+    // Helper method to evict cache
+    private void evictCache(String cacheKey) {
+        stringRedisTemplate.convertAndSend("cacheEvictChannel", cacheKey);
+        stringRedisTemplate.delete(cacheKey); // Ensure the cache entry is deleted
+    }
+
+    // Helper method to refresh the cache for getTasksByUserId
+    private void refreshTasksByUserIdCache(long userId) {
+        CompletableFuture.runAsync(() -> {
+            List<TasksModels> tasks = tasksRepository.findByUserId(userId);
+            List<TasksDTO> tasksDTOs = tasks.stream()
+                    .map(this::convertToDTO)
+                    .collect(Collectors.toList());
+            stringRedisTemplate.opsForValue().set("tasks::" + userId, tasksDTOs.toString());
         });
     }
 
