@@ -21,7 +21,6 @@ const EmptyState: React.FC<EmptyStateProps> = ({
 }) => {
   return (
     <View style={styles.emptyStateContainer}>
-      {iconName && <Ionicons name={iconName} size={iconSize} color={iconColor} />}
       <Text style={[styles.emptyStateText, { color: colors.text || '#000' }]}>
         {message}
       </Text>

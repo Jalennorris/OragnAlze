@@ -26,6 +26,7 @@ interface DateSectionProps {
   colors: {
     text: string;
   };
+  icon?: React.ReactNode; // Optional icon to display when there are no tasks
 }
 
 const DateSection: React.FC<DateSectionProps> = ({
@@ -36,6 +37,7 @@ const DateSection: React.FC<DateSectionProps> = ({
   onDelete,
   getPriorityColor,
   colors,
+  icon, // Add icon prop
 }) => {
   return (
     <View style={styles.container}>
@@ -53,6 +55,7 @@ const DateSection: React.FC<DateSectionProps> = ({
         ))
       ) : (
         <View style={styles.emptyStateContainer}>
+          {icon && <View style={styles.iconContainer}>{icon}</View>} {/* Render icon if provided */}
           <Text style={[styles.emptyStateText, { color: colors.text }]}>No tasks for {title.toLowerCase()}!</Text>
         </View>
       )}
@@ -73,6 +76,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 10,
+  },
+  iconContainer: {
+    marginBottom: 10, // Add spacing between the icon and the text
   },
   emptyStateText: {
     fontSize: 16,

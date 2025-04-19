@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  SafeAreaView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
@@ -35,7 +36,12 @@ const UpdateEmail: React.FC = () => {
     try {
       // Simulate an API call
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      Alert.alert('Success', 'Email updated successfully!');
+      Alert.alert('Success', 'Email updated successfully!', [
+        {
+          text: 'OK',
+          onPress: () => navigation.navigate('Home'), // Navigate to Home screen
+        },
+      ]);
     } catch (error) {
       Alert.alert('Error', 'Failed to update email. Please try again.');
     } finally {
@@ -44,96 +50,102 @@ const UpdateEmail: React.FC = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* Back Button */}
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-back" size={24} color="#6200ee" />
-          <Text style={styles.backButtonText}>Back</Text>
-        </TouchableOpacity>
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
+          {/* Back Button */}
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Icon name="arrow-back" size={24} color="#6200ee" />
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
 
-        <Text style={styles.title}>Update Email</Text>
+          <Text style={styles.title}>Update Email</Text>
 
-        {/* Form */}
-        <Formik
-          initialValues={{ currentEmail: '', newEmail: '', confirmEmail: '' }}
-          validationSchema={emailSchema}
-          onSubmit={handleSave}
-        >
-          {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
-            <View style={styles.formContainer}>
-              {/* Current Email Input */}
-              <View style={styles.inputContainer}>
-                <Icon name="email" size={24} color="#6200ee" style={styles.icon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Current Email"
-                  value={values.currentEmail}
-                  onChangeText={handleChange('currentEmail')}
-                  onBlur={handleBlur('currentEmail')}
-                  keyboardType="email-address"
-                />
-              </View>
-              {touched.currentEmail && errors.currentEmail && (
-                <Text style={styles.errorText}>{errors.currentEmail}</Text>
-              )}
-
-              {/* New Email Input */}
-              <View style={styles.inputContainer}>
-                <Icon name="email" size={24} color="#6200ee" style={styles.icon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="New Email"
-                  value={values.newEmail}
-                  onChangeText={handleChange('newEmail')}
-                  onBlur={handleBlur('newEmail')}
-                  keyboardType="email-address"
-                />
-              </View>
-              {touched.newEmail && errors.newEmail && (
-                <Text style={styles.errorText}>{errors.newEmail}</Text>
-              )}
-
-              {/* Confirm Email Input */}
-              <View style={styles.inputContainer}>
-                <Icon name="email" size={24} color="#6200ee" style={styles.icon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Confirm New Email"
-                  value={values.confirmEmail}
-                  onChangeText={handleChange('confirmEmail')}
-                  onBlur={handleBlur('confirmEmail')}
-                  keyboardType="email-address"
-                />
-              </View>
-              {touched.confirmEmail && errors.confirmEmail && (
-                <Text style={styles.errorText}>{errors.confirmEmail}</Text>
-              )}
-
-              {/* Save Button */}
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={() => handleSubmit()}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.saveButtonText}>Save Changes</Text>
+          {/* Form */}
+          <Formik
+            initialValues={{ currentEmail: '', newEmail: '', confirmEmail: '' }}
+            validationSchema={emailSchema}
+            onSubmit={handleSave}
+          >
+            {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
+              <View style={styles.formContainer}>
+                {/* Current Email Input */}
+                <View style={styles.inputContainer}>
+                  <Icon name="email" size={24} color="#6200ee" style={styles.icon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Current Email"
+                    value={values.currentEmail}
+                    onChangeText={handleChange('currentEmail')}
+                    onBlur={handleBlur('currentEmail')}
+                    keyboardType="email-address"
+                  />
+                </View>
+                {touched.currentEmail && errors.currentEmail && (
+                  <Text style={styles.errorText}>{errors.currentEmail}</Text>
                 )}
-              </TouchableOpacity>
-            </View>
-          )}
-        </Formik>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+                {/* New Email Input */}
+                <View style={styles.inputContainer}>
+                  <Icon name="email" size={24} color="#6200ee" style={styles.icon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="New Email"
+                    value={values.newEmail}
+                    onChangeText={handleChange('newEmail')}
+                    onBlur={handleBlur('newEmail')}
+                    keyboardType="email-address"
+                  />
+                </View>
+                {touched.newEmail && errors.newEmail && (
+                  <Text style={styles.errorText}>{errors.newEmail}</Text>
+                )}
+
+                {/* Confirm Email Input */}
+                <View style={styles.inputContainer}>
+                  <Icon name="email" size={24} color="#6200ee" style={styles.icon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Confirm New Email"
+                    value={values.confirmEmail}
+                    onChangeText={handleChange('confirmEmail')}
+                    onBlur={handleBlur('confirmEmail')}
+                    keyboardType="email-address"
+                  />
+                </View>
+                {touched.confirmEmail && errors.confirmEmail && (
+                  <Text style={styles.errorText}>{errors.confirmEmail}</Text>
+                )}
+
+                {/* Save Button */}
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={() => handleSubmit()}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </Formik>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',

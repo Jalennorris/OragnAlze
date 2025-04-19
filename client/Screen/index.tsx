@@ -400,9 +400,11 @@ const DateSection: React.FC<{
   toggleTaskCompletion: (taskId: number) => void;
   deleteTask: (taskId: number) => void;
   getPriorityColor: (priority: 'low' | 'medium' | 'high') => string;
-}> = ({ title, tasks, handleTaskPress, toggleTaskCompletion, deleteTask, getPriorityColor }) => (
+  icon?: React.ReactNode; // Add icon prop
+}> = ({ title, tasks, handleTaskPress, toggleTaskCompletion, deleteTask, getPriorityColor, icon }) => (
   <View style={styles.dateSection}>
     <Text style={[styles.dateText, title === 'Today' && styles.todayText]}>{title}</Text>
+    {icon && <View style={styles.iconContainer}>{icon}</View>} {/* Render icon if provided */}
     {tasks.length > 0 ? (
       tasks.map((task) => (
         <TaskItem
@@ -493,6 +495,7 @@ const DateSection: React.FC<{
                       toggleTaskCompletion={toggleTaskCompletion}
                       deleteTask={deleteTask}
                       getPriorityColor={getPriorityColor}
+                      icon={<Ionicons name="calendar-outline" size={32} color={COLORS.text} />} // Add icon for "Today"
                     />
                     <DateSection
                       title="This Week"
@@ -501,6 +504,7 @@ const DateSection: React.FC<{
                       toggleTaskCompletion={toggleTaskCompletion}
                       deleteTask={deleteTask}
                       getPriorityColor={getPriorityColor}
+                      icon={<Ionicons name="time-outline" size={32} color={COLORS.text} />} // Add icon for "This Week"
                     />
                     <FutureTask
                       futureTasks={futureTasks}
@@ -667,6 +671,10 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     textAlign: 'center',
+  },
+  iconContainer: {
+    alignItems: 'center',
+    marginBottom: 10,
   },
 });
 export default HomeScreen;

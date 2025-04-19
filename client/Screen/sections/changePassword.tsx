@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
@@ -60,39 +60,41 @@ const ChangePassword: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-        <Icon name="arrow-back" size={24} color="#6200ee" />
-        <Text style={styles.backButtonText}>Back</Text>
-      </TouchableOpacity>
-      
-      <Text style={styles.title}>Change Password</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Icon name="arrow-back" size={24} color="#6200ee" />
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
+        
+        <Text style={styles.title}>Change Password</Text>
 
-      <PasswordInput
-        icon="lock"
-        placeholder="Current Password"
-        value={currentPassword}
-        onChangeText={setCurrentPassword}
-      />
+        <PasswordInput
+          icon="lock"
+          placeholder="Current Password"
+          value={currentPassword}
+          onChangeText={setCurrentPassword}
+        />
 
-      <PasswordInput
-        icon="lock"
-        placeholder="New Password"
-        value={newPassword}
-        onChangeText={setNewPassword}
-      />
+        <PasswordInput
+          icon="lock"
+          placeholder="New Password"
+          value={newPassword}
+          onChangeText={setNewPassword}
+        />
 
-      <PasswordInput
-        icon="lock"
-        placeholder="Confirm New Password"
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-      />
+        <PasswordInput
+          icon="lock"
+          placeholder="Confirm New Password"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+        />
 
-      <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={isSaving}>
-        {isSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Changes</Text>}
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={isSaving}>
+          {isSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Changes</Text>}
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 };
 
@@ -115,6 +117,10 @@ const PasswordInput: React.FC<{
 );
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   container: {
     flex: 1,
     padding: 20,

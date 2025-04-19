@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'; // Import 
 import axios from 'axios';
 
 interface Task {
+  taskId?: number; // Add taskId as optional
   userId: number;
   taskName: string;
   taskDescription: string;
@@ -20,12 +21,13 @@ interface Task {
   completed: boolean;
   category: string; 
   createdAt: string;
+  deadline: string; // Add dueDate to Task interface
 }
 
 const AddTaskScreen: React.FC = () => {
   const [taskName, setTaskName] = useState<string>('');
   const [taskDescription, setTaskDescription] = useState<string>('');
-  const [dueDate, setDueDate] = useState<string>('');
+  const [dueDate, setDueDate] = useState<string>(moment().toISOString()); // Initialize with current date
   const [priority, setPriority] = useState<string>('low');
   const [status, setStatus] = useState<string>('Not Started'); // Use status for progress and task state
   const [estimatedDays, setEstimatedDays] = useState<string>(''); // New state for days
@@ -54,6 +56,12 @@ const AddTaskScreen: React.FC = () => {
 
       const estimatedDuration = `${estimatedDays || 0} days, ${estimatedHours || 0} hours`; // Combine days and hours
 
+      // Validate required fields
+      if (!taskName || !taskDescription || !priority || !estimatedDuration || !status || !category) {
+        console.error('Validation failed: Missing required fields');
+        return;
+      }
+
       const newTask: Task = {
         userId: parseInt(userId, 10), // Ensure userId is a number
         taskName,
@@ -63,14 +71,9 @@ const AddTaskScreen: React.FC = () => {
         status, // Use status for progress
         completed: status === 'Completed', // Set completed based on status
         category, // Include selected category
-        createdAt: moment().toISOString(),
+        createdAt: moment().toISOString(), // Add createdAt field
+        deadline: dueDate // Use initialized or updated dueDate
       };
-
-      // Validate newTask
-      if (!newTask.taskName || !newTask.taskDescription || !newTask.priority || !newTask.estimatedDuration || !newTask.status || !newTask.category) {
-        console.error('Validation failed: Missing required fields in newTask');
-        return;
-      }
 
       const response = await axios.post('http://localhost:8080/api/tasks', newTask);
       console.log('Task saved successfully:', response.data);
@@ -91,7 +94,7 @@ const AddTaskScreen: React.FC = () => {
   };
 
   const handleConfirm = (date: Date) => {
-    setDueDate(moment(date).format('YYYY-MM-DD'));
+    setDueDate(moment(date).toISOString()); // Save full ISO string with timezone
     hideDatePicker();
   };
 
@@ -201,7 +204,7 @@ const AddTaskScreen: React.FC = () => {
             <Ionicons name="calendar-outline" size={24} color="black" style={styles.icon} />
             <TouchableOpacity onPress={showDatePicker} style={styles.dateInput}>
               <Text style={styles.dateText}>
-                {dueDate ? dueDate : 'Select Due Date'}
+                {dueDate ? moment(dueDate).format('MMMM Do YYYY') : 'Select Due Date'} {/* Format dueDate for display */}
               </Text>
             </TouchableOpacity>
             <DateTimePickerModal
