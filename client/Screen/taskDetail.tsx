@@ -185,6 +185,13 @@ const TaskDetail: React.FC = () => {
     <SafeAreaView style={styles.safeArea}> {/* Added SafeAreaView */}
       <View style={styles.container}>
         <Header />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()} // Navigate back to the previous screen
+        >
+          <Ionicons name="arrow-back" size={24} color="#000" />
+         
+        </TouchableOpacity>
         <View style={styles.taskContainer}>
           <View style={styles.card}>
             {/* Task Title */}
@@ -390,6 +397,17 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     backgroundColor: '#F44336',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    padding: 10,
+  },
+  backButtonText: {
+    fontSize: 16,
+    marginLeft: 5,
+    color: '#000',
   },
 });
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Animated, Dimensions, ScrollView, SafeAreaView, TextInput } from 'react-native';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,7 +7,7 @@ import Modal from 'react-native-modal';
 import Header from '@/components/header';
 import NavBar from '@/components/Navbar';
 import * as Haptics from 'expo-haptics';
-import Swiper from 'react-native-swiper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Define types for the task structure
 interface Task {
@@ -39,22 +39,57 @@ LocaleConfig.defaultLocale = 'en';
 
 const CalendarScreen: React.FC = () => {
   const router = useRouter();
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: '1', title: 'Task 1', description: 'Task 1 description', dueDate: '2025-01-20', completed: false, priority: 'medium' },
-    { id: '2', title: 'Task 2', description: 'Task 2 description', dueDate: '2025-01-21', completed: false, priority: 'high' },
-    { id: '3', title: 'Task 3', description: 'Task 3 description', dueDate: '2025-01-22', completed: false, priority: 'low' },
-    { id: '4', title: 'Task 4', description: 'Task 4 description', dueDate: '2025-01-23', completed: false, priority: 'medium' },
-    { id: '5', title: 'Task 5', description: 'Task 5 description', dueDate: '2025-01-24', completed: false, priority: 'high' },
-    { id: '6', title: 'Task 6', description: 'Task 6 description', dueDate: '2025-01-25', completed: false, priority: 'low' },
-    { id: '7', title: 'Task 7', description: 'Task 7 description', dueDate: '2025-01-26', completed: false, priority: 'medium' },
-    { id: '8', title: 'Task 8', description: 'Task 8 description', dueDate: '2025-02-02', completed: false, priority: 'high' },
-    { id: '9', title: 'Eating', description: 'Task 8 description', dueDate: '2025-01-31', completed: false, priority: 'high' },
-  ]);
-
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const [markedDates, setMarkedDates] = useState<{ [key: string]: { dots: { key: string, color: string }[], marked: boolean } }>({});
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isModalVisible, setModalVisible] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in animation
+  const [currentMonth, setCurrentMonth] = useState<string>(new Date().toISOString().slice(0, 7) + '-01');
+  const [notes, setNotes] = useState<{ [key: string]: string }>({}); // State for notes
+  const [noteInput, setNoteInput] = useState<string>(''); // State for note input
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const userId = await AsyncStorage.getItem('userId');
+        if (!userId) {
+          throw new Error('User ID not found in AsyncStorage');
+        }
+        console.log('Fetching tasks for userId:', userId);
+
+        const response = await fetch(`http://localhost:8080/api/tasks/user/${userId}?month=${currentMonth.slice(0, 7)}`);
+        if (!response.ok) {
+          console.error('API response error:', response.status, response.statusText);
+          throw new Error(`Failed to fetch tasks: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log('Fetched tasks:', data);
+
+        // Map the fetched tasks to match the expected structure
+        const mappedTasks = data.map((task: any) => ({
+          id: task.taskId,
+          title: task.taskName,
+          description: task.taskDescription,
+          dueDate: task.deadline.split('T')[0], // Extract date part
+          completed: task.completed,
+          priority: task.priority.toLowerCase(), // Convert priority to lowercase
+        }));
+
+        setTasks(mappedTasks);
+      } catch (err: any) {
+        console.error('Error fetching tasks:', err.message);
+        setError(err.message || 'Error fetching tasks');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTasks();
+  }, [currentMonth]);
 
   useEffect(() => {
     const datesWithTasks: { [key: string]: { dots: { key: string, color: string }[], marked: boolean } } = {};
@@ -80,6 +115,20 @@ const CalendarScreen: React.FC = () => {
     }).start();
   }, [tasks]);
 
+  useEffect(() => {
+    const loadNotes = async () => {
+      try {
+        const storedNotes = await AsyncStorage.getItem('notes');
+        if (storedNotes) {
+          setNotes(JSON.parse(storedNotes));
+        }
+      } catch (err) {
+        console.error('Error loading notes:', err);
+      }
+    };
+    loadNotes();
+  }, []);
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'low':
@@ -95,8 +144,22 @@ const CalendarScreen: React.FC = () => {
 
   const handleDayPress = (date: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // Haptic feedback
+    console.log('Selected date:', date); // Debug log
     setSelectedDate(date);
     setModalVisible(true);
+  };
+
+  const saveNote = async () => {
+    if (selectedDate) {
+      const updatedNotes = { ...notes, [selectedDate]: noteInput };
+      setNotes(updatedNotes);
+      setNoteInput('');
+      try {
+        await AsyncStorage.setItem('notes', JSON.stringify(updatedNotes));
+      } catch (err) {
+        console.error('Error saving note:', err);
+      }
+    }
   };
 
   const renderTaskItem = ({ item }: { item: Task }) => (
@@ -108,98 +171,148 @@ const CalendarScreen: React.FC = () => {
   );
 
   return (
-    <View style={styles.container}>
-      <Header />
-      <Animated.View style={[styles.calendarContainer, { opacity: fadeAnim }]}>
-        <Swiper
-          loop={false}
-          showsPagination={false}
-          index={new Date().getMonth()}
-        >
-          {Array.from({ length: 12 }).map((_, month) => (
-            <Calendar
-              key={month}
-              current={`2025-${String(month + 1).padStart(2, '0')}-01`}
-              markedDates={markedDates}
-              markingType={'multi-dot'}
-              onDayPress={(day) => handleDayPress(day.dateString)}
-              theme={{
-                backgroundColor: '#ffffff',
-                calendarBackground: '#ffffff',
-                textSectionTitleColor: '#6a11cb',
-                selectedDayBackgroundColor: '#6a11cb',
-                selectedDayTextColor: '#ffffff',
-                todayTextColor: '#6a11cb',
-                dayTextColor: '#2d4150',
-                textDisabledColor: '#d9e1e8',
-                dotColor: '#6a11cb',
-                selectedDotColor: '#ffffff',
-                arrowColor: '#6a11cb',
-                disabledArrowColor: '#d9e1e8',
-                monthTextColor: '#6a11cb',
-                indicatorColor: '#6a11cb',
-                textDayFontWeight: '400',
-                textMonthFontWeight: 'bold',
-                textDayHeaderFontWeight: '500',
-                textDayFontSize: 16,
-                textMonthFontSize: 18,
-                textDayHeaderFontSize: 14,
-                'stylesheet.calendar.main': {
-                  container: {
-                    padding: 0,
-                  },
+    <SafeAreaView style={styles.safeArea}> {/* Add SafeAreaView */}
+      <View style={styles.container}>
+        <Header />
+        <Animated.View style={[styles.calendarContainer, { opacity: fadeAnim }]}>
+          {loading && (
+            <Text style={{ textAlign: 'center', color: '#6a11cb', marginVertical: 10 }}>Loading tasks...</Text>
+          )}
+          {error && (
+            <Text style={{ textAlign: 'center', color: '#F44336', marginVertical: 10 }}>{error}</Text>
+          )}
+          <Calendar
+            current={currentMonth}
+            markedDates={markedDates}
+            markingType={'multi-dot'}
+            onDayPress={(day) => handleDayPress(day.dateString)}
+            onMonthChange={(month) => setCurrentMonth(`${month.year}-${String(month.month).padStart(2, '0')}-01`)}
+            theme={{
+              backgroundColor: '#ffffff',
+              calendarBackground: '#ffffff',
+              textSectionTitleColor: '#000', // Black for month and year
+              selectedDayBackgroundColor: '#6a11cb', // Purple for selected day
+              selectedDayTextColor: '#ffffff', // White text for selected day
+              todayTextColor: '#6a11cb', // Purple for today
+              dayTextColor: '#000', // Black for day numbers
+              textDisabledColor: '#d1d1d6', // Light gray for disabled days
+              dotColor: '#6a11cb', // Purple dots for events
+              selectedDotColor: '#ffffff', // White dots for selected day
+              arrowColor: '#000', // Black for navigation arrows
+              monthTextColor: '#000', // Black for month text
+              indicatorColor: '#6a11cb', // Purple for loading indicator
+              textDayFontWeight: '500', // Regular weight for day numbers
+              textMonthFontWeight: '600', // Semi-bold for month text
+              textDayHeaderFontWeight: '600', // Semi-bold for day headers
+              textDayFontSize: 16, // Standard size for day numbers
+              textMonthFontSize: 20, // Larger size for month text
+              textDayHeaderFontSize: 14, // Smaller size for day headers
+              'stylesheet.calendar.main': {
+                container: {
+                  padding: 0,
+                  flex: 1,
                 },
-                'stylesheet.day.basic': {
-                  base: {
-                    width: 40,
-                    height: 40,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: '#e0e0e0',
-                  },
-                  selected: {
-                    backgroundColor: '#6a11cb',
-                    borderRadius: 8,
-                  },
-                  today: {
-                    backgroundColor: '#f0e6ff',
-                    borderRadius: 8,
-                  },
+                week: {
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  justifyContent: 'flex-start',
+                  marginVertical: 2,
+                  width: Dimensions.get('window').width,
                 },
-              }}
-            />
-          ))}
-        </Swiper>
-      </Animated.View>
-      <Modal isVisible={isModalVisible} onBackdropPress={() => setModalVisible(false)}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Tasks for {selectedDate}</Text>
-          <FlatList
-            data={tasks.filter(task => task.dueDate === selectedDate)}
-            renderItem={renderTaskItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.taskList}
+              },
+              'stylesheet.day.basic': {
+                base: {
+                  width: Math.floor(Dimensions.get('window').width / 5) - 8, // 5 columns
+                  height: Math.floor(Dimensions.get('window').height / 14),   // 12 rows + header + month
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: '#e0e0e0',
+                  margin: 4,
+                },
+                selected: {
+                  backgroundColor: '#6a11cb',
+                  borderRadius: 8,
+                },
+                today: {
+                  backgroundColor: '#f0e6ff',
+                  borderRadius: 8,
+                },
+              },
+            }}
+            style={{ borderRadius: 12, margin: 8 }}
           />
-          <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
-            <Text style={styles.closeButtonText}>Close</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
-      <NavBar />
-    </View>
+        </Animated.View>
+        <Modal
+          isVisible={isModalVisible}
+          onBackdropPress={() => setModalVisible(false)}
+          useNativeDriver // Ensure smooth animations on iOS
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Tasks and Notes for {selectedDate}</Text>
+            {selectedDate && (
+              <>
+                <FlatList
+                  data={tasks.filter(task => task.dueDate === selectedDate)} // Ensure dueDate matches selectedDate
+                  renderItem={renderTaskItem}
+                  keyExtractor={(item) => item.id} // Fixed missing closing parenthesis
+                  contentContainerStyle={styles.taskList}
+                />
+                {tasks.filter(task => task.dueDate === selectedDate).length === 0 && (
+                  <Text style={{ textAlign: 'center', color: '#999', marginVertical: 10 }}>No tasks for this date.</Text>
+                )}
+                <Text style={styles.noteLabel}>Note:</Text>
+                <TextInput
+                  style={styles.noteInput}
+                  placeholder="Write a note..."
+                  value={noteInput}
+                  onChangeText={setNoteInput}
+                />
+                <TouchableOpacity style={styles.saveButton} onPress={saveNote}>
+                  <Text style={styles.saveButtonText}>Save Note</Text>
+                </TouchableOpacity>
+                {notes[selectedDate] && (
+                  <Text style={styles.savedNote}>Saved Note: {notes[selectedDate]}</Text>
+                )}
+              </>
+            )}
+            <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+        <NavBar />
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f8f9fa', // Ensure SafeAreaView fills the screen
+  },
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f8f9fa', // Ensure content stretches to fill the screen
   },
   calendarContainer: {
-    paddingHorizontal: 10,
-    paddingVertical: 20,
+    width: '96%',
+    height: Dimensions.get('window').height * 0.9, // Increased height
+    backgroundColor: '#fff',
+    alignSelf: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    padding: 16,
+    marginTop: 10,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
   },
   modalContent: {
     backgroundColor: '#ffffff',
@@ -255,6 +368,38 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  noteLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 15,
+  },
+  noteInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 10,
+    fontSize: 14,
+    color: '#333',
+  },
+  saveButton: {
+    backgroundColor: '#6a11cb',
+    padding: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  saveButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  savedNote: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 10,
   },
 });
 

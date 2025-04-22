@@ -265,10 +265,13 @@ const AddTaskScreen: React.FC = () => {
               <Text style={styles.saveButtonText}>Save Task</Text>
             </Animated.View>
           </TouchableOpacity>
+         
         </View>
+      
        
       </ScrollView>
       <Navbar />
+    
     </SafeAreaView>
   );
 };

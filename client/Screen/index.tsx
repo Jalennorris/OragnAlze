@@ -31,6 +31,7 @@ import EmptyState from '@/components/EmptyState';
 import ErrorState from '@/components/ErrorState'; // Add this import
 import Loader from '@/components/Loader'; // Add this import
 import FilterBar from '@/components/FilterBar'; // Add this import
+import { useFocusEffect } from '@react-navigation/native'; // Add this import
 
 // Define types for the task structure
 interface Task {
@@ -80,6 +81,7 @@ const TaskList: React.FC<{
   refreshing: boolean;
   onRefresh: () => void;
   ListHeaderComponent: React.ReactNode;
+  searchQuery: string; // Add searchQuery prop
 }> = ({
   tasks,
   handleTaskPress,
@@ -89,23 +91,34 @@ const TaskList: React.FC<{
   refreshing,
   onRefresh,
   ListHeaderComponent,
-}) => (
-  <FlatList
-    data={tasks}
-    keyExtractor={(item) => item.taskId.toString()}
-    renderItem={({ item }) => (
-      <TaskItem
-        task={item}
-        onPress={() => handleTaskPress(item.taskId.toString())}
-        onToggleCompletion={() => toggleTaskCompletion(item.taskId)}
-        onDelete={() => deleteTask(item.taskId)}
-        priorityColor={getPriorityColor(item.priority)}
-      />
-    )}
-    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    ListHeaderComponent={ListHeaderComponent}
-  />
-);
+  searchQuery, // Destructure searchQuery
+}) => {
+  const filteredTasks = searchQuery
+    ? tasks.filter(
+        (task) =>
+          task.taskName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          task.taskDescription.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : tasks;
+
+  return (
+    <FlatList
+      data={filteredTasks} // Use filteredTasks here
+      keyExtractor={(item) => item.taskId.toString()}
+      renderItem={({ item }) => (
+        <TaskItem
+          task={item}
+          onPress={() => handleTaskPress(item.taskId.toString())}
+          onToggleCompletion={() => toggleTaskCompletion(item.taskId)}
+          onDelete={() => deleteTask(item.taskId)}
+          priorityColor={getPriorityColor(item.priority)}
+        />
+      )}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      ListHeaderComponent={searchQuery ? null : ListHeaderComponent} // Hide header if searching
+    />
+  );
+};
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation(); // Use navigation instead of router
@@ -126,6 +139,9 @@ const HomeScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'work' | 'personal' | 'school'| 'other'>('all');
   const [showFilterOptions, setShowFilterOptions] = useState(false);
   
+  const onSearch = useCallback((query: string) => {
+    setSearchQuery(query); // Update the search query state
+  },);
 
 
   const getTasks = async () => {
@@ -185,6 +201,13 @@ const HomeScreen: React.FC = () => {
   useEffect(() => {
     getTasks();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Screen focused, refreshing tasks...');
+      getTasks(); // Refresh tasks when the screen is focused
+    }, [])
+  );
 
   //loading Task
 
@@ -449,7 +472,7 @@ const DateSection: React.FC<{
               <View style={styles.iconsContainer}>
                 <SearchBar 
                   searchQuery={searchQuery} 
-                  setSearchQuery={setSearchQuery} 
+                  setSearchQuery={onSearch} // Pass the onSearch function here
                   colors={COLORS} 
                 />
                 <TouchableOpacity
@@ -474,7 +497,7 @@ const DateSection: React.FC<{
               }
 
               <TaskList
-                tasks={filteredTasks}
+                tasks={filteredTasks} // Pass filteredTasks here
                 handleTaskPress={handleTaskPress}
                 toggleTaskCompletion={toggleTaskCompletion}
                 deleteTask={deleteTask}
@@ -482,42 +505,45 @@ const DateSection: React.FC<{
                 refreshing={refreshing}
                 onRefresh={onRefresh}
                 ListHeaderComponent={
-                  <>
-                    <TaskSummary 
-                      totalTasks={tasks.length} 
-                      completedTasks={completedTasksCount} 
-                      colors={COLORS} 
-                    />
-                    <DateSection
-                      title="Today"
-                      tasks={todayTasks}
-                      handleTaskPress={handleTaskPress}
-                      toggleTaskCompletion={toggleTaskCompletion}
-                      deleteTask={deleteTask}
-                      getPriorityColor={getPriorityColor}
-                      icon={<Ionicons name="calendar-outline" size={32} color={COLORS.text} />} // Add icon for "Today"
-                    />
-                    <DateSection
-                      title="This Week"
-                      tasks={currentWeekTasks}
-                      handleTaskPress={handleTaskPress}
-                      toggleTaskCompletion={toggleTaskCompletion}
-                      deleteTask={deleteTask}
-                      getPriorityColor={getPriorityColor}
-                      icon={<Ionicons name="time-outline" size={32} color={COLORS.text} />} // Add icon for "This Week"
-                    />
-                    <FutureTask
-                      futureTasks={futureTasks}
-                      showFutureTasks={showFutureTasks}
-                      setShowFutureTasks={setShowFutureTasks}
-                      handleTaskPress={handleTaskPress}
-                      toggleTaskCompletion={toggleTaskCompletion}
-                      deleteTask={deleteTask}
-                      getPriorityColor={getPriorityColor}
-                      colors={COLORS}
-                    />
-                  </>
+                  searchQuery
+                    ? null
+                    : <>
+                        <TaskSummary 
+                          totalTasks={tasks.length} 
+                          completedTasks={completedTasksCount} 
+                          colors={COLORS} 
+                        />
+                        <DateSection
+                          title="Today"
+                          tasks={todayTasks}
+                          handleTaskPress={handleTaskPress}
+                          toggleTaskCompletion={toggleTaskCompletion}
+                          deleteTask={deleteTask}
+                          getPriorityColor={getPriorityColor}
+                          icon={<Ionicons name="calendar-outline" size={32} color={COLORS.text} />} // Add icon for "Today"
+                        />
+                        <DateSection
+                          title="This Week"
+                          tasks={currentWeekTasks}
+                          handleTaskPress={handleTaskPress}
+                          toggleTaskCompletion={toggleTaskCompletion}
+                          deleteTask={deleteTask}
+                          getPriorityColor={getPriorityColor}
+                          icon={<Ionicons name="time-outline" size={32} color={COLORS.text} />} // Add icon for "This Week"
+                        />
+                        <FutureTask
+                          futureTasks={futureTasks}
+                          showFutureTasks={showFutureTasks}
+                          setShowFutureTasks={setShowFutureTasks}
+                          handleTaskPress={handleTaskPress}
+                          toggleTaskCompletion={toggleTaskCompletion}
+                          deleteTask={deleteTask}
+                          getPriorityColor={getPriorityColor}
+                          colors={COLORS}
+                        />
+                      </>
                 }
+                searchQuery={searchQuery} // Pass searchQuery to TaskList
               />
             </>
           ) : null /* Render nothing if there are no tasks */}
