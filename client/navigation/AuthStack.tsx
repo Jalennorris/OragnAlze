@@ -10,6 +10,7 @@ import Welcome from '@/Screen/welcome';
 import EditProfile from '@/Screen/sections/editProfile';
 import ChangePassword from '@/Screen/sections/changePassword';
 import UpdateEmail from '@/Screen/sections/updateEmail';
+import PrivacyPolicy from '@/Screen/sections/PrivacyPolicy';
 
 const Stack = createNativeStackNavigator();
 
@@ -27,6 +28,7 @@ const AuthStack = () => (
     <Stack.Screen name="sections/editProfile" component={EditProfile} />
     <Stack.Screen name="sections/changePassword" component={ChangePassword} />
     <Stack.Screen name="sections/updateEmail" component={UpdateEmail} />
+    <Stack.Screen name="sections/privacyPolicy" component={PrivacyPolicy} />
   </Stack.Navigator>
 );
 

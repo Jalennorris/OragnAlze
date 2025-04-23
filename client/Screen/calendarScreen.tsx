@@ -47,8 +47,9 @@ const CalendarScreen: React.FC = () => {
   const [isModalVisible, setModalVisible] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current; // For fade-in animation
   const [currentMonth, setCurrentMonth] = useState<string>(new Date().toISOString().slice(0, 7) + '-01');
-  const [notes, setNotes] = useState<{ [key: string]: string }>({}); // State for notes
-  const [noteInput, setNoteInput] = useState<string>(''); // State for note input
+  const [comments, setComments] = useState<{ [key: string]: string }>({}); // State for comments by task ID
+  const [commentInput, setCommentInput] = useState<string>(''); // State for comment input
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null); // State for selected task ID
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -116,17 +117,17 @@ const CalendarScreen: React.FC = () => {
   }, [tasks]);
 
   useEffect(() => {
-    const loadNotes = async () => {
+    const loadComments = async () => {
       try {
-        const storedNotes = await AsyncStorage.getItem('notes');
-        if (storedNotes) {
-          setNotes(JSON.parse(storedNotes));
+        const storedComments = await AsyncStorage.getItem('comments');
+        if (storedComments) {
+          setComments(JSON.parse(storedComments));
         }
       } catch (err) {
-        console.error('Error loading notes:', err);
+        console.error('Error loading comments:', err);
       }
     };
-    loadNotes();
+    loadComments();
   }, []);
 
   const getPriorityColor = (priority: string) => {
@@ -149,17 +150,8 @@ const CalendarScreen: React.FC = () => {
     setModalVisible(true);
   };
 
-  const saveNote = async () => {
-    if (selectedDate) {
-      const updatedNotes = { ...notes, [selectedDate]: noteInput };
-      setNotes(updatedNotes);
-      setNoteInput('');
-      try {
-        await AsyncStorage.setItem('notes', JSON.stringify(updatedNotes));
-      } catch (err) {
-        console.error('Error saving note:', err);
-      }
-    }
+  const saveComment = async () => {
+    // Save comment logic here
   };
 
   const renderTaskItem = ({ item }: { item: Task }) => (
@@ -167,6 +159,25 @@ const CalendarScreen: React.FC = () => {
       <Text style={styles.taskTitle}>{item.title}</Text>
       <Text style={styles.taskDescription}>{item.description}</Text>
       <Text style={styles.taskDueDate}>Due: {item.dueDate}</Text>
+      <TouchableOpacity
+        style={styles.commentButton}
+        onPress={() => {
+          if (selectedTaskId === item.id) {
+            setSelectedTaskId(null); // Unview comment if already selected
+            setCommentInput('');
+          } else {
+            setSelectedTaskId(item.id);
+            setCommentInput(comments[item.id] || '');
+          }
+        }}
+      >
+        <Text style={styles.commentButtonText}>
+          {selectedTaskId === item.id ? 'Hide Comment' : 'Add/View Comment'}
+        </Text>
+      </TouchableOpacity>
+      {selectedTaskId === item.id && comments[item.id] && (
+        <Text style={styles.savedComment}>Comment: {comments[item.id]}</Text>
+      )}
     </View>
   );
 
@@ -250,7 +261,7 @@ const CalendarScreen: React.FC = () => {
           useNativeDriver // Ensure smooth animations on iOS
         >
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Tasks and Notes for {selectedDate}</Text>
+            <Text style={styles.modalTitle}>Tasks for {selectedDate}</Text>
             {selectedDate && (
               <>
                 <FlatList
@@ -259,21 +270,19 @@ const CalendarScreen: React.FC = () => {
                   keyExtractor={(item) => item.id} // Fixed missing closing parenthesis
                   contentContainerStyle={styles.taskList}
                 />
-                {tasks.filter(task => task.dueDate === selectedDate).length === 0 && (
-                  <Text style={{ textAlign: 'center', color: '#999', marginVertical: 10 }}>No tasks for this date.</Text>
-                )}
-                <Text style={styles.noteLabel}>Note:</Text>
-                <TextInput
-                  style={styles.noteInput}
-                  placeholder="Write a note..."
-                  value={noteInput}
-                  onChangeText={setNoteInput}
-                />
-                <TouchableOpacity style={styles.saveButton} onPress={saveNote}>
-                  <Text style={styles.saveButtonText}>Save Note</Text>
-                </TouchableOpacity>
-                {notes[selectedDate] && (
-                  <Text style={styles.savedNote}>Saved Note: {notes[selectedDate]}</Text>
+                {selectedTaskId && (
+                  <>
+                    <Text style={styles.commentLabel}>Comment for Task:</Text>
+                    <TextInput
+                      style={styles.commentInput}
+                      placeholder="Write a comment..."
+                      value={commentInput}
+                      onChangeText={setCommentInput}
+                    />
+                    <TouchableOpacity style={styles.saveButton} onPress={saveComment}>
+                      <Text style={styles.saveButtonText}>Save Comment</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
               </>
             )}
@@ -369,13 +378,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  noteLabel: {
+  commentLabel: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
     marginTop: 15,
   },
-  noteInput: {
+  commentInput: {
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 10,
@@ -396,10 +405,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
-  savedNote: {
+  savedComment: {
     fontSize: 14,
     color: '#666',
     marginTop: 10,
+  },
+  commentButton: {
+    backgroundColor: '#6a11cb',
+    padding: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  commentButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
 

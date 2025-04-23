@@ -3,15 +3,9 @@ import { View, Text, StyleSheet, Pressable, Animated, Platform } from "react-nat
 import { Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
-import { useRouter } from "expo-router";
 import axios from "axios";
 import { useNavigation} from "expo-router";
-
-
-
-
-
-
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Load custom fonts
 const loadFonts = async () => {
@@ -40,7 +34,6 @@ interface Credentials {
 const Header: React.FC = () => {
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const scaleValue = new Animated.Value(1); // For icon animation
-  const router = useRouter();
   const navigation = useNavigation();
   const [credentials, setCredentials] = useState<Credentials>({
     profile_pic: '',
@@ -67,16 +60,19 @@ const Header: React.FC = () => {
 
   const getUserInfo = async () => {
     try {
-      const userId = localStorage.getItem('userId'); // Assuming userId is stored in localStorage
+      const userId = await AsyncStorage.getItem('userId'); // Use AsyncStorage instead of localStorage
       console.log(userId);
+      if (!userId) {
+        console.warn('No userId found in AsyncStorage');
+        return;
+      }
       const response = await axios.get(`http://localhost:8080/api/users/${userId}`);
       const data = response.data;
 
       setCredentials({
         profile_pic: data.profile_pic,
-        
       });
-      console.log('Successfully fetched user info:', );
+      console.log('Successfully fetched user info:');
       console.log('profile_pic:', data.profile_pic);
     } catch (error) {
       console.error('Failed to fetch user info:', error);

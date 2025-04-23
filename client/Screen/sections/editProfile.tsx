@@ -21,6 +21,7 @@ import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Credentials {
   firstName: string;
@@ -94,7 +95,19 @@ const EditProfile: React.FC<{ }> = () => {
 
   useEffect(() => {
     getUserInfo();
+    loadProfileImage(); // Load the saved profile image on component mount
   }, []);
+
+  const loadProfileImage = async () => {
+    try {
+      const savedImage = await AsyncStorage.getItem('profileImage');
+      if (savedImage) {
+        setProfileImage(savedImage);
+      }
+    } catch (error) {
+      console.error('Failed to load profile image:', error);
+    }
+  };
 
   const handleImageUpload = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -111,15 +124,24 @@ const EditProfile: React.FC<{ }> = () => {
     });
 
     if (!result.canceled) {
-      setProfileImage(result.assets[0].uri);
+      const imageUri = result.assets[0].uri;
+      setProfileImage(imageUri);
       setSelectedColor(null);
       setIsModalVisible(false);
+
+      try {
+        await AsyncStorage.setItem('profileImage', imageUri); // Save the selected image URI
+      } catch (error) {
+        console.error('Failed to save profile image:', error);
+      }
     }
   }, []);
 
   const getUserInfo = async () => {
     try {
-      const userId = localStorage.getItem('userId'); // Assuming userId is stored in localStorage
+      const userId = await AsyncStorage.getItem('userId'); // Retrieve userId from AsyncStorage
+      if (!userId) throw new Error('User ID not found');
+
       const response = await axios.get(`http://localhost:8080/api/users/${userId}`);
       const data = response.data;
 
@@ -141,10 +163,9 @@ const EditProfile: React.FC<{ }> = () => {
   const handleSave = async (values: { firstName: string; lastName: string; email: string }) => {
     setIsLoading(true);
     try {
-      const userId = localStorage.getItem('userId'); // Assuming userId is stored in localStorage
-      if (!userId) {
-        throw new Error('User ID not found');
-      }
+      const userId = await AsyncStorage.getItem('userId'); // Retrieve userId from AsyncStorage
+      if (!userId) throw new Error('User ID not found');
+
       await axios.patch(`http://localhost:8080/api/users/${userId}`, {
         firstname: values.firstName,
         lastname: values.lastName,
@@ -155,6 +176,24 @@ const EditProfile: React.FC<{ }> = () => {
       Alert.alert('Success', 'Profile updated successfully!');
     } catch (error) {
       Alert.alert('Error', 'Failed to update profile. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveProfilePicture = async () => {
+    setIsLoading(true);
+    try {
+      const userId = await AsyncStorage.getItem('userId'); // Retrieve userId from AsyncStorage
+      if (!userId) throw new Error('User ID not found');
+
+      await axios.patch(`http://localhost:8080/api/users/${userId}`, {
+        profile_pic: profileImage || selectedColor,
+      });
+
+      Alert.alert('Success', 'Profile picture updated successfully!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update profile picture. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -183,6 +222,10 @@ const EditProfile: React.FC<{ }> = () => {
             color={!profileImage && selectedColor ? selectedColor : undefined} 
             onPress={() => setIsModalVisible(true)} 
           />
+
+          <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfilePicture} disabled={isLoading}>
+            {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Profile Picture</Text>}
+          </TouchableOpacity>
 
           <Modal visible={isModalVisible} animationType="slide" transparent>
             <View style={styles.modalOverlay}>

@@ -16,6 +16,8 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 
 // Validation schema
 const emailSchema = Yup.object().shape({
@@ -34,8 +36,15 @@ const UpdateEmail: React.FC = () => {
   const handleSave = async (values: { currentEmail: string; newEmail: string; confirmEmail: string }) => {
     setIsLoading(true);
     try {
-      // Simulate an API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const userId = await AsyncStorage.getItem('userId'); // Retrieve userId using AsyncStorage
+
+      const response = await axios.patch(
+        `http://localhost:8080/api/users/${userId}/update-email`,
+        { currentEmail: values.currentEmail, newEmail: values.newEmail }
+      );
+
+      console.log('Email updated successfully:', response.data);
+
       Alert.alert('Success', 'Email updated successfully!', [
         {
           text: 'OK',
@@ -43,7 +52,11 @@ const UpdateEmail: React.FC = () => {
         },
       ]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to update email. Please try again.');
+      console.error('Error updating email:', error);
+      Alert.alert(
+        'Error',
+        error.response?.data?.message || 'Failed to update email. Please try again.'
+      );
     } finally {
       setIsLoading(false);
     }

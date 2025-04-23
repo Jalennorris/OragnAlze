@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityInd
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ChangePassword: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -32,7 +33,7 @@ const ChangePassword: React.FC = () => {
     setIsSaving(true);
   
     try {
-      const userId = localStorage.getItem('userId');
+      const userId = await AsyncStorage.getItem('userId'); // Updated to use AsyncStorage
   
       const response = await axios.patch(
         `http://localhost:8080/api/users/${userId}/change-password`,

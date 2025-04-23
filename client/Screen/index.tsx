@@ -31,7 +31,6 @@ import EmptyState from '@/components/EmptyState';
 import ErrorState from '@/components/ErrorState'; // Add this import
 import Loader from '@/components/Loader'; // Add this import
 import FilterBar from '@/components/FilterBar'; // Add this import
-import { useFocusEffect } from '@react-navigation/native'; // Add this import
 
 // Define types for the task structure
 interface Task {
@@ -201,13 +200,6 @@ const HomeScreen: React.FC = () => {
   useEffect(() => {
     getTasks();
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      console.log('Screen focused, refreshing tasks...');
-      getTasks(); // Refresh tasks when the screen is focused
-    }, [])
-  );
 
   //loading Task
 

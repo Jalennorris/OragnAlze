@@ -66,7 +66,7 @@ const AddTaskScreen: React.FC = () => {
         userId: parseInt(userId, 10), // Ensure userId is a number
         taskName,
         taskDescription,
-        priority: priority.charAt(0).toUpperCase() + priority.slice(1), // Capitalize priority
+        priority: priority.charAt(0).toLowerCase() + priority.slice(1), // Capitalize priority
         estimatedDuration, // Include combined duration
         status, // Use status for progress
         completed: status === 'Completed', // Set completed based on status
