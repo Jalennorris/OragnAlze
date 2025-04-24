@@ -26,14 +26,14 @@ public class TasksControllers {
         this.taskService = taskService;
     }
 
-    // Asynchronously fetch all tasks
+    // Endpoint to fetch all tasks asynchronously
     @GetMapping
     public CompletableFuture<ResponseEntity<List<TasksDTO>>> getTasks() {
         return taskService.getAllTasks()
                 .thenApply(ResponseEntity::ok); // Return tasks wrapped in ResponseEntity
     }
 
-    // Asynchronously fetch a task by ID
+    // Endpoint to fetch a task by its ID
     @GetMapping("/{id}")
     public CompletableFuture<ResponseEntity<TasksDTO>> getTask(@PathVariable("id") long id) {
         return taskService.getTaskById(id)
@@ -45,8 +45,7 @@ public class TasksControllers {
                     }
                 });
     }
-    //fetching all tasks by user Id
-
+    // Endpoint to fetch all tasks for a specific user ID
     @GetMapping("/user/{userId}")
     public CompletableFuture<ResponseEntity<List<TasksDTO>>> getTasksByUserId(@PathVariable("userId") long userId) {
         logger.info("Fetching tasks for userId: {}", userId);
@@ -62,10 +61,10 @@ public class TasksControllers {
                 });
     }
 
-    // Fetch tasks by status
+    // Endpoint to fetch tasks by status
+    @GetMapping("/status/{status}")
 
-
-    // Asynchronously create a new task
+    // Endpoint to create a new task
     @PostMapping
     public CompletableFuture<ResponseEntity<TasksDTO>> createTask(@RequestBody TasksDTO newTask) {
         try {
@@ -84,14 +83,14 @@ public class TasksControllers {
         }
     }
 
-    // Asynchronously update a task
+    // Endpoint to update a task partially
     @PatchMapping("/{id}")
     public CompletableFuture<ResponseEntity<TasksDTO>> updateTask(@PathVariable long id, @RequestBody Map<String, Object> updatedTask) {
         return taskService.updateTask(id, updatedTask)
                 .thenApply(updated -> updated != null ? ResponseEntity.ok(updated) : ResponseEntity.notFound().build());
     }
 
-    // Asynchronously delete a task by ID
+    // Endpoint to delete a task by its ID
     @DeleteMapping("/{id}")
     public CompletableFuture<ResponseEntity<Void>> deleteTask(@PathVariable long id) {
         try {
@@ -109,7 +108,7 @@ public class TasksControllers {
         }
     }
 
-    // Helper method to convert DTO to entity
+    // Helper method to convert a DTO to an entity
     private TasksModels convertToEntity(TasksDTO taskDTO) {
         TasksModels taskEntity = new TasksModels();
         taskEntity.setUser_id(taskDTO.getUserId());
@@ -122,13 +121,17 @@ public class TasksControllers {
         taskEntity.setCompleted(taskDTO.isCompleted());
         taskEntity.setCategory(taskDTO.getCategory());
         taskEntity.setCreated_at(taskDTO.getCreatedAt()); // Mapping camelCase to snake_case
+        taskEntity.setNotes(taskDTO.getNotes() != null && !taskDTO.getNotes().isBlank() ? taskDTO.getNotes().trim() : null); // Handle null/blank notes
         return taskEntity;
     }
 
-    // Helper method to validate task entity
+    // Helper method to validate a task entity
     private void validateTask(TasksModels task) {
         if (task.getTask_name() == null || task.getTask_name().isEmpty()) {
             throw new IllegalArgumentException("Task name must not be null or empty");
+        }
+        if (task.getNotes() != null && task.getNotes().length() > 500) { // Validate notes length
+            throw new IllegalArgumentException("Notes must not exceed 500 characters");
         }
     }
 }

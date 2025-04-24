@@ -33,11 +33,14 @@ public class TasksModels {
     @Column(name = "category" )
     private String category;
 
+    @Column(name = "notes")
+    private String notes; // Field to store notes for the task
+
     // Default constructor (required for JPA)
     public TasksModels() {}
 
     public TasksModels(long task_id, long userId, String task_name, String task_description, String priority,
-                       String estimated_duration, ZonedDateTime deadline, String status, boolean completed, String category ,ZonedDateTime created_at) {
+                       String estimated_duration, ZonedDateTime deadline, String status, boolean completed, String category ,ZonedDateTime created_at, String notes) {
         this.task_id = task_id;
         this.userId = userId;
         this.task_name = task_name;
@@ -49,7 +52,7 @@ public class TasksModels {
         this.completed = completed;
         this.category = category;
         this.created_at = created_at;
-
+        this.notes = notes;
     }
 
     public long getTask_id() {
@@ -145,6 +148,14 @@ public class TasksModels {
 
     public void setCategory(String category) {
         this.category = category;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
     }
 
 }

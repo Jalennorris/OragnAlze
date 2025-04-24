@@ -8,16 +8,40 @@ public class TasksDTO implements Serializable {
     // When you are creating/testing use these instead of models
     private static final long serialVersionUID = 1L;
 
+    // Unique identifier for the task
     private long taskId;
+
+    // ID of the user who owns the task
     private long userId;
+
+    // Name of the task
     private String taskName;
+
+    // Description of the task
     private String taskDescription;
+
+    // Priority level of the task
     private String priority;
+
+    // Estimated duration to complete the task
     private String estimatedDuration;
+
+    // Deadline for the task
     private ZonedDateTime deadline;
+
+    // Current status of the task
     private String status;
+
+    // Whether the task is completed
     private boolean completed;
+
+    // Category of the task
     private String category;
+
+    // Notes for the task
+    private String notes;
+
+    // Timestamp when the task was created
     private ZonedDateTime createdAt;
 
     // Default constructor
@@ -25,7 +49,7 @@ public class TasksDTO implements Serializable {
 
     // Constructor with parameters
     public TasksDTO(long taskId, long userId, String taskName, String taskDescription, String priority,
-                    String estimatedDuration, ZonedDateTime deadline, String status, boolean completed, String category, ZonedDateTime createdAt) {
+                    String estimatedDuration, ZonedDateTime deadline, String status, boolean completed, String category, String notes, ZonedDateTime createdAt) {
         this.taskId = taskId;
         this.userId = userId;
         this.taskName = taskName;
@@ -36,6 +60,7 @@ public class TasksDTO implements Serializable {
         this.status = status;
         this.completed = completed;
         this.category = category;
+        this.notes = notes;
         this.createdAt = createdAt;
     }
 
@@ -126,5 +151,13 @@ public class TasksDTO implements Serializable {
 
     public void setCategory(String category) {
         this.category = category;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
     }
 }

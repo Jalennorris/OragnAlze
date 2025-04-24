@@ -10,6 +10,7 @@ import {
   RefreshControl,
   FlatList,
   useColorScheme,
+  Alert, // Add this import
 } from 'react-native';
 import TaskItem from '../components/taskItem';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +32,9 @@ import EmptyState from '@/components/EmptyState';
 import ErrorState from '@/components/ErrorState'; // Add this import
 import Loader from '@/components/Loader'; // Add this import
 import FilterBar from '@/components/FilterBar'; // Add this import
+import axios from 'axios'; // Add axios for API requests
+import Modal from 'react-native-modal'; // Add Modal for user interaction
+import { API_URL, OPENROUTER_API_KEY } from '@env'; // Import API_URL and OPENROUTER_API_KEY from .env
 
 // Define types for the task structure
 interface Task {
@@ -49,7 +53,7 @@ interface Task {
 
 // Constants for colors and styles
 const LIGHT_COLORS = {
-  low: '#4caf50', // green
+  low: '#000', // black
   medium: '#ff9800', // orange
   high: '#f44336', // red
   today: '#f44336', // red
@@ -137,6 +141,12 @@ const HomeScreen: React.FC = () => {
   const [sortBy, setSortBy] = useState<'date' | 'priority' | 'completed'>('date');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'work' | 'personal' | 'school'| 'other'>('all');
   const [showFilterOptions, setShowFilterOptions] = useState(false);
+  const [isAIPressed, setIsAIPressed] = useState(false); // Add this state
+  const scaleAnim = useRef(new Animated.Value(1)).current; // Add this state
+  const [aiModalVisible, setAiModalVisible] = useState(false); // State for AI modal
+  const [aiQuery, setAiQuery] = useState(''); // State for user query
+  const [aiResponse, setAiResponse] = useState(''); // State for AI response
+  const [aiLoading, setAiLoading] = useState(false); // State for AI loading
   
   const onSearch = useCallback((query: string) => {
     setSearchQuery(query); // Update the search query state
@@ -157,7 +167,7 @@ const HomeScreen: React.FC = () => {
       }
       
       console.log(`User ID retrieved: ${userId}`);
-      const apiUrl = `http://localhost:8080/api/tasks/user/${userId}`;
+      const apiUrl = `${API_URL}/tasks/user/${userId}`; // Use API_URL from .env
       console.log(`Fetching tasks from: ${apiUrl}`);
   
       // Clear tasks state before fetching new data
@@ -441,6 +451,79 @@ const DateSection: React.FC<{
   </View>
 );
 
+  // Handler for the "Ask AI" button
+  const handleAskAI = useCallback(() => {
+    setAiModalVisible(true); // Show the AI modal
+  }, []);
+
+  const fetchAIResponse = async () => {
+    try {
+      console.log('Starting fetchAIResponse...');
+      setAiLoading(true);
+      setAiResponse(''); // Clear previous response
+
+      const apiUrl = "https://openrouter.ai/api/v1/chat/completions";
+      const headers = {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`, // Use OPENROUTER_API_KEY from .env
+        "Content-Type": "application/json",
+      };
+
+      console.log('API URL:', apiUrl);
+      console.log('Headers:', headers);
+
+      const body = JSON.stringify({
+        model: "deepseek/deepseek-r1-zero:free",
+        messages: [
+          {
+            role: "user",
+            content: aiQuery, // Use the user's query
+          },
+        ],
+      });
+
+      console.log('Request Body:', body);
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers,
+        body,
+      });
+
+      console.log('Response Status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Response Data:', data);
+
+      setAiResponse(data.choices[0].message.content.trim());
+    } catch (error) {
+      console.error('Error fetching AI response:', error);
+      setAiResponse('Failed to get a response. Please try again.');
+    } finally {
+      setAiLoading(false);
+      console.log('fetchAIResponse execution completed.');
+    }
+  };
+  // Add these animations
+const handlePressIn = () => {
+  setIsAIPressed(true);
+  Animated.spring(scaleAnim, {
+    toValue: 0.9,
+    useNativeDriver: true,
+  }).start();
+};
+
+const handlePressOut = () => {
+  setIsAIPressed(false);
+  Animated.spring(scaleAnim, {
+    toValue: 1,
+    useNativeDriver: true,
+  }).start();
+};
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={[styles.container, { backgroundColor: COLORS.background }]}>
@@ -539,6 +622,76 @@ const DateSection: React.FC<{
               />
             </>
           ) : null /* Render nothing if there are no tasks */}
+          <TouchableOpacity
+            style={[styles.askAIButton, { transform: [{ scale: scaleAnim }] }]} // Replace with Animated.View
+            onPress={handleAskAI} // Fix: Uncomment onPress
+            onPressIn={handlePressIn} // Fix: Uncomment onPressIn
+            onPressOut={handlePressOut} // Fix: Uncomment onPressOut
+            accessibilityLabel="Ask AI for assistance"
+          >
+            <View style={styles.cartoonButton}> {/* Wrap the face inside cartoonButton */}
+              <View style={styles.faceContainer}>
+                {/* Eyes */}
+                <View style={styles.eyes}>
+                  <View style={[styles.eye, isAIPressed && styles.eyeSquint]} />
+                  <View style={[styles.eye, isAIPressed && styles.eyeSquint, { marginLeft: 10 }]} />
+                </View>
+                
+                {/* Mouth - changes when pressed */}
+                {isAIPressed ? (
+                  <View style={styles.mouthOpen} />
+                ) : (
+                  <View style={styles.mouthClosed} />
+                )}
+                
+                {/* Sparkles */}
+                <Ionicons name="sparkles" size={16} color="#FFD700" style={styles.sparkle1} />
+                <Ionicons name="sparkles" size={16} color="#FFD700" style={styles.sparkle2} />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* AI Modal */}
+          <Modal
+            isVisible={aiModalVisible}
+            onBackdropPress={() => setAiModalVisible(false)}
+            onBackButtonPress={() => setAiModalVisible(false)}
+            style={styles.modalWrapper} // Add wrapper style
+          >
+            <View style={styles.modalContainer}>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setAiModalVisible(false)}
+                accessibilityLabel="Close modal"
+              >
+                <Text style={styles.closeButtonText}>X</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Ask AI</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Type your question..."
+                value={aiQuery}
+                onChangeText={setAiQuery}
+                placeholderTextColor="#aaa" // Modern placeholder color
+              />
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={fetchAIResponse}
+                disabled={aiLoading}
+              >
+                <Text style={styles.modalButtonText}>{aiLoading ? 'Loading...' : 'Submit'}</Text>
+              </TouchableOpacity>
+              <View style={styles.modalResponseContainer}>
+                {aiResponse ? (
+                  <Text style={styles.modalResponse}>{aiResponse}</Text>
+                ) : (
+                  <Text style={styles.modalPlaceholder}>
+                    {aiLoading ? 'Fetching response...' : 'Your AI response will appear here.'}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </Modal>
           <NavBar />  
         </View>
       </SafeAreaView>
@@ -693,6 +846,161 @@ const styles = StyleSheet.create({
   iconContainer: {
     alignItems: 'center',
     marginBottom: 10,
+  },
+  askAIButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    position: 'absolute',
+    bottom: 80,
+    right: 20,
+    zIndex: 10,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    backgroundColor: '#000', // Black background
+  },
+  cartoonButton: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 35,
+    backgroundColor: '#fff', // White inner button
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000', // Box shadow for inner button
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  faceContainer: {
+    width: 40,
+    height: 40,
+    position: 'relative',
+  },
+  eyes: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 5,
+  },
+  eye: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#333',
+  },
+  eyeSquint: {
+    height: 6,
+    marginTop: 4,
+  },
+  mouthClosed: {
+    width: 20,
+    height: 5,
+    borderRadius: 2,
+    backgroundColor: '#333',
+    alignSelf: 'center',
+  },
+  mouthOpen: {
+    width: 20,
+    height: 10,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#333',
+    backgroundColor: '#FF6B6B',
+    alignSelf: 'center',
+  },
+  sparkle1: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    transform: [{ rotate: '-20deg' }],
+  },
+  sparkle2: {
+    position: 'absolute',
+    bottom: -10,
+    right: -10,
+    transform: [{ rotate: '20deg' }],
+  },
+  modalWrapper: {
+    justifyContent: 'flex-end', // Align modal at the bottom
+    margin: 0, // Remove default margin
+  },
+  modalContainer: {
+    backgroundColor: '#1e1e1e', // Dark background for modern look
+    padding: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 10,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 1,
+    backgroundColor: '#444',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  modalInput: {
+    width: '100%',
+    height: 50,
+    borderColor: '#444',
+    borderWidth: 1,
+    borderRadius: 25,
+    paddingHorizontal: 15,
+    backgroundColor: '#2a2a2a',
+    color: '#fff',
+    marginBottom: 15,
+    fontSize: 16,
+  },
+  modalButton: {
+    backgroundColor: '#007BFF',
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  modalResponseContainer: {
+    maxHeight: 200, // Limit height for scrollable area
+    backgroundColor: '#2a2a2a',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 10,
+  },
+  modalResponse: {
+    color: '#fff',
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  modalPlaceholder: {
+    color: '#888',
+    fontSize: 16,
+    textAlign: 'center',
   },
 });
 export default HomeScreen;
