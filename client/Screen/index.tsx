@@ -34,7 +34,9 @@ import Loader from '@/components/Loader'; // Add this import
 import FilterBar from '@/components/FilterBar'; // Add this import
 import axios from 'axios'; // Add axios for API requests
 import Modal from 'react-native-modal'; // Add Modal for user interaction
-import { API_URL, OPENROUTER_API_KEY } from '@env'; // Import API_URL and OPENROUTER_API_KEY from .env
+import { API_URL, OPENROUTER_API_KEY } from '@env'; // Ensure this import is correct
+import OpenAI from 'openai'; // Add OpenAI import
+import AskAIButton from './components/AskAIButton'; // Add this import
 
 // Define types for the task structure
 interface Task {
@@ -456,49 +458,42 @@ const DateSection: React.FC<{
     setAiModalVisible(true); // Show the AI modal
   }, []);
 
+  const openai = new OpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: OPENROUTER_API_KEY, // Ensure this is defined in your .env file
+    defaultHeaders: {
+      "HTTP-Referer": "https://your-site-url.com", // Replace with your site URL
+      "X-Title": "Your Site Name", // Replace with your site name
+    },
+  });
+
   const fetchAIResponse = async () => {
     try {
       console.log('Starting fetchAIResponse...');
       setAiLoading(true);
       setAiResponse(''); // Clear previous response
 
-      const apiUrl = "https://openrouter.ai/api/v1/chat/completions";
-      const headers = {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`, // Use OPENROUTER_API_KEY from .env
-        "Content-Type": "application/json",
-      };
-
-      console.log('API URL:', apiUrl);
-      console.log('Headers:', headers);
-
-      const body = JSON.stringify({
-        model: "deepseek/deepseek-r1-zero:free",
+      const completion = await openai.chat.completions.create({
+        model: "microsoft/mai-ds-r1:free", // Updated model
         messages: [
           {
             role: "user",
-            content: aiQuery, // Use the user's query
+            content: `Suggest tasks for the next 7 days based on this input: "${aiQuery}"`, // Instruct AI to create tasks for 7 days
           },
         ],
       });
 
-      console.log('Request Body:', body);
+      console.log('Response Data:', completion);
+      const aiGeneratedTasks = completion.choices[0].message.content.trim();
+      setAiResponse(aiGeneratedTasks);
 
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers,
-        body,
-      });
-
-      console.log('Response Status:', response.status);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Parse AI response and create multiple tasks
+      const newTasks = parseTasksFromAIResponse(aiGeneratedTasks);
+      if (newTasks && newTasks.length > 0) {
+        setTasks((prevTasks) => [...prevTasks, ...newTasks]); // Add the new tasks to the task list
+      } else {
+        console.error('Failed to parse tasks from AI response.');
       }
-
-      const data = await response.json();
-      console.log('Response Data:', data);
-
-      setAiResponse(data.choices[0].message.content.trim());
     } catch (error) {
       console.error('Error fetching AI response:', error);
       setAiResponse('Failed to get a response. Please try again.');
@@ -507,6 +502,36 @@ const DateSection: React.FC<{
       console.log('fetchAIResponse execution completed.');
     }
   };
+
+  // Helper function to parse AI response into multiple task objects
+const parseTasksFromAIResponse = (response: string): Task[] => {
+  try {
+    // Example: Parse response assuming it's in JSON format with an array of tasks
+    const tasksData = JSON.parse(response);
+
+    // Validate and return the task objects
+    if (Array.isArray(tasksData)) {
+      return tasksData.map((taskData) => ({
+        taskId: Date.now() + Math.random(), // Generate a unique ID
+        userId: 95, // Replace with actual user ID
+        taskName: taskData.taskName,
+        taskDescription: taskData.taskDescription,
+        estimatedDuration: taskData.estimatedDuration || 0,
+        deadline: taskData.deadline,
+        completed: false,
+        status: "pending",
+        createdAt: new Date(),
+        priority: taskData.priority,
+        category: taskData.category || "general",
+      }));
+    }
+    return [];
+  } catch (error) {
+    console.error('Error parsing AI response:', error);
+    return [];
+  }
+};
+
   // Add these animations
 const handlePressIn = () => {
   setIsAIPressed(true);
@@ -622,35 +647,7 @@ const handlePressOut = () => {
               />
             </>
           ) : null /* Render nothing if there are no tasks */}
-          <TouchableOpacity
-            style={[styles.askAIButton, { transform: [{ scale: scaleAnim }] }]} // Replace with Animated.View
-            onPress={handleAskAI} // Fix: Uncomment onPress
-            onPressIn={handlePressIn} // Fix: Uncomment onPressIn
-            onPressOut={handlePressOut} // Fix: Uncomment onPressOut
-            accessibilityLabel="Ask AI for assistance"
-          >
-            <View style={styles.cartoonButton}> {/* Wrap the face inside cartoonButton */}
-              <View style={styles.faceContainer}>
-                {/* Eyes */}
-                <View style={styles.eyes}>
-                  <View style={[styles.eye, isAIPressed && styles.eyeSquint]} />
-                  <View style={[styles.eye, isAIPressed && styles.eyeSquint, { marginLeft: 10 }]} />
-                </View>
-                
-                {/* Mouth - changes when pressed */}
-                {isAIPressed ? (
-                  <View style={styles.mouthOpen} />
-                ) : (
-                  <View style={styles.mouthClosed} />
-                )}
-                
-                {/* Sparkles */}
-                <Ionicons name="sparkles" size={16} color="#FFD700" style={styles.sparkle1} />
-                <Ionicons name="sparkles" size={16} color="#FFD700" style={styles.sparkle2} />
-              </View>
-            </View>
-          </TouchableOpacity>
-
+          <AskAIButton onPress={handleAskAI} /> {/* Use the new component */}
           {/* AI Modal */}
           <Modal
             isVisible={aiModalVisible}

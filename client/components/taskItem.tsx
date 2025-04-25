@@ -34,13 +34,13 @@ interface TaskItemProps {
 const getPriorityColor = (priority: 'low' | 'medium' | 'high') => {
   switch (priority) {
     case 'low':
-      return '#A0A0A0'; // Neutral gray
+      return '#4CAF50'; // Green for low priority
     case 'medium':
-      return '#808080'; // Darker gray
+      return '#FF9800'; // Orange for medium priority
     case 'high':
-      return '#606060'; // Even darker gray
+      return '#F44336'; // Red for high priority
     default:
-      return '#A0A0A0'; // Default to neutral gray
+      return '#4CAF50'; // Default to green for low priority
   }
 };
 

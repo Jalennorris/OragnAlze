@@ -21,7 +21,8 @@ interface Task {
   completed: boolean;
   category: string; 
   createdAt: string;
-  deadline: string; // Add dueDate to Task interface
+  deadline: string; 
+  notes: string; // Add dueDate to Task interface
 }
 
 const AddTaskScreen: React.FC = () => {
@@ -72,7 +73,8 @@ const AddTaskScreen: React.FC = () => {
         completed: status === 'Completed', // Set completed based on status
         category, // Include selected category
         createdAt: moment().toISOString(), // Add createdAt field
-        deadline: dueDate // Use initialized or updated dueDate
+        deadline: dueDate, // Use initialized or updated dueDate
+        notes: null, // Set notes to null
       };
 
       const response = await axios.post('http://localhost:8080/api/tasks', newTask);

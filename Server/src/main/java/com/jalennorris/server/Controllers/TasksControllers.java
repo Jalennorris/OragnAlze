@@ -62,18 +62,22 @@ public class TasksControllers {
     }
 
     // Endpoint to fetch tasks by status
-    @GetMapping("/status/{status}")
+
 
     // Endpoint to create a new task
     @PostMapping
     public CompletableFuture<ResponseEntity<TasksDTO>> createTask(@RequestBody TasksDTO newTask) {
+        logger.info("Received POST request to create a task: {}", newTask); // Log incoming request
         try {
             TasksModels taskEntity = convertToEntity(newTask);
             validateTask(taskEntity); // Validate task before saving
 
             // Call service to save the task
             return taskService.createTask(taskEntity)
-                    .thenApply(task -> ResponseEntity.status(201).body(task)); // Return 201 Created
+                    .thenApply(task -> {
+                        logger.info("Task created successfully with ID: {}", task.getTaskId());
+                        return ResponseEntity.status(201).body(task); // Return 201 Created
+                    });
         } catch (IllegalArgumentException e) {
             logger.error("Validation failed: {}", e.getMessage());
             return CompletableFuture.completedFuture(ResponseEntity.badRequest().body(null));
@@ -106,6 +110,13 @@ public class TasksControllers {
             logger.error("Failed to delete task with ID {}: {}", id, e.getMessage());
             return CompletableFuture.completedFuture(ResponseEntity.status(500).build());
         }
+    }
+
+    // Handle unsupported HTTP methods
+    @RequestMapping(method = {RequestMethod.PUT, RequestMethod.HEAD, RequestMethod.OPTIONS, RequestMethod.TRACE})
+    public ResponseEntity<Void> handleUnsupportedMethods() {
+        logger.warn("Unsupported HTTP method received");
+        return ResponseEntity.status(405).build(); // Return 405 Method Not Allowed
     }
 
     // Helper method to convert a DTO to an entity

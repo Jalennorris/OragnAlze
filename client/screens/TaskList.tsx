@@ -38,7 +38,11 @@ const TaskList: React.FC = () => {
                 onTaskPress={(taskId) => console.log(`Task ${taskId} pressed`)}
                 onToggleCompletion={(taskId) => console.log(`Toggle completion for ${taskId}`)}
                 onDelete={(taskId) => console.log(`Delete task ${taskId}`)}
-                getPriorityColor={(priority) => priority === 'high' ? 'red' : priority === 'medium' ? 'orange' : 'green'}
+                getPriorityColor={(priority) => 
+                    priority === 'high' ? 'red' : 
+                    priority === 'medium' ? 'orange' : 
+                    priority === 'low' ? 'green' : 'gray'
+                }
                 colors={{ text: '#000' }}
             />
         </View>
