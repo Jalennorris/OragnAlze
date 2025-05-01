@@ -22,6 +22,12 @@ const FilterBar: React.FC<FilterBarProps> = ({
   setSortBy,
   colors,
 }) => {
+  const onClearFilters = () => {
+    setSelectedPriority('all');
+    setSelectedCategory('all');
+    setSortBy('date');
+  };
+
   return (
     <View style={styles.filterContainer}>
       <View style={styles.filterSection}>
@@ -86,6 +92,10 @@ const FilterBar: React.FC<FilterBarProps> = ({
           ))}
         </ScrollView>
       </View>
+
+      <TouchableOpacity onPress={onClearFilters} style={styles.clearButton}>
+        <Text style={styles.clearButtonText}>Clear Filters</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -111,6 +121,19 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   selectedOption: {
+    fontWeight: 'bold',
+  },
+  clearButton: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f44336', // Or another suitable color
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  clearButtonText: {
+    color: '#fff', // White text for contrast
+    fontSize: 14,
     fontWeight: 'bold',
   },
 });

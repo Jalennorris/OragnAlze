@@ -1,0 +1,21 @@
+{
+  "build": {
+    "development": {
+      "autoIncrement": true,
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_OAI_KEY": "EXPO_PUBLIC_OAI_KEY"
+      },
+      "channel": "development"
+    },
+    "production": {
+      "autoIncrement": true,
+      "distribution": "store",
+      "env": {
+        "EXPO_PUBLIC_OAI_KEY": "EXPO_PUBLIC_OAI_KEY"
+      },
+      "channel": "production"
+    }
+  }
+}

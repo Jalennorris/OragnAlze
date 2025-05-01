@@ -27,16 +27,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native'; // Replace useRouter with useNavigation
 import SearchBar from '@/components/SearchBar';
 import TaskSummary from '@/components/TaskSummary';
-import FutureTask from './FutureTask';
+import FutureTask from '@/components/FutureTask';
 import EmptyState from '@/components/EmptyState';
 import ErrorState from '@/components/ErrorState'; // Add this import
 import Loader from '@/components/Loader'; // Add this import
 import FilterBar from '@/components/FilterBar'; // Add this import
 import axios from 'axios'; // Add axios for API requests
-import Modal from 'react-native-modal'; // Add Modal for user interaction
 import { API_URL, OPENROUTER_API_KEY } from '@env'; // Ensure this import is correct
 import OpenAI from 'openai'; // Add OpenAI import
-import AskAIButton from './components/AskAIButton'; // Add this import
+import AskAIButton from '@/components/AskAIButton';
+import config from '../src/config'; // Import the config file
+import NetInfo from '@react-native-community/netinfo'; // Import NetInfo
 
 // Define types for the task structure
 interface Task {
@@ -76,6 +77,10 @@ const DARK_COLORS = {
   placeholder: '#888',
 };
 
+// Define an estimated height for TaskItem. Adjust this based on your actual item height.
+// If your TaskItem height is dynamic, getItemLayout might not be suitable or accurate.
+const TASK_ITEM_HEIGHT = 80; // Example height, adjust as needed
+
 // New TaskList component
 const TaskList: React.FC<{
   tasks: Task[];
@@ -106,6 +111,17 @@ const TaskList: React.FC<{
       )
     : tasks;
 
+  // getItemLayout tells the FlatList how to measure items without rendering them.
+  // Crucial for performance with large lists and fixed-height items.
+  const getItemLayout = useCallback(
+    (data: Task[] | null | undefined, index: number) => ({
+      length: TASK_ITEM_HEIGHT,
+      offset: TASK_ITEM_HEIGHT * index,
+      index,
+    }),
+    [] // No dependencies as TASK_ITEM_HEIGHT is constant
+  );
+
   return (
     <FlatList
       data={filteredTasks} // Use filteredTasks here
@@ -121,6 +137,14 @@ const TaskList: React.FC<{
       )}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       ListHeaderComponent={searchQuery ? null : ListHeaderComponent} // Hide header if searching
+      // Performance Optimizations
+      getItemLayout={getItemLayout} // Add getItemLayout
+      windowSize={11} // Render items within 5 viewports (adjust as needed)
+      initialNumToRender={10} // Render initial 10 items
+      maxToRenderPerBatch={10} // Render 10 items per batch during scroll
+      removeClippedSubviews={true} // Can improve performance on Android (use with caution)
+      // updateCellsBatchingPeriod={50} // Optional: Adjust batching frequency
+      // legacyImplementation={false} // Optional: Use newer implementation if available
     />
   );
 };
@@ -134,7 +158,6 @@ const HomeScreen: React.FC = () => {
 
   const [showFutureTasks, setShowFutureTasks] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [data, setData] = useState<Task[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -145,98 +168,145 @@ const HomeScreen: React.FC = () => {
   const [showFilterOptions, setShowFilterOptions] = useState(false);
   const [isAIPressed, setIsAIPressed] = useState(false); // Add this state
   const scaleAnim = useRef(new Animated.Value(1)).current; // Add this state
-  const [aiModalVisible, setAiModalVisible] = useState(false); // State for AI modal
-  const [aiQuery, setAiQuery] = useState(''); // State for user query
-  const [aiResponse, setAiResponse] = useState(''); // State for AI response
-  const [aiLoading, setAiLoading] = useState(false); // State for AI loading
-  
+  const [isOffline, setIsOffline] = useState(false); // State for offline status
+  const [isInitialLoad, setIsInitialLoad] = useState(true); // Track initial load
+
   const onSearch = useCallback((query: string) => {
     setSearchQuery(query); // Update the search query state
   },);
 
-
-  const getTasks = async () => {
+  // Function to load tasks from cache
+  const loadTasksFromCache = async () => {
     try {
-      console.log('Fetching userId from AsyncStorage...');
-      const userId = await AsyncStorage.getItem('userId'); // Await is needed
-      console.log(`userId: ${userId}`);
-  
-      if (!userId) {
-        console.error("User ID not found in AsyncStorage. Redirecting to login...");
-        navigation.navigate("login"); 
-        
-        throw new Error("User ID not found in AsyncStorage");
+      console.log('Attempting to load tasks from cache...');
+      const cachedTasks = await AsyncStorage.getItem('cachedTasks');
+      if (cachedTasks) {
+        const parsedTasks: Task[] = JSON.parse(cachedTasks);
+        console.log(`Loaded ${parsedTasks.length} tasks from cache.`);
+        setTasks(parsedTasks);
+        setError(''); // Clear previous errors if cache is loaded
+        return true; // Indicate success
+      } else {
+        console.log('No tasks found in cache.');
+        return false; // Indicate cache miss
       }
-      
-      console.log(`User ID retrieved: ${userId}`);
-      const apiUrl = `${API_URL}/tasks/user/${userId}`; // Use API_URL from .env
-      console.log(`Fetching tasks from: ${apiUrl}`);
-  
-      // Clear tasks state before fetching new data
-      setTasks([]);
-      setData([]);
-      setError(''); // Clear any existing error before fetching
-  
-      const response = await fetch(apiUrl);
-  
-      console.log(`Response status: ${response.status}`);
-  
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("No tasks found for the user. Please add tasks.");
-        }
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-  
-      const data = await response.json();
-      console.log('Raw response JSON:', JSON.stringify(data, null, 2));
-  
-      setData(data);
-      console.log('Data successfully stored in state.');
-  
-      loadTasks(data);
-      console.log('loadTasks function executed with fetched data.');
-  
-    } catch (err) {
-      const errorMessage = (err as Error).message || 'An unknown error occurred';
-      setError(errorMessage); // Set a user-friendly error message
-      console.error('Failed to load tasks:', errorMessage);
-    } finally {
-      console.log('getTasks execution completed.');
-      setLoading(false);
-      setRefreshing(false); // Ensure refreshing is stopped
+    } catch (cacheError) {
+      console.error('Failed to load tasks from cache:', cacheError);
+      setError('Failed to load cached tasks.');
+      return false; // Indicate failure
     }
   };
 
+  const getTasks = useCallback(async (forceRefresh = false) => {
+    setLoading(true);
+    setError(''); // Clear previous errors
 
-  useEffect(() => {
-    getTasks();
-  }, []);
-
-  //loading Task
-
-  const loadTasks = (tasksData?: Task[]) => {
     try {
-      if (tasksData && Array.isArray(tasksData)) {
-        setTasks(tasksData);
+      const netInfoState = await NetInfo.fetch();
+      const online = netInfoState.isConnected && netInfoState.isInternetReachable;
+      setIsOffline(!online); // Update offline state
+
+      if (online) {
+        console.log('App is online. Fetching tasks from API...');
+        const userId = await AsyncStorage.getItem('userId');
+        if (!userId) {
+          console.error("User ID not found in AsyncStorage. Redirecting to login...");
+          navigation.navigate("login");
+          throw new Error("User ID not found");
+        }
+
+        const apiUrl = `http://localhost:8080/api/tasks/user/${userId}`;
+        console.log(`Fetching tasks from: ${apiUrl}`);
+        const response = await fetch(apiUrl);
+        console.log(`Response status: ${response.status}`);
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            console.log("No tasks found for the user on the server.");
+            setTasks([]); // Clear tasks if none found on server
+            await AsyncStorage.removeItem('cachedTasks'); // Clear cache if server returns 404
+            setError("No tasks found. Add some!"); // User-friendly message
+          } else {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+        } else {
+          const fetchedTasks: Task[] = await response.json();
+          console.log(`Fetched ${fetchedTasks.length} tasks from API.`);
+          setTasks(fetchedTasks);
+          // Cache the fetched tasks
+          try {
+            await AsyncStorage.setItem('cachedTasks', JSON.stringify(fetchedTasks));
+            console.log('Tasks successfully cached.');
+          } catch (cacheError) {
+            console.error('Failed to cache tasks:', cacheError);
+            // Optionally inform the user caching failed, but proceed with fetched data
+          }
+        }
       } else {
-        throw new Error('Tasks data is not properly formatted');
+        console.log('App is offline. Attempting to load from cache...');
+        setError('You are offline. Showing cached tasks.'); // Inform user
+        const cacheLoaded = await loadTasksFromCache();
+        if (!cacheLoaded && isInitialLoad) {
+           // Only set error if initial load fails and cache is empty
+           setError('Offline and no cached tasks available.');
+           setTasks([]); // Ensure tasks are empty if cache load fails
+        }
       }
     } catch (err) {
-      setError(err.message);
-      console.error('Failed to load tasks data:', err);
+      const errorMessage = (err as Error).message || 'An unknown error occurred';
+      console.error('Failed to get tasks:', errorMessage);
+      // Try loading from cache as a fallback if API call failed for reasons other than 404
+      if (!errorMessage.includes("No tasks found")) {
+          const cacheLoaded = await loadTasksFromCache();
+          if (cacheLoaded) {
+              setError('Failed to fetch tasks. Showing cached data.');
+          } else {
+              setError(`Failed to fetch tasks: ${errorMessage}`);
+              setTasks([]); // Clear tasks if fetch and cache fail
+          }
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setIsInitialLoad(false); // Mark initial load as complete
+      console.log('getTasks execution completed.');
     }
-  };
+  }, [navigation, isInitialLoad]); // Add isInitialLoad dependency
+
+
+  useEffect(() => {
+    // Initial fetch
+    getTasks();
+
+    // Subscribe to network status changes
+    const unsubscribe = NetInfo.addEventListener(state => {
+      const currentlyOffline = !(state.isConnected && state.isInternetReachable);
+      if (isOffline !== currentlyOffline) { // Only update if status changed
+          setIsOffline(currentlyOffline);
+          console.log("Network status changed. Offline:", currentlyOffline);
+          if (!currentlyOffline) {
+              // If connection is restored, try fetching fresh data
+              console.log("Connection restored. Re-fetching tasks...");
+              getTasks();
+              // Add logic here later to sync offline changes if implemented
+          } else {
+              // If connection is lost, ensure user knows
+              setError("You are offline. Showing cached tasks.");
+          }
+      }
+    });
+
+    return () => {
+      // Unsubscribe from network status listener on component unmount
+      unsubscribe();
+    };
+  }, [getTasks]); // Rerun effect if getTasks changes (due to navigation dependency)
 
   //refresh
-
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     setError(''); // Clear any existing error
-    getTasks(); // Reload tasks
+    getTasks(true); // Force refresh from API if online
   }, [getTasks]);
 
   // Get the user's local timezone
@@ -293,12 +363,57 @@ const HomeScreen: React.FC = () => {
     setTasks((prevTasks) =>
       prevTasks.map((task) => (task.taskId === taskId ? { ...task, completed: !task.completed } : task))
     );
+    Alert.alert("Offline Action", "Task status changed locally. Syncing requires internet connection."); // Temporary feedback
   }, []);
 
-  //delete task function
+  //delete task function with confirmation
   const deleteTask = useCallback((taskId: number) => {
-    setTasks((prevTasks) => prevTasks.filter((task) => task.taskId !== taskId));
-  }, []);
+    Alert.alert(
+      'Confirm Deletion',
+      'Are you sure you want to delete this task?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          onPress: async () => { // Make onPress async
+            const netInfoState = await NetInfo.fetch();
+            const online = netInfoState.isConnected && netInfoState.isInternetReachable;
+
+            // Note: The API call is now primarily handled within TaskItem's handleDelete
+            // This function now mainly updates the HomeScreen state *after* TaskItem confirms deletion (via its onDelete prop)
+            // If deleting from somewhere else (not TaskItem swipe), you'd need the API call here too.
+            // For simplicity with the current setup where TaskItem handles API call on swipe:
+            setTasks((prevTasks) => prevTasks.filter((task) => task.taskId !== taskId));
+
+            if (!online) {
+                 Alert.alert("Offline Action", "Task deleted locally. Syncing requires internet connection.");
+                 // Add logic here to queue this deletion for later sync if needed
+            }
+            // No need for API call here if TaskItem handles it via swipe
+            // If deletion can be triggered elsewhere, add API call conditionally:
+            /*
+            if (online) {
+                try {
+                    await axios.delete(`http://localhost:8080/api/tasks/${taskId}`);
+                    // State update happens regardless of online status for optimistic UI
+                } catch (error) {
+                    console.error('Error deleting task via API:', error);
+                    Alert.alert('Error', 'Failed to delete task from server. Please check connection.');
+                    // Optionally revert state change if API fails
+                    // getTasks(); // Or refetch tasks to ensure consistency
+                }
+            }
+            */
+          },
+          style: 'destructive',
+        },
+      ],
+      { cancelable: true }
+    );
+  }, []); // Removed tasks dependency as it's handled optimistically
 
   //priority color function
   const getPriorityColor = useCallback((priority: 'low' | 'medium' | 'high') => {
@@ -453,101 +568,25 @@ const DateSection: React.FC<{
   </View>
 );
 
-  // Handler for the "Ask AI" button
-  const handleAskAI = useCallback(() => {
-    setAiModalVisible(true); // Show the AI modal
-  }, []);
-
-  const openai = new OpenAI({
-    baseURL: "https://openrouter.ai/api/v1",
-    apiKey: OPENROUTER_API_KEY, // Ensure this is defined in your .env file
-    defaultHeaders: {
-      "HTTP-Referer": "https://your-site-url.com", // Replace with your site URL
-      "X-Title": "Your Site Name", // Replace with your site name
-    },
-  });
-
-  const fetchAIResponse = async () => {
-    try {
-      console.log('Starting fetchAIResponse...');
-      setAiLoading(true);
-      setAiResponse(''); // Clear previous response
-
-      const completion = await openai.chat.completions.create({
-        model: "microsoft/mai-ds-r1:free", // Updated model
-        messages: [
-          {
-            role: "user",
-            content: `Suggest tasks for the next 7 days based on this input: "${aiQuery}"`, // Instruct AI to create tasks for 7 days
-          },
-        ],
-      });
-
-      console.log('Response Data:', completion);
-      const aiGeneratedTasks = completion.choices[0].message.content.trim();
-      setAiResponse(aiGeneratedTasks);
-
-      // Parse AI response and create multiple tasks
-      const newTasks = parseTasksFromAIResponse(aiGeneratedTasks);
-      if (newTasks && newTasks.length > 0) {
-        setTasks((prevTasks) => [...prevTasks, ...newTasks]); // Add the new tasks to the task list
-      } else {
-        console.error('Failed to parse tasks from AI response.');
-      }
-    } catch (error) {
-      console.error('Error fetching AI response:', error);
-      setAiResponse('Failed to get a response. Please try again.');
-    } finally {
-      setAiLoading(false);
-      console.log('fetchAIResponse execution completed.');
-    }
-  };
-
-  // Helper function to parse AI response into multiple task objects
-const parseTasksFromAIResponse = (response: string): Task[] => {
-  try {
-    // Example: Parse response assuming it's in JSON format with an array of tasks
-    const tasksData = JSON.parse(response);
-
-    // Validate and return the task objects
-    if (Array.isArray(tasksData)) {
-      return tasksData.map((taskData) => ({
-        taskId: Date.now() + Math.random(), // Generate a unique ID
-        userId: 95, // Replace with actual user ID
-        taskName: taskData.taskName,
-        taskDescription: taskData.taskDescription,
-        estimatedDuration: taskData.estimatedDuration || 0,
-        deadline: taskData.deadline,
+  const handleTaskAccept = (tasks: string[]) => {
+    console.log('Accepted tasks:', tasks);
+    // Add logic to handle the accepted tasks, e.g., save them to state or send to a server
+    setTasks((prevTasks) => [
+      ...prevTasks,
+      ...tasks.map((task, index) => ({
+        taskId: Date.now() + index, // Generate unique task IDs
+        userId: 1, // Replace with the actual user ID
+        taskName: task,
+        taskDescription: '',
+        estimatedDuration: 0,
+        deadline: new Date().toISOString(),
         completed: false,
-        status: "pending",
+        status: 'pending',
         createdAt: new Date(),
-        priority: taskData.priority,
-        category: taskData.category || "general",
-      }));
-    }
-    return [];
-  } catch (error) {
-    console.error('Error parsing AI response:', error);
-    return [];
-  }
-};
-
-  // Add these animations
-const handlePressIn = () => {
-  setIsAIPressed(true);
-  Animated.spring(scaleAnim, {
-    toValue: 0.9,
-    useNativeDriver: true,
-  }).start();
-};
-
-const handlePressOut = () => {
-  setIsAIPressed(false);
-  Animated.spring(scaleAnim, {
-    toValue: 1,
-    useNativeDriver: true,
-  }).start();
-};
+        priority: 'low',
+      })),
+    ]);
+  };
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -555,6 +594,11 @@ const handlePressOut = () => {
         <Header />
         <Greeting />
         <MotivationalQuotes colors={COLORS} /> {/* Add MotivationalQuotes component */}
+        {isOffline && ( // Display offline indicator
+            <View style={styles.offlineIndicator}>
+                <Text style={styles.offlineText}>Offline Mode</Text>
+            </View>
+        )}
         <View style={styles.taskcontainer}>
           {loading && !refreshing ? ( // Show loader only if not refreshing
             <Loader colors={COLORS} />
@@ -647,48 +691,7 @@ const handlePressOut = () => {
               />
             </>
           ) : null /* Render nothing if there are no tasks */}
-          <AskAIButton onPress={handleAskAI} /> {/* Use the new component */}
-          {/* AI Modal */}
-          <Modal
-            isVisible={aiModalVisible}
-            onBackdropPress={() => setAiModalVisible(false)}
-            onBackButtonPress={() => setAiModalVisible(false)}
-            style={styles.modalWrapper} // Add wrapper style
-          >
-            <View style={styles.modalContainer}>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setAiModalVisible(false)}
-                accessibilityLabel="Close modal"
-              >
-                <Text style={styles.closeButtonText}>X</Text>
-              </TouchableOpacity>
-              <Text style={styles.modalTitle}>Ask AI</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Type your question..."
-                value={aiQuery}
-                onChangeText={setAiQuery}
-                placeholderTextColor="#aaa" // Modern placeholder color
-              />
-              <TouchableOpacity
-                style={styles.modalButton}
-                onPress={fetchAIResponse}
-                disabled={aiLoading}
-              >
-                <Text style={styles.modalButtonText}>{aiLoading ? 'Loading...' : 'Submit'}</Text>
-              </TouchableOpacity>
-              <View style={styles.modalResponseContainer}>
-                {aiResponse ? (
-                  <Text style={styles.modalResponse}>{aiResponse}</Text>
-                ) : (
-                  <Text style={styles.modalPlaceholder}>
-                    {aiLoading ? 'Fetching response...' : 'Your AI response will appear here.'}
-                  </Text>
-                )}
-              </View>
-            </View>
-          </Modal>
+          <AskAIButton onTaskAccept={handleTaskAccept} /> {/* Updated AskAIButton now includes the modal */}
           <NavBar />  
         </View>
       </SafeAreaView>
@@ -918,86 +921,6 @@ const styles = StyleSheet.create({
     bottom: -10,
     right: -10,
     transform: [{ rotate: '20deg' }],
-  },
-  modalWrapper: {
-    justifyContent: 'flex-end', // Align modal at the bottom
-    margin: 0, // Remove default margin
-  },
-  modalContainer: {
-    backgroundColor: '#1e1e1e', // Dark background for modern look
-    padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 10,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    zIndex: 1,
-    backgroundColor: '#444',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  modalInput: {
-    width: '100%',
-    height: 50,
-    borderColor: '#444',
-    borderWidth: 1,
-    borderRadius: 25,
-    paddingHorizontal: 15,
-    backgroundColor: '#2a2a2a',
-    color: '#fff',
-    marginBottom: 15,
-    fontSize: 16,
-  },
-  modalButton: {
-    backgroundColor: '#007BFF',
-    paddingVertical: 12,
-    borderRadius: 25,
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  modalResponseContainer: {
-    maxHeight: 200, // Limit height for scrollable area
-    backgroundColor: '#2a2a2a',
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 10,
-  },
-  modalResponse: {
-    color: '#fff',
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  modalPlaceholder: {
-    color: '#888',
-    fontSize: 16,
-    textAlign: 'center',
   },
 });
 export default HomeScreen;

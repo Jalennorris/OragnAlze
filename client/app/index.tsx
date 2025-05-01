@@ -23,6 +23,7 @@ import FilterComponent from '@/components/FilterComponent';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MotivationalQuotes from '@/components/MotivationalQoutes';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import jwtDecode from 'jwt-decode'; // Import JWT decode library
 
 // Define types for the task structure
 interface Task {
@@ -80,8 +81,33 @@ const HomeScreen: React.FC = () => {
   const [sortBy, setSortBy] = useState<'date' | 'priority' | 'completed'>('date');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'work' | 'personal' | 'school'| 'other'>('all');
   const [showFilterOptions, setShowFilterOptions] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // New state for authentication
   
   const searchAnim = useRef(new Animated.Value(0)).current;
+
+  const checkAuthentication = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        console.error("No auth token found. Redirecting to login...");
+        router.push('/login');
+        return;
+      }
+
+      const decodedToken: any = jwtDecode(token);
+      if (decodedToken.exp * 1000 < Date.now()) {
+        console.error("Auth token expired. Redirecting to login...");
+        await AsyncStorage.removeItem('authToken');
+        router.push('/login');
+        return;
+      }
+
+      setIsAuthenticated(true);
+    } catch (err) {
+      console.error("Error during authentication check:", err);
+      router.push('/login');
+    }
+  };
 
   const getTasks = async () => {
     try {
@@ -139,8 +165,14 @@ const HomeScreen: React.FC = () => {
   });
 
   useEffect(() => {
-    getTasks();
+    checkAuthentication();
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      getTasks();
+    }
+  }, [isAuthenticated]);
 
   //loading Task
 
@@ -347,157 +379,120 @@ const HomeScreen: React.FC = () => {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={[styles.container, { backgroundColor: COLORS.background }]}>
-        <Header />
-        <Greeting />
-        <View style={styles.taskcontainer}>
-          {loading ? (
-            <ActivityIndicator size="large" color="#0000ff" />
-          ) : error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>Something went wrong!</Text>
-              <TouchableOpacity onPress={() => setError('')}>
-                <Text style={styles.retryText}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              <View style={styles.iconsContainer}>
-                <Animated.View style={[styles.searchContainer, { width: searchBarWidth }]}>
-                  {showSearch && (
-                    <TextInput
-                      style={styles.searchInput}
-                      placeholder="Search tasks..."
-                      placeholderTextColor={COLORS.placeholder}
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                      accessibilityLabel="Search tasks"
-                    />
-                  )}
-                </Animated.View>
-                <TouchableOpacity
-                  style={styles.iconButton}
-                  onPress={toggleSearch}
-                  accessibilityLabel={showSearch ? 'Close search' : 'Open search'}
-                >
-                  <Ionicons name={showSearch ? 'close' : 'search'} size={24} color={COLORS.text} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.iconButton}
-                  onPress={() => setShowFilterOptions((prev) => !prev)}
-                  accessibilityLabel="Filter tasks"
-                >
-                  <Ionicons name="filter" size={24} color={COLORS.text} />
+      {loading ? (
+        <ActivityIndicator size="large" color="#0000ff" />
+      ) : (
+        <View style={[styles.container, { backgroundColor: COLORS.background }]}>
+          <Header />
+          <Greeting />
+          <View style={styles.taskcontainer}>
+            {loading ? (
+              <ActivityIndicator size="large" color="#0000ff" />
+            ) : error ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>Something went wrong!</Text>
+                <TouchableOpacity onPress={() => setError('')}>
+                  <Text style={styles.retryText}>Retry</Text>
                 </TouchableOpacity>
               </View>
+            ) : (
+              <>
+                <View style={styles.iconsContainer}>
+                  <Animated.View style={[styles.searchContainer, { width: searchBarWidth }]}>
+                    {showSearch && (
+                      <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search tasks..."
+                        placeholderTextColor={COLORS.placeholder}
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        accessibilityLabel="Search tasks"
+                      />
+                    )}
+                  </Animated.View>
+                  <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={toggleSearch}
+                    accessibilityLabel={showSearch ? 'Close search' : 'Open search'}
+                  >
+                    <Ionicons name={showSearch ? 'close' : 'search'} size={24} color={COLORS.text} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={() => setShowFilterOptions((prev) => !prev)}
+                    accessibilityLabel="Filter tasks"
+                  >
+                    <Ionicons name="filter" size={24} color={COLORS.text} />
+                  </TouchableOpacity>
+                </View>
 
-              {showFilterOptions && 
-                <FilterComponent
-                  selectedPriority={selectedPriority}
-                  setSelectedPriority={setSelectedPriority}
-                  selectedCategory={selectedCategory}
-                  setSelectedCategory={setSelectedCategory}
-                  sortBy={sortBy}
-                  setSortBy={setSortBy}
-                  colors={COLORS}
-                />
-              }
-
-              <FlatList
-                data={filteredTasks}
-                keyExtractor={(item) => item.taskId.toString()}
-                renderItem={({ item }) => (
-                  <TaskItem
-                    task={item}
-                    onPress={() => handleTaskPress(item.taskId.toString())}
-                    onToggleCompletion={() => toggleTaskCompletion(item.taskId)}
-                    onDelete={() => deleteTask(item.taskId)}
-                    priorityColor={getPriorityColor(item.priority)}
+                {showFilterOptions && 
+                  <FilterComponent
+                    selectedPriority={selectedPriority}
+                    setSelectedPriority={setSelectedPriority}
+                    selectedCategory={selectedCategory}
+                    setSelectedCategory={setSelectedCategory}
+                    sortBy={sortBy}
+                    setSortBy={setSortBy}
+                    colors={COLORS}
                   />
-                )}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                ListHeaderComponent={
-                  <>
-                    <Text style={styles.taskSummary}>
-                      {tasks.length} tasks total, {completedTasksCount} completed
-                    </Text>
+                }
 
-                    {/* Display today's tasks at the top */}
-                    {todayTasks.length > 0 ? (
-                      <View style={styles.dateSection}>
-                        <Text style={[styles.dateText, styles.todayText]}>Today</Text>
-                        {todayTasks.map((task) => (
-                          <TaskItem
-                            key={task.taskId}
-                            task={task}
-                            onPress={() => handleTaskPress(task.taskId.toString())}
-                            onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
-                            onDelete={() => deleteTask(task.taskId)}
-                            priorityColor={getPriorityColor(task.priority)}
-                          />
-                        ))}
-                      </View>
-                    ) : (
-                      <View style={styles.dateSection}>
-                        <Text style={[styles.dateText, styles.todayText]}>Today</Text>
-                        <View style={styles.emptyStateContainer}>
-                          <Text style={styles.emptyStateText}>No tasks for today!</Text>
-                          <MotivationalQuotes/>
-                        </View>
-                      </View>
-                    )}
-                      {/* Display tasks for the current week */
-                      
-                      
-                      
-                      }
-                    {currentWeekTasks.length > 0 ? (
-                      currentWeekTasks.map((task) => (
-                        <View key={task.taskId.toString()} style={styles.dateSection}>
-                          <Text style={[styles.dateText, formatLocalDate(task.deadline) === todayString && styles.todayText]}>
-            
-                            {formatLocalDate(task.deadline) === todayString ? 'Today' : getDayName(task.deadline)}
-                          </Text>
-                          <TaskItem
-                            key={task.taskId.toString()}
-                            task={task}
-                            onPress={() => handleTaskPress(task.taskId.toString())}
-                            onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
-                            onDelete={() => deleteTask(task.taskId)}
-                            priorityColor={getPriorityColor(task.priority)}
-                          />
-                        </View>
-                      ))
-                    ) : (
-                      <View style={styles.dateSection}>
-                        <View style={styles.emptyStateContainer}>
-                          <Icon name="md-checkmark-circle-outline" size={50} color="#000" />
-                          <Text style={styles.emptyStateText}>No tasks for this week!</Text>
-                        </View>
-                      </View>
-                    )}
+                <FlatList
+                  data={filteredTasks}
+                  keyExtractor={(item) => item.taskId.toString()}
+                  renderItem={({ item }) => (
+                    <TaskItem
+                      task={item}
+                      onPress={() => handleTaskPress(item.taskId.toString())}
+                      onToggleCompletion={() => toggleTaskCompletion(item.taskId)}
+                      onDelete={() => deleteTask(item.taskId)}
+                      priorityColor={getPriorityColor(item.priority)}
+                    />
+                  )}
+                  refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                  ListHeaderComponent={
+                    <>
+                      <Text style={styles.taskSummary}>
+                        {tasks.length} tasks total, {completedTasksCount} completed
+                      </Text>
 
-                    <View style={styles.futureSection}>
-                      <TouchableOpacity
-                        onPress={() => setShowFutureTasks(!showFutureTasks)}
-                        accessibilityLabel={showFutureTasks ? 'Hide future tasks' : 'Show future tasks'}
-                      >
-                        <Text style={styles.futureHeader}>
-                          Future Tasks{' '}
-                          {showFutureTasks ? (
-                            <Ionicons name="chevron-up" size={18} color={COLORS.text} />
-                            
-                            
-                            
-                          ) : (
-                            <Ionicons name="chevron-down" size={18} color={COLORS.text} />
-                            
-                          )}
-                        </Text>
-                      </TouchableOpacity>
-                      {showFutureTasks && gi(
-                        futureTasks.length > 0 ? (
-                          futureTasks.map((task) => (
+                      {/* Display today's tasks at the top */}
+                      {todayTasks.length > 0 ? (
+                        <View style={styles.dateSection}>
+                          <Text style={[styles.dateText, styles.todayText]}>Today</Text>
+                          {todayTasks.map((task) => (
+                            <TaskItem
+                              key={task.taskId}
+                              task={task}
+                              onPress={() => handleTaskPress(task.taskId.toString())}
+                              onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
+                              onDelete={() => deleteTask(task.taskId)}
+                              priorityColor={getPriorityColor(task.priority)}
+                            />
+                          ))}
+                        </View>
+                      ) : (
+                        <View style={styles.dateSection}>
+                          <Text style={[styles.dateText, styles.todayText]}>Today</Text>
+                          <View style={styles.emptyStateContainer}>
+                            <Text style={styles.emptyStateText}>No tasks for today!</Text>
+                            <MotivationalQuotes/>
+                          </View>
+                        </View>
+                      )}
+                        {/* Display tasks for the current week */
+                        
+                        
+                        
+                        }
+                      {currentWeekTasks.length > 0 ? (
+                        currentWeekTasks.map((task) => (
+                          <View key={task.taskId.toString()} style={styles.dateSection}>
+                            <Text style={[styles.dateText, formatLocalDate(task.deadline) === todayString && styles.todayText]}>
+              
+                              {formatLocalDate(task.deadline) === todayString ? 'Today' : getDayName(task.deadline)}
+                            </Text>
                             <TaskItem
                               key={task.taskId.toString()}
                               task={task}
@@ -506,23 +501,64 @@ const HomeScreen: React.FC = () => {
                               onDelete={() => deleteTask(task.taskId)}
                               priorityColor={getPriorityColor(task.priority)}
                             />
-                          ))
-                        ) : (
-                          <View style={styles.emptyStateContainer}>
-                            <Icon name="md-checkmark-circle-outline" size={50} color={COLORS.text} />
-                            <Text style={styles.emptyStateText}>No future tasks!</Text>
                           </View>
-                        )
+                        ))
+                      ) : (
+                        <View style={styles.dateSection}>
+                          <View style={styles.emptyStateContainer}>
+                            <Icon name="md-checkmark-circle-outline" size={50} color="#000" />
+                            <Text style={styles.emptyStateText}>No tasks for this week!</Text>
+                          </View>
+                        </View>
                       )}
-                    </View>
-                  </>
-                }
-              />
-            </>
-          )}
-          <NavBar />  
+
+                      <View style={styles.futureSection}>
+                        <TouchableOpacity
+                          onPress={() => setShowFutureTasks(!showFutureTasks)}
+                          accessibilityLabel={showFutureTasks ? 'Hide future tasks' : 'Show future tasks'}
+                        >
+                          <Text style={styles.futureHeader}>
+                            Future Tasks{' '}
+                            {showFutureTasks ? (
+                              <Ionicons name="chevron-up" size={18} color={COLORS.text} />
+                              
+                              
+                              
+                            ) : (
+                              <Ionicons name="chevron-down" size={18} color={COLORS.text} />
+                              
+                            )}
+                          </Text>
+                        </TouchableOpacity>
+                        {showFutureTasks && gi(
+                          futureTasks.length > 0 ? (
+                            futureTasks.map((task) => (
+                              <TaskItem
+                                key={task.taskId.toString()}
+                                task={task}
+                                onPress={() => handleTaskPress(task.taskId.toString())}
+                                onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
+                                onDelete={() => deleteTask(task.taskId)}
+                                priorityColor={getPriorityColor(task.priority)}
+                              />
+                            ))
+                          ) : (
+                            <View style={styles.emptyStateContainer}>
+                              <Icon name="md-checkmark-circle-outline" size={50} color={COLORS.text} />
+                              <Text style={styles.emptyStateText}>No future tasks!</Text>
+                            </View>
+                          )
+                        )}
+                      </View>
+                    </>
+                  }
+                />
+              </>
+            )}
+            <NavBar />  
+          </View>
         </View>
-      </View>
+      )}
     </GestureHandlerRootView>
   );
 };

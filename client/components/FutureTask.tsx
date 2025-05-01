@@ -1,38 +1,44 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import TaskItem from './taskItem';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import TaskItem from '../components/taskItem';
+import Icon from 'react-native-vector-icons/Ionicons';
+import EmptyState from '../components/EmptyState';
 
+// Define types for the task structure
 interface Task {
   taskId: number;
   taskName: string;
   taskDescription: string;
+  estimatedDuration: number;
   deadline: string;
   completed: boolean;
+  status: string;
+  createdAt: Date;
   priority: 'low' | 'medium' | 'high';
+  category?: string;
 }
 
-interface FutureTasksProps {
+interface FutureTaskProps {
   futureTasks: Task[];
-  onTaskPress: (taskId: string) => void;
-  onToggleCompletion: (taskId: number) => void;
-  onDelete: (taskId: number) => void;
+  showFutureTasks: boolean;
+  setShowFutureTasks: React.Dispatch<React.SetStateAction<boolean>>;
+  handleTaskPress: (taskId: string) => void;
+  toggleTaskCompletion: (taskId: number) => void;
+  deleteTask: (taskId: number) => void;
   getPriorityColor: (priority: 'low' | 'medium' | 'high') => string;
-  colors: {
-    text: string;
-  };
+  colors: { [key: string]: string };
 }
 
-const FutureTasks: React.FC<FutureTasksProps> = ({
+const FutureTask: React.FC<FutureTaskProps> = ({
   futureTasks,
-  onTaskPress,
-  onToggleCompletion,
-  onDelete,
+  showFutureTasks,
+  setShowFutureTasks,
+  handleTaskPress,
+  toggleTaskCompletion,
+  deleteTask,
   getPriorityColor,
   colors,
 }) => {
-  const [showFutureTasks, setShowFutureTasks] = useState(false);
-
   return (
     <View style={styles.futureSection}>
       <TouchableOpacity
@@ -42,32 +48,28 @@ const FutureTasks: React.FC<FutureTasksProps> = ({
         <Text style={[styles.futureHeader, { color: colors.text }]}>
           Future Tasks{' '}
           {showFutureTasks ? (
-            <Ionicons name="chevron-up" size={18} color={colors.text} />
+            <Icon name="chevron-up" size={18} color={colors.text} />
           ) : (
-            <Ionicons name="chevron-down" size={18} color={colors.text} />
+            <Icon name="chevron-down" size={18} color={colors.text} />
           )}
         </Text>
       </TouchableOpacity>
-      {showFutureTasks &&
-        (futureTasks.length > 0 ? (
+      {showFutureTasks && (
+        futureTasks.length > 0 ? (
           futureTasks.map((task) => (
             <TaskItem
               key={task.taskId.toString()}
               task={task}
-              onPress={() => onTaskPress(task.taskId.toString())}
-              onToggleCompletion={() => onToggleCompletion(task.taskId)}
-              onDelete={() => onDelete(task.taskId)}
+              onPress={() => handleTaskPress(task.taskId.toString())}
+              onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
+              onDelete={() => deleteTask(task.taskId)}
               priorityColor={getPriorityColor(task.priority)}
             />
           ))
         ) : (
-          <View style={styles.emptyStateContainer}>
-            <Ionicons name="cloud-outline" size={50} color={colors.text} />
-            <Text style={[styles.emptyStateText, { color: colors.text }]}>No tasks for today!</Text>
-            <Ionicons name="calendar-outline" size={50} color={colors.text} style={{ marginTop: 10 }} />
-            <Text style={[styles.emptyStateText, { color: colors.text }]}>No tasks for this week!</Text>
-          </View>
-        ))}
+          <EmptyState message="No future tasks!" colors={colors} />
+        )
+      )}
     </View>
   );
 };
@@ -85,7 +87,7 @@ const styles = StyleSheet.create({
   emptyStateContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
+    marginTop: 40,
   },
   emptyStateText: {
     fontSize: 16,
@@ -93,4 +95,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default FutureTasks;
+export default FutureTask;
