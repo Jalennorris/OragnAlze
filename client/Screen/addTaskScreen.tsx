@@ -11,6 +11,7 @@ import {
   Alert, // Import Alert
   ActivityIndicator, // Import ActivityIndicator for loading state
   Keyboard, // Import Keyboard
+  Modal, // Add Modal import
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -26,7 +27,6 @@ import Navbar from '../components/Navbar'; // Adjust path if needed
 
 // --- Constants ---
 const BASE_API_URL = 'http://localhost:8080/api'; // Use a constant for the base URL
-const CATEGORIES = ['Work', 'Personal', 'Shopping', 'Health', 'Other']; // Define categories centrally
 const PRIORITY_COLORS = {
   low: '#8BC34A',
   medium: '#FFC107',
@@ -59,11 +59,14 @@ const AddTaskScreen: React.FC = () => {
   const [status, setStatus] = useState<string>('Not Started');
   const [estimatedDays, setEstimatedDays] = useState<string>('');
   const [estimatedHours, setEstimatedHours] = useState<string>('');
+  const [categories, setCategories] = useState<string[]>(['Work', 'Personal', 'Shopping', 'Health', 'Other']);
   const [category, setCategory] = useState<string>('');
   const [notes, setNotes] = useState<string>(''); // Add notes state
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(false); // Loading state for API call
   const [userId, setUserId] = useState<number | null>(null); // Store userId
+  const [isAddCategoryModalVisible, setAddCategoryModalVisible] = useState(false);
+  const [newCategory, setNewCategory] = useState<string>('');
 
   const navigation = useNavigation();
   const buttonScale = useRef(new Animated.Value(1)).current;
@@ -199,6 +202,28 @@ const AddTaskScreen: React.FC = () => {
     }
   };
 
+  // --- Custom Category Handlers ---
+  const openAddCategoryModal = () => {
+    setNewCategory('');
+    setAddCategoryModalVisible(true);
+  };
+  const closeAddCategoryModal = () => setAddCategoryModalVisible(false);
+
+  const handleAddCategory = () => {
+    const trimmed = newCategory.trim();
+    if (!trimmed) {
+      Alert.alert('Validation Error', 'Category name cannot be empty.');
+      return;
+    }
+    if (categories.includes(trimmed)) {
+      Alert.alert('Duplicate Category', 'This category already exists.');
+      return;
+    }
+    setCategories([...categories, trimmed]);
+    setCategory(trimmed);
+    setAddCategoryModalVisible(false);
+  };
+
   // --- Render ---
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -331,24 +356,68 @@ const AddTaskScreen: React.FC = () => {
           {/* Category Selector */}
           <View style={styles.inputGroup}>
              <Text style={styles.label}>Category *:</Text>
-             <View style={styles.segmentedControl}>
-               {CATEGORIES.map((cat) => (
+             <ScrollView
+               horizontal
+               showsHorizontalScrollIndicator={false}
+               contentContainerStyle={styles.categoryScrollContainer}
+             >
+               <View style={styles.segmentedControl}>
+                 {categories.map((cat) => (
+                   <TouchableOpacity
+                     key={cat}
+                     style={[
+                       styles.segmentButton, // Reuse segment style
+                       { backgroundColor: category === cat ? '#6a11cb' : '#eee' },
+                       styles.categoryButton, // Add specific category styles if needed
+                     ]}
+                     onPress={() => setCategory(cat)}
+                     accessibilityLabel={`Set category to ${cat}`}
+                     accessibilityState={{ selected: category === cat }}
+                   >
+                     <Text style={[styles.segmentButtonText, { color: category === cat ? '#fff' : '#555'}]}>{cat}</Text>
+                   </TouchableOpacity>
+                 ))}
+                 {/* Add Category Button */}
                  <TouchableOpacity
-                   key={cat}
-                   style={[
-                     styles.segmentButton, // Reuse segment style
-                     { backgroundColor: category === cat ? '#6a11cb' : '#eee' },
-                     styles.categoryButton, // Add specific category styles if needed
-                   ]}
-                   onPress={() => setCategory(cat)}
-                   accessibilityLabel={`Set category to ${cat}`}
-                   accessibilityState={{ selected: category === cat }}
+                   style={[styles.segmentButton, styles.addCategoryButton]}
+                   onPress={openAddCategoryModal}
+                   accessibilityLabel="Add custom category"
                  >
-                   <Text style={[styles.segmentButtonText, { color: category === cat ? '#fff' : '#555'}]}>{cat}</Text>
+                   <Ionicons name="add-circle-outline" size={22} color="#6a11cb" />
                  </TouchableOpacity>
-               ))}
-             </View>
+               </View>
+             </ScrollView>
            </View>
+
+           {/* Add Category Modal */}
+           <Modal
+             visible={isAddCategoryModalVisible}
+             animationType="slide"
+             transparent
+             onRequestClose={closeAddCategoryModal}
+           >
+             <View style={styles.modalOverlay}>
+               <View style={styles.modalContent}>
+                 <Text style={styles.modalTitle}>Add Custom Category</Text>
+                 <TextInput
+                   style={styles.modalInput}
+                   placeholder="Enter category name"
+                   value={newCategory}
+                   onChangeText={setNewCategory}
+                   maxLength={30}
+                   autoFocus
+                 />
+                 <View style={styles.modalButtonRow}>
+                   <TouchableOpacity style={styles.modalButton} onPress={closeAddCategoryModal}>
+                     <Text style={styles.modalButtonText}>Cancel</Text>
+                   </TouchableOpacity>
+                   <TouchableOpacity style={[styles.modalButton, styles.modalButtonPrimary]} onPress={handleAddCategory}>
+                     <Text style={[styles.modalButtonText, styles.modalButtonPrimaryText]}>Add</Text>
+                   </TouchableOpacity>
+                 </View>
+               </View>
+             </View>
+           </Modal>
 
            {/* Notes Input */}
           <View style={styles.inputContainer}>
@@ -509,6 +578,71 @@ const styles = StyleSheet.create({
      // Add specific styles here if needed, e.g., minWidth
      minWidth: 80, // Ensure categories aren't too squished
   },
+  addCategoryButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#6a11cb',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 44,
+    minHeight: 44,
+    margin: 2,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 18,
+    color: '#333',
+  },
+  modalInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 20,
+    color: '#333',
+    backgroundColor: '#fafafa',
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    width: '100%',
+  },
+  modalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    marginLeft: 10,
+    backgroundColor: '#eee',
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#6a11cb',
+  },
+  modalButtonText: {
+    fontSize: 15,
+    color: '#333',
+    fontWeight: '500',
+  },
+  modalButtonPrimaryText: {
+    color: '#fff',
+  },
   saveButton: {
     backgroundColor: '#6a11cb', // Primary action color
     padding: 16, // Slightly larger padding
@@ -540,6 +674,10 @@ const styles = StyleSheet.create({
     // backgroundColor: 'white', // Example
     // borderTopWidth: 1, // Example
     // borderTopColor: '#eee', // Example
+  },
+  categoryScrollContainer: {
+    flexGrow: 1,
+    paddingRight: 10,
   },
 });
 

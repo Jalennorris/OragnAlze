@@ -11,6 +11,7 @@ import {
   FlatList,
   useColorScheme,
   Alert, // Add this import
+  Share, // Add Share import
 } from 'react-native';
 import TaskItem from '../components/taskItem';
 import { Ionicons } from '@expo/vector-icons';
@@ -170,6 +171,10 @@ const HomeScreen: React.FC = () => {
   const scaleAnim = useRef(new Animated.Value(1)).current; // Add this state
   const [isOffline, setIsOffline] = useState(false); // State for offline status
   const [isInitialLoad, setIsInitialLoad] = useState(true); // Track initial load
+  const [syncHistory, setSyncHistory] = useState<{ type: string; taskId: number; status: string }[]>([]); // Add sync history state
+  const [showSyncHistory, setShowSyncHistory] = useState(false); // Add state to toggle sync history visibility
+  const [offlineQueue, setOfflineQueue] = useState<{ type: string; taskId: number }[]>([]); // Add state for offline queue
+  const [showOfflineQueue, setShowOfflineQueue] = useState(false); // Add state to toggle offline queue visibility
 
   const onSearch = useCallback((query: string) => {
     setSearchQuery(query); // Update the search query state
@@ -196,6 +201,53 @@ const HomeScreen: React.FC = () => {
       return false; // Indicate failure
     }
   };
+
+  const syncOfflineChanges = useCallback(async () => {
+    try {
+      const offlineChanges = await AsyncStorage.getItem('offlineChanges');
+      if (!offlineChanges) {
+        console.log('No offline changes to sync.');
+        setOfflineQueue([]); // Clear offline queue if no changes
+        return;
+      }
+  
+      const changes = JSON.parse(offlineChanges);
+      const netInfoState = await NetInfo.fetch();
+      const online = netInfoState.isConnected && netInfoState.isInternetReachable;
+  
+      if (!online) {
+        console.log('Still offline. Cannot sync changes.');
+        setOfflineQueue(changes); // Update offline queue
+        return;
+      }
+  
+      console.log('Syncing offline changes...');
+      const userId = await AsyncStorage.getItem('userId');
+      if (!userId) {
+        console.error("User ID not found in AsyncStorage. Cannot sync changes.");
+        return;
+      }
+  
+      const apiUrl = `http://localhost:8080/api/tasks/user/${userId}/sync`;
+      const response = await axios.post(apiUrl, { changes });
+  
+      if (response.status === 200) {
+        console.log('Offline changes synced successfully.');
+        setOfflineQueue([]); // Clear offline queue after successful sync
+        await AsyncStorage.removeItem('offlineChanges'); // Clear offline changes
+      } else {
+        console.error('Failed to sync offline changes:', response.status);
+        setOfflineQueue(changes); // Keep offline queue if sync fails
+      }
+    } catch (error) {
+      console.error('Error syncing offline changes:', error);
+      const offlineChanges = await AsyncStorage.getItem('offlineChanges');
+      if (offlineChanges) {
+        const changes = JSON.parse(offlineChanges);
+        setOfflineQueue(changes); // Update offline queue on error
+      }
+    }
+  }, []);
 
   const getTasks = useCallback(async (forceRefresh = false) => {
     setLoading(true);
@@ -231,16 +283,24 @@ const HomeScreen: React.FC = () => {
           }
         } else {
           const fetchedTasks: Task[] = await response.json();
-          console.log(`Fetched ${fetchedTasks.length} tasks from API.`);
-          setTasks(fetchedTasks);
-          // Cache the fetched tasks
-          try {
-            await AsyncStorage.setItem('cachedTasks', JSON.stringify(fetchedTasks));
-            console.log('Tasks successfully cached.');
-          } catch (cacheError) {
-            console.error('Failed to cache tasks:', cacheError);
-            // Optionally inform the user caching failed, but proceed with fetched data
-          }
+          const offlineChanges = await AsyncStorage.getItem('offlineChanges');
+          const changes = offlineChanges ? JSON.parse(offlineChanges) : [];
+
+          // Resolve conflicts
+          const resolvedTasks = fetchedTasks.map((task) => {
+            const conflict = changes.find((change) => change.taskId === task.taskId);
+            if (conflict) {
+              if (conflict.type === 'edit') {
+                console.log(`Resolving conflict for task ${task.taskId}. Using offline changes.`);
+                return { ...task, ...conflict.updatedTask };
+              }
+            }
+            return task;
+          });
+
+          setTasks(resolvedTasks);
+          await AsyncStorage.setItem('cachedTasks', JSON.stringify(resolvedTasks));
+          console.log('Tasks successfully cached.');
         }
       } else {
         console.log('App is offline. Attempting to load from cache...');
@@ -273,10 +333,10 @@ const HomeScreen: React.FC = () => {
     }
   }, [navigation, isInitialLoad]); // Add isInitialLoad dependency
 
-
   useEffect(() => {
     // Initial fetch
     getTasks();
+    syncOfflineChanges(); // Attempt to sync offline changes on app start
 
     // Subscribe to network status changes
     const unsubscribe = NetInfo.addEventListener(state => {
@@ -287,6 +347,7 @@ const HomeScreen: React.FC = () => {
           if (!currentlyOffline) {
               // If connection is restored, try fetching fresh data
               console.log("Connection restored. Re-fetching tasks...");
+              syncOfflineChanges(); // Sync changes when connection is restored
               getTasks();
               // Add logic here later to sync offline changes if implemented
           } else {
@@ -300,7 +361,7 @@ const HomeScreen: React.FC = () => {
       // Unsubscribe from network status listener on component unmount
       unsubscribe();
     };
-  }, [getTasks]); // Rerun effect if getTasks changes (due to navigation dependency)
+  }, [getTasks, syncOfflineChanges]); // Rerun effect if getTasks changes (due to navigation dependency)
 
   //refresh
   const onRefresh = useCallback(() => {
@@ -355,7 +416,7 @@ const HomeScreen: React.FC = () => {
   //Router routes
   //
   const handleTaskPress = useCallback((taskId: string): void => {
-    navigation.navigate('taskDetail', { taskId }); // Replace router.push with navigation.navigate
+    navigation.navigate('taskDetail', { taskId }); // Use lowercase 'taskDetail' to match your stack
   }, [navigation]);
 
   // Function to toggle task completion
@@ -382,31 +443,24 @@ const HomeScreen: React.FC = () => {
             const netInfoState = await NetInfo.fetch();
             const online = netInfoState.isConnected && netInfoState.isInternetReachable;
 
-            // Note: The API call is now primarily handled within TaskItem's handleDelete
-            // This function now mainly updates the HomeScreen state *after* TaskItem confirms deletion (via its onDelete prop)
-            // If deleting from somewhere else (not TaskItem swipe), you'd need the API call here too.
-            // For simplicity with the current setup where TaskItem handles API call on swipe:
             setTasks((prevTasks) => prevTasks.filter((task) => task.taskId !== taskId));
 
             if (!online) {
-                 Alert.alert("Offline Action", "Task deleted locally. Syncing requires internet connection.");
-                 // Add logic here to queue this deletion for later sync if needed
+              console.log('Offline. Queuing deletion for sync.');
+              const offlineChanges = await AsyncStorage.getItem('offlineChanges');
+              const changes = offlineChanges ? JSON.parse(offlineChanges) : [];
+              changes.push({ type: 'delete', taskId });
+              await AsyncStorage.setItem('offlineChanges', JSON.stringify(changes));
+              Alert.alert("Offline Action", "Task deleted locally. Syncing requires internet connection.");
+            } else {
+              try {
+                await axios.delete(`http://localhost:8080/api/tasks/${taskId}`);
+                console.log('Task deleted on server.');
+              } catch (error) {
+                console.error('Error deleting task via API:', error);
+                Alert.alert('Error', 'Failed to delete task from server. Please check connection.');
+              }
             }
-            // No need for API call here if TaskItem handles it via swipe
-            // If deletion can be triggered elsewhere, add API call conditionally:
-            /*
-            if (online) {
-                try {
-                    await axios.delete(`http://localhost:8080/api/tasks/${taskId}`);
-                    // State update happens regardless of online status for optimistic UI
-                } catch (error) {
-                    console.error('Error deleting task via API:', error);
-                    Alert.alert('Error', 'Failed to delete task from server. Please check connection.');
-                    // Optionally revert state change if API fails
-                    // getTasks(); // Or refetch tasks to ensure consistency
-                }
-            }
-            */
           },
           style: 'destructive',
         },
@@ -543,7 +597,8 @@ const DateSection: React.FC<{
   deleteTask: (taskId: number) => void;
   getPriorityColor: (priority: 'low' | 'medium' | 'high') => string;
   icon?: React.ReactNode; // Add icon prop
-}> = ({ title, tasks, handleTaskPress, toggleTaskCompletion, deleteTask, getPriorityColor, icon }) => (
+  onShare: (task: Task) => void; // Add onShare prop
+}> = ({ title, tasks, handleTaskPress, toggleTaskCompletion, deleteTask, getPriorityColor, icon, onShare }) => (
   <View style={styles.dateSection}>
     <Text style={[styles.dateText, title === 'Today' && styles.todayText]}>{title}</Text>
     {icon && <View style={styles.iconContainer}>{icon}</View>} {/* Render icon if provided */}
@@ -556,6 +611,7 @@ const DateSection: React.FC<{
           onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
           onDelete={() => deleteTask(task.taskId)}
           priorityColor={getPriorityColor(task.priority)}
+          onShare={() => onShare(task)} // Add onShare prop
         />
       ))
     ) : (
@@ -587,6 +643,63 @@ const DateSection: React.FC<{
       })),
     ]);
   };
+
+  // Add a component to display sync history
+const SyncHistory: React.FC<{ history: { type: string; taskId: number; status: string }[] }> = ({ history }) => (
+  <View style={styles.syncHistoryContainer}>
+    <Text style={styles.syncHistoryTitle}>Sync History</Text>
+    {history.length > 0 ? (
+      history.map((entry, index) => (
+        <View key={index} style={styles.syncHistoryItem}>
+          <Text style={styles.syncHistoryText}>
+            Task ID: {entry.taskId} | Action: {entry.type} | Status: {entry.status}
+          </Text>
+        </View>
+      ))
+    ) : (
+      <Text style={styles.syncHistoryText}>No sync history available.</Text>
+    )}
+  </View>
+);
+
+// Add a component to display the offline queue
+const OfflineQueue: React.FC<{
+  queue: { type: string; taskId: number }[];
+  onRetry: () => void;
+}> = ({ queue, onRetry }) => (
+  <View style={styles.offlineQueueContainer}>
+    <Text style={styles.offlineQueueTitle}>Offline Task Queue</Text>
+    {queue.length > 0 ? (
+      <>
+        {queue.map((entry, index) => (
+          <View key={index} style={styles.offlineQueueItem}>
+            <Text style={styles.offlineQueueText}>
+              Task ID: {entry.taskId} | Action: {entry.type}
+            </Text>
+          </View>
+        ))}
+        <TouchableOpacity style={styles.retryButton} onPress={onRetry}>
+          <Text style={styles.retryButtonText}>Retry Sync</Text>
+        </TouchableOpacity>
+      </>
+    ) : (
+      <Text style={styles.offlineQueueText}>No offline tasks waiting to sync.</Text>
+    )}
+  </View>
+);
+
+  // Share task handler
+  const shareTask = useCallback(async (task: Task) => {
+    try {
+      const message = `Task: ${task.taskName}\nDescription: ${task.taskDescription}\nDue: ${task.deadline}\nPriority: ${task.priority}`;
+      await Share.share({
+        message,
+        title: `Task: ${task.taskName}`,
+      });
+    } catch (error) {
+      Alert.alert('Share Failed', 'Unable to share the task.');
+    }
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -665,6 +778,7 @@ const DateSection: React.FC<{
                           deleteTask={deleteTask}
                           getPriorityColor={getPriorityColor}
                           icon={<Ionicons name="calendar-outline" size={32} color={COLORS.text} />} // Add icon for "Today"
+                          onShare={shareTask} // Pass shareTask to DateSection
                         />
                         <DateSection
                           title="This Week"
@@ -674,6 +788,7 @@ const DateSection: React.FC<{
                           deleteTask={deleteTask}
                           getPriorityColor={getPriorityColor}
                           icon={<Ionicons name="time-outline" size={32} color={COLORS.text} />} // Add icon for "This Week"
+                          onShare={shareTask} // Pass shareTask to DateSection
                         />
                         <FutureTask
                           futureTasks={futureTasks}
@@ -692,6 +807,28 @@ const DateSection: React.FC<{
             </>
           ) : null /* Render nothing if there are no tasks */}
           <AskAIButton onTaskAccept={handleTaskAccept} /> {/* Updated AskAIButton now includes the modal */}
+          {isOffline && (
+            <>
+              <TouchableOpacity
+                style={styles.syncHistoryToggle}
+                onPress={() => setShowSyncHistory((prev) => !prev)}
+              >
+                <Text style={styles.syncHistoryToggleText}>
+                  {showSyncHistory ? 'Hide Sync History' : 'Show Sync History'}
+                </Text>
+              </TouchableOpacity>
+              {showSyncHistory && <SyncHistory history={syncHistory} />}
+              <TouchableOpacity
+                style={styles.offlineQueueToggle}
+                onPress={() => setShowOfflineQueue((prev) => !prev)}
+              >
+                <Text style={styles.offlineQueueToggleText}>
+                  {showOfflineQueue ? 'Hide Offline Queue' : 'Show Offline Queue'}
+                </Text>
+              </TouchableOpacity>
+              {showOfflineQueue && <OfflineQueue queue={offlineQueue} onRetry={syncOfflineChanges} />}
+            </>
+          )}
           <NavBar />  
         </View>
       </SafeAreaView>
@@ -921,6 +1058,76 @@ const styles = StyleSheet.create({
     bottom: -10,
     right: -10,
     transform: [{ rotate: '20deg' }],
+  },
+  syncHistoryContainer: {
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: '#f1f1f1',
+    borderRadius: 10,
+  },
+  syncHistoryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  syncHistoryItem: {
+    marginBottom: 5,
+  },
+  syncHistoryText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  syncHistoryToggle: {
+    marginTop: 20,
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: '#ddd',
+    borderRadius: 5,
+  },
+  syncHistoryToggleText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  offlineQueueContainer: {
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: '#f1f1f1',
+    borderRadius: 10,
+  },
+  offlineQueueTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  offlineQueueItem: {
+    marginBottom: 5,
+  },
+  offlineQueueText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  retryButton: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#f44336',
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  retryButtonText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  offlineQueueToggle: {
+    marginTop: 20,
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: '#ddd',
+    borderRadius: 5,
+  },
+  offlineQueueToggleText: {
+    fontSize: 16,
+    color: '#333',
   },
 });
 export default HomeScreen;

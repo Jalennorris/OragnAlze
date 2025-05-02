@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'; // Added A
 
 // Define types for the task structure
 interface Task {
-  id: string;
+  taskId: string;
   title: string;
   description: string;
   dueDate: string;
@@ -30,7 +30,7 @@ const TaskDetail: React.FC = () => {
   // Save task data to AsyncStorage
   const saveTaskToStorage = async (task: Task) => {
     try {
-      await AsyncStorage.setItem(`task_${task.id}`, JSON.stringify(task));
+      await AsyncStorage.setItem(`task_${task.taskId}`, JSON.stringify(task));
     } catch (error) {
       console.error('Failed to save task to storage:', error);
     }
@@ -56,7 +56,7 @@ const TaskDetail: React.FC = () => {
         const response = await axios.get(`http://localhost:8080/api/tasks/${taskId}`);
         const data = response.data;
         const TaskDetail: Task = {
-          id: taskId,
+          taskId: taskId,
           title: data.taskName,
           description: data.taskDescription,
           dueDate: data.deadline,
@@ -86,7 +86,7 @@ const TaskDetail: React.FC = () => {
     if (task) {
       try {
         // Send the updated task details to the server
-        await axios.patch(`http://localhost:8080/api/tasks/${task.id}`, {
+        await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}`, {
           taskName: editedTitle,
           taskDescription: editedDescription,
         });
@@ -115,7 +115,7 @@ const TaskDetail: React.FC = () => {
     if (task) {
       try {
         // Send the updated completion status to the server
-        await axios.patch(`http://localhost:8080/api/tasks/${task.id}`, {
+        await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}`, {
           completed: !task.completed,
         });
 
@@ -142,7 +142,7 @@ const TaskDetail: React.FC = () => {
             if (task) {
               try {
                 // Send a DELETE request to the server
-                await axios.delete(`http://localhost:8080/api/tasks/${task.id}`);
+                await axios.delete(`http://localhost:8080/api/tasks/${task.taskId}`);
 
                 // Navigate back after successful deletion
                 navigation.goBack();

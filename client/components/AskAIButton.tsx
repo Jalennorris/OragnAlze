@@ -130,149 +130,96 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
       Alert.alert('Input Required', 'Please describe what you need help planning.');
       return;
     }
-    // Validation for numDays is inherently handled by the selector now
-    // if (isNaN(numDays) || numDays < MIN_DAYS || numDays > MAX_DAYS) { ... } // No longer needed
 
-    // Abort previous request if any
     if (abortControllerRef.current) {
-        abortControllerRef.current.abort("Starting new request");
+      abortControllerRef.current.abort("Starting new request");
     }
     abortControllerRef.current = new AbortController();
 
     setIsLoading(true);
     setSuggestedTasks([]);
     setErrorMessage(null);
-    // Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); // Optional
 
     try {
-      console.log(`Requesting ${numDays} tasks with deadlines for query: "${trimmedQuery}" using model ${API_MODEL}`);
+      console.log(`Requesting ${numDays} tasks for query: "${trimmedQuery}" using model ${API_MODEL}`);
       const completion = await openai.chat.completions.create(
         {
           model: API_MODEL,
           messages: [
             {
               role: "system",
-              // Updated prompt to request deadlines in a specific JSON structure
-              content: `You are a helpful task planner. Generate exactly ${numDays} specific, actionable daily tasks based on the user's request. For each task, also suggest a plausible relative deadline (e.g., "End of Day 1", "Day 2 Morning", "Within 3 days"). Structure your response as a JSON object with a key "tasks", containing an array of objects. Each object should have a "task" (string) and a "deadline" (string) field. Example: {"tasks": [{"task": "Task for Day 1", "deadline": "End of Day 1"}, {"task": "Task for Day 2", "deadline": "Day 2 Afternoon"}]}`
+              content: `You are a helpful task planner. Generate exactly ${numDays} specific, actionable daily tasks with deadlines. For each task, suggest a deadline based on the task's type or estimated duration. Return a JSON object with a "tasks" array containing objects with "task" and "deadline" fields.`,
             },
             {
               role: "user",
-              content: `Create a ${numDays}-day task plan with suggested deadlines for: "${trimmedQuery}"`
+              content: `Create a ${numDays}-day task plan for: "${trimmedQuery}"`,
             },
           ],
-          response_format: { type: "json_object" }, // Request JSON output
         },
-        // Pass the signal for cancellation
         { signal: abortControllerRef.current.signal }
       );
 
       const content = completion.choices[0]?.message?.content;
-      console.log("AI Raw Response:", content);
+      if (!content) throw new Error("Empty response from AI.");
 
-      if (!content) {
-        throw new Error("Received an empty response from the AI.");
-      }
+      const jsonResponse = JSON.parse(content.match(/```json\s*([\s\S]*?)\s*```/)?.[1] || content);
+      if (!Array.isArray(jsonResponse.tasks)) throw new Error("Invalid JSON structure.");
 
-      // --- Robust Parsing ---
-      let parsedTaskObjects: { task: string; deadline?: string }[] = []; // Expect objects now
-      let jsonString = ''; // Define jsonString here to be accessible in catch
-      try {
-        jsonString = content.trim(); // Trim whitespace first
-
-        // Attempt to extract JSON from markdown code blocks
-        const codeBlockMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (codeBlockMatch && codeBlockMatch[1]) {
-            jsonString = codeBlockMatch[1].trim();
-            console.log("Extracted JSON from code block:", jsonString);
-        } else {
-            // Fallback: Find the first '{' (since we expect an object)
-            const jsonStartIndex = jsonString.indexOf('{');
-
-            if (jsonStartIndex === -1) {
-                console.error("AI response does not appear to contain JSON start character ({):", jsonString);
-                throw new Error("AI response did not contain a valid JSON structure start.");
-            }
-            jsonString = jsonString.substring(jsonStartIndex);
-            console.log("Attempting to parse JSON string starting from first {:", jsonString);
-        }
-
-
-        // Attempt to parse the extracted/trimmed string
-        const jsonResponse = JSON.parse(jsonString);
-
-        // Expecting structure like { "tasks": [{"task": "...", "deadline": "..."}, ...] }
-         if (jsonResponse && typeof jsonResponse === 'object' && Array.isArray(jsonResponse.tasks)) {
-           // Validate the structure of task objects within the array
-           if (jsonResponse.tasks.every((item: any) => typeof item === 'object' && item !== null && typeof item.task === 'string')) {
-              parsedTaskObjects = jsonResponse.tasks.map((item: any) => ({
-                task: item.task,
-                // Make deadline optional during parsing
-                deadline: typeof item.deadline === 'string' ? item.deadline : undefined
-              }));
-           } else {
-             console.warn("Parsed JSON 'tasks' array, but items do not have the expected structure ({task: string, deadline?: string}):", jsonResponse.tasks);
-             throw new Error("Parsed JSON 'tasks' array items have incorrect format.");
-           }
-         } else {
-            // This case might occur if the JSON is valid but not the expected structure
-            console.warn("Parsed JSON, but it's not an object with a 'tasks' array:", jsonResponse);
-            throw new Error("Parsed JSON response does not match expected format ({tasks: [...]}).");
-         }
-
-
-        if (!Array.isArray(parsedTaskObjects)) {
-          // This check might be redundant if the above logic is correct, but good safeguard
-          throw new Error("Parsed data did not result in an array of task objects.");
-        }
-
-      } catch (parseError: any) {
-        console.error('AI Response Parsing Error:', parseError);
-        console.error('Content that failed parsing:', content); // Log original content
-        console.error('String attempted for parsing:', jsonString); // Log the string we tried to parse
-        // Make the error message slightly more specific about the parsing stage
-        throw new Error(`Failed to parse AI response. Ensure the AI returns valid JSON matching the requested format. ${parseError.message}`);
-      }
-
-      // Ensure correct number of tasks and map to Task objects with unique IDs
-      const finalTasks = parsedTaskObjects
-        .slice(0, numDays) // Take at most the requested number
-        .map<Task>((parsedTask) => ({
+      const finalTasks = jsonResponse.tasks
+        .slice(0, numDays)
+        .map((task: any) => ({
           id: generateUniqueId(),
-          text: parsedTask.task.trim(),
-          suggestedDeadline: parsedTask.deadline?.trim(), // Add the deadline
+          text: task.task.trim(),
+          suggestedDeadline: task.deadline?.trim(),
         }))
-        .filter(task => task.text.length > 0); // Remove empty tasks
+        .filter(task => task.text);
 
-      if (finalTasks.length === 0) {
-        throw new Error("The AI generated empty tasks or no tasks were found.");
-      }
-      if (finalTasks.length < numDays) {
-        setErrorMessage(`Note: The AI generated ${finalTasks.length} tasks instead of ${numDays}.`);
-      }
+      if (finalTasks.length === 0) throw new Error("No valid tasks generated.");
+      if (finalTasks.length < numDays) setErrorMessage(`Only ${finalTasks.length} tasks generated.`);
 
       setSuggestedTasks(finalTasks);
       scrollToBottom();
-
     } catch (error: any) {
       console.error('AI Fetch Error:', error);
-      if (error.name === 'AbortError') {
-        setErrorMessage('Task generation cancelled.');
-      } else {
-        // Provide more specific feedback
-        let friendlyMessage = 'Failed to generate tasks. Please check your connection and try again.';
-        if (error.message) {
-            friendlyMessage += `\nDetails: ${error.message}`;
-        }
-        setErrorMessage(friendlyMessage);
-        // Use Alert for critical failures
-        // Alert.alert('AI Error', friendlyMessage);
-      }
-      setSuggestedTasks([]); // Clear tasks on error
+      setErrorMessage(error.name === 'AbortError' ? 'Task generation cancelled.' : error.message);
+      setSuggestedTasks([]);
     } finally {
       setIsLoading(false);
-      abortControllerRef.current = null; // Clear the controller
+      abortControllerRef.current = null;
     }
-  }, [aiQuery, numDays, openai]); // Depends on the validated numDays
+  }, [aiQuery, numDays, openai]);
+
+  const fetchSuggestedTasks = useCallback(async () => {
+    try {
+      const response = await openai.chat.completions.create({
+        model: API_MODEL,
+        messages: [
+          {
+            role: "system",
+            content: "You are an assistant that suggests tasks based on user activity or common patterns. Analyze the user's activity and provide relevant tasks.",
+          },
+          {
+            role: "user",
+            content: "Suggest tasks for me based on my recent activity and recurring patterns.",
+          },
+        ],
+      });
+
+      const tasks = JSON.parse(response.choices[0]?.message?.content || "{}").tasks || [];
+      setSuggestedTasks(tasks.map((task: any) => ({
+        id: generateUniqueId(),
+        text: task.task,
+        suggestedDeadline: task.deadline,
+      })));
+    } catch (error) {
+      console.error("Error fetching suggested tasks:", error);
+      Alert.alert("Error", "Failed to fetch suggested tasks. Please try again.");
+    }
+  }, [openai]);
+
+  const handleFetchSuggestions = () => {
+    fetchSuggestedTasks();
+  };
 
   // --- Task Management Handlers ---
   const handleAcceptAllTasks = useCallback(() => {
@@ -362,6 +309,54 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     }, 150); // Increased delay slightly
   };
 
+  // --- Task Rendering ---
+  const renderTask = (task: Task, index: number) => {
+    const isEditing = editingTaskId === task.id;
+    return (
+      <View key={task.id} style={styles.taskItem}>
+        {isEditing ? (
+          <View style={styles.taskEditContainer}>
+            <TextInput
+              style={styles.taskInput}
+              value={editedTaskText}
+              onChangeText={setEditedTaskText}
+              autoFocus
+              multiline
+            />
+            <View style={styles.editActions}>
+              <TouchableOpacity style={styles.taskActionButton} onPress={handleSaveEdit}>
+                <Ionicons name="checkmark" size={24} color="#4CAF50" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.taskActionButton} onPress={handleCancelEdit}>
+                <Ionicons name="close" size={24} color="#888" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.taskContentContainer}>
+            <View style={styles.taskTextWrapper}>
+              <View style={styles.taskHeaderLine}>
+                <Text style={styles.taskDay}>Day {index + 1}:</Text>
+                {task.suggestedDeadline && (
+                  <Text style={styles.taskDeadline}> (Due: {task.suggestedDeadline})</Text>
+                )}
+              </View>
+              <Text style={styles.taskText}>{task.text}</Text>
+            </View>
+            <View style={styles.taskActions}>
+              <TouchableOpacity style={styles.taskActionButton} onPress={() => handleStartEditing(task)}>
+                <Ionicons name="create-outline" size={20} color="#FFC107" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.taskActionButton} onPress={() => handleDeleteTask(task.id)}>
+                <Ionicons name="trash-outline" size={20} color="#F44336" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   // --- Render ---
   return (
     <>
@@ -448,86 +443,31 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
                 {/* Task Display Area (This is the scrollable response part) */}
                 <ScrollView
                   ref={scrollViewRef}
-                  style={{ flex: 1, maxHeight: '60%' }} // Ensure it takes up to 60% of modal height
-                  contentContainerStyle={styles.scrollContent} // Apply styles for content inside scrollview
-                  keyboardShouldPersistTaps="handled" // Keep keyboard open if tapping inside scroll
-                  showsVerticalScrollIndicator={true} // Enable vertical scrollbar
+                  style={{ flex: 1 }} // Ensure it takes available space
+                  contentContainerStyle={{ paddingBottom: 20 }} // Add only necessary padding
+                  showsVerticalScrollIndicator={true} // Enable scrollbar
+                  keyboardShouldPersistTaps="handled" // Allow taps to dismiss the keyboard
                 >
                   {/* Loading Indicator */}
-                  {isLoading && suggestedTasks.length === 0 && (
+                  {isLoading && suggestedTasks.length === 0 ? (
                     <View style={styles.placeholderContainer}>
-                       <ActivityIndicator size="large" color="#BB86FC" />
-                       {/* Use numDays state for placeholder text */}
-                       <Text style={styles.placeholderText}>Generating your {numDays}-day plan...</Text>
+                      <ActivityIndicator size="large" color="#BB86FC" />
+                      {/* Use numDays state for placeholder text */}
+                      <Text style={styles.placeholderText}>Generating your {numDays}-day plan...</Text>
                     </View>
-                  )}
-                  {/* Placeholder / Error Message */}
-                  {!isLoading && suggestedTasks.length === 0 && (
-                     <View style={styles.placeholderContainer}>
-                       <Ionicons name="bulb-outline" size={40} color="#888" style={{marginBottom: 10}}/>
-                       <Text style={styles.placeholderText}>
+                  ) : suggestedTasks.length === 0 ? (
+                    <View style={styles.placeholderContainer}>
+                      <Ionicons name="bulb-outline" size={40} color="#888" style={{ marginBottom: 10 }} />
+                      <Text style={styles.placeholderText}>
                         {/* Use numDays state for placeholder text */}
                         {errorMessage ? errorMessage : `Describe your goal below to get a personalized ${numDays}-day task plan.`}
-                       </Text>
-                     </View>
+                      </Text>
+                    </View>
+                  ) : (
+                    suggestedTasks.map(renderTask)
                   )}
-                  {/* Rendered Tasks (Scrollable Content) */}
-                  <ScrollView
-                    style={{ flex: 1 }}
-                    contentContainerStyle={styles.scrollContent} // Apply styles for content inside scrollview
-                    showsVerticalScrollIndicator={true} // Enable vertical scrollbar
-                  >
-                    {suggestedTasks.map((task, index) => (
-                      <View key={task.id} style={styles.taskItem}>
-                        {editingTaskId === task.id ? (
-                          // --- Editing View ---
-                          <View style={styles.taskEditContainer}>
-                            <TextInput
-                              style={styles.taskInput}
-                              value={editedTaskText}
-                              onChangeText={setEditedTaskText}
-                              autoFocus
-                              multiline
-                              onBlur={handleSaveEdit} // Save on blur maybe? Or require explicit save.
-                            />
-                            <View style={styles.editActions}>
-                              <TouchableOpacity style={styles.taskActionButton} onPress={handleSaveEdit}>
-                                <Ionicons name="checkmark" size={24} color="#4CAF50" />
-                              </TouchableOpacity>
-                              <TouchableOpacity style={styles.taskActionButton} onPress={handleCancelEdit}>
-                                <Ionicons name="close" size={24} color="#888" />
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        ) : (
-                          // --- Display View ---
-                          <View style={styles.taskContentContainer}>
-                            {/* Container for Day Label, Task Text, and Deadline */}
-                            <View style={styles.taskTextWrapper}>
-                              <View style={styles.taskHeaderLine}>
-                                <Text style={styles.taskDay}>Day {index + 1}:</Text>
-                                {task.suggestedDeadline && (
-                                  <Text style={styles.taskDeadline}> (Due: {task.suggestedDeadline})</Text>
-                                )}
-                              </View>
-                              <Text style={styles.taskText}>{task.text}</Text>
-                            </View>
-                            {/* Actions remain separate */}
-                            <View style={styles.taskActions}>
-                              <TouchableOpacity style={styles.taskActionButton} onPress={() => handleStartEditing(task)}>
-                                <Ionicons name="create-outline" size={20} color="#FFC107" />
-                              </TouchableOpacity>
-                              <TouchableOpacity style={styles.taskActionButton} onPress={() => handleDeleteTask(task.id)}>
-                                <Ionicons name="trash-outline" size={20} color="#F44336" />
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    ))}
-                    {/* Add some padding at the bottom of scroll */}
-                    <View style={{ height: 20 }} />
-                  </ScrollView>
+                  {/* Add some padding at the bottom of scroll */}
+                  <View style={{ height: 20 }} />
                 </ScrollView>
 
                 {/* Input Area (Fixed at the bottom) */}
@@ -636,6 +576,13 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
                      )}
                   </View>
                 </View>
+                <TouchableOpacity
+                  style={styles.suggestionButton}
+                  onPress={handleFetchSuggestions}
+                  accessibilityLabel="Get AI-suggested tasks"
+                >
+                  <Text style={styles.suggestionButtonText}>Get Suggestions</Text>
+                </TouchableOpacity>
               </View>
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -946,6 +893,7 @@ const styles = StyleSheet.create({
   },
   stopButton: {
      backgroundColor: '#F44336', // Red for stop
+    paddingHorizontal: 20,
   },
   // --- Action Buttons ---
   actionButtonsContainer: { // Below the input field
@@ -975,6 +923,19 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  suggestionButton: {
+    backgroundColor: '#6200EE',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  suggestionButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 
