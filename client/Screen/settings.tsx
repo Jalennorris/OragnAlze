@@ -5,6 +5,9 @@ import Icon from 'react-native-vector-icons/MaterialIcons'; // For icons
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage'; // Add this import
 import * as Notifications from 'expo-notifications'; // Import expo-notifications
+import * as Linking from 'react-native'; // Add Linking import
+import Constants from 'expo-constants'; // Add Constants import
+import * as LocalAuthentication from 'expo-local-authentication'; // Add LocalAuthentication import
 
 const Settings: React.FC = () => {
   const [isNotificationsEnabled, setIsNotificationsEnabled] = React.useState(false);
@@ -24,22 +27,49 @@ const Settings: React.FC = () => {
     setIsNotificationsEnabled(previousState => !previousState);
   };
 
-  const toggleDarkMode = () => setIsDarkModeEnabled(previousState => !previousState);
+  const toggleDarkMode = async () => {
+    const newMode = !isDarkModeEnabled;
+    setIsDarkModeEnabled(newMode);
+    await AsyncStorage.setItem('darkMode', JSON.stringify(newMode));
+  };
 
   const handleLogout = async () => {
-    try {
-      await AsyncStorage.removeItem('userId'); // Clear user session
-      navigation.navigate('login'); // Navigate to login screen
-    } catch (error) {
-      console.error('Failed to logout:', error);
-    }
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Logout', onPress: async () => {
+            try {
+              await AsyncStorage.removeItem('userId');
+              navigation.navigate('login');
+            } catch (error) {
+              console.error('Failed to logout:', error);
+            }
+          }
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const handlePrivacyPolicy = () => {
-    // Example: Navigate to a Privacy Policy screen or open a URL
-    navigation.navigate('sections/privacyPolicy'); // Replace with your actual route
-    // Alternatively, use Linking to open a URL:
-    // Linking.openURL('https://your-privacy-policy-url.com');
+    Linking.openURL('https://your-privacy-policy-url.com');
+  };
+
+  const handleSecureSettings = async () => {
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const supportedTypes = await LocalAuthentication.supportedAuthenticationTypesAsync();
+    if (!hasHardware || supportedTypes.length === 0) {
+      Alert.alert('Error', 'Biometric authentication is not available on this device.');
+    } else {
+      const result = await LocalAuthentication.authenticateAsync();
+      if (result.success) {
+        navigation.navigate('secureSettings');
+      } else {
+        Alert.alert('Authentication Failed', 'Failed to authenticate.');
+      }
+    }
   };
 
   React.useEffect(() => {
@@ -48,6 +78,14 @@ const Settings: React.FC = () => {
       setIsNotificationsEnabled(status === 'granted');
     };
     checkNotificationPermission();
+
+    const loadDarkModePreference = async () => {
+      const savedMode = await AsyncStorage.getItem('darkMode');
+      if (savedMode !== null) {
+        setIsDarkModeEnabled(JSON.parse(savedMode));
+      }
+    };
+    loadDarkModePreference();
   }, []);
 
   const dynamicStyles = StyleSheet.create({
@@ -166,6 +204,20 @@ const Settings: React.FC = () => {
                 value={isDarkModeEnabled}
               />
             </View>
+            <TouchableOpacity style={dynamicStyles.settingContainer} onPress={() => navigation.navigate('languageSettings')}>
+              <View style={styles.settingLeft}>
+                <Icon name="language" size={24} color={isDarkModeEnabled ? '#bb86fc' : '#6200ee'} />
+                <Text style={dynamicStyles.settingText}>Language</Text>
+              </View>
+              <Icon name="chevron-right" size={24} color={isDarkModeEnabled ? '#ffffff' : colors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity style={dynamicStyles.settingContainer} onPress={handleSecureSettings}>
+              <View style={styles.settingLeft}>
+                <Icon name="fingerprint" size={24} color={isDarkModeEnabled ? '#bb86fc' : '#6200ee'} />
+                <Text style={dynamicStyles.settingText}>Secure Settings</Text>
+              </View>
+              <Icon name="chevron-right" size={24} color={isDarkModeEnabled ? '#ffffff' : colors.text} />
+            </TouchableOpacity>
           </View>
 
           {/* Privacy Section */}

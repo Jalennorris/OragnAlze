@@ -395,24 +395,24 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  // Added container for consistent height during skeleton/text swap
+  // Adjusted container for smaller height
   greetingContainer: {
-      height: 50, // Approximate height of two lines of text
+      height: 36, // Reduced from 50
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: 16,
+      marginBottom: 12, // Slightly reduced margin
       width: '100%',
   },
   greeting: {
-    fontSize: Platform.select({ ios: 26, android: 24 }),
+    fontSize: Platform.select({ ios: 20, android: 18 }), // Reduced font size
     fontWeight: '600',
     color: COLORS.text,
     textAlign: 'center',
-    marginBottom: 16, // Keep margin consistent
+    marginBottom: 12, // Reduced margin
     paddingHorizontal: 10,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
-    minHeight: 50, // Ensure space is reserved even for short greetings
-    lineHeight: Platform.select({ ios: 30, android: 28}), // Improve line spacing
+    minHeight: 36, // Reduced from 50
+    lineHeight: Platform.select({ ios: 24, android: 22 }), // Reduced line spacing
   },
   editContainer: {
     flexDirection: 'row',

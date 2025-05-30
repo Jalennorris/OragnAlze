@@ -1,93 +1,260 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Animated,
+  Easing,
+  SafeAreaView,
+  Dimensions, // For potential responsive adjustments
+  Platform,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native'; // Import navigation hook
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 
-const NavBar: React.FC = () => {
-  const navigation = useNavigation(); // Use navigation instead of router
-  const [activeTab, setActiveTab] = useState<string>('index'); // Default active tab
-  const scaleAnims = {
-    home: new Animated.Value(1),
-    addTask: new Animated.Value(1),
-    calendar: new Animated.Value(1),
+// --- Types ---
+interface ThemeColors {
+  primary: string;
+  inactive: string;
+  navBg: string;
+  navBorder: string;
+  navActiveBg: string;
+  shadowColor: string;
+}
+
+interface TabConfigItem {
+  name: string; // Screen name, also used as animation key
+  label: string;
+  iconName: keyof typeof Ionicons.glyphMap; // For type safety with Ionicons
+  accessibilityLabel: string;
+}
+
+interface TabItemProps {
+  config: TabConfigItem;
+  isActive: boolean;
+  onPress: () => void;
+  animationValue: Animated.Value;
+  colors: ThemeColors;
+}
+
+interface NavBarProps {
+  theme?: Partial<ThemeColors>;
+  initialRouteName?: string; // To set the initial active tab correctly
+}
+
+// --- Default Configuration & Theme ---
+const DEFAULT_COLORS: ThemeColors = {
+  primary: '#6200EA', // Purple
+  inactive: '#757575', // Medium Grey
+  navBg: '#ffffff',
+  navBorder: '#e0e0e0',
+  navActiveBg: '#f3eaff', // Lighter purple
+  shadowColor: '#000000',
+};
+
+const TAB_CONFIG: TabConfigItem[] = [
+  {
+    name: 'index', // Matches screen name in navigator
+    label: 'Home',
+    iconName: 'home-outline',
+    accessibilityLabel: 'Go to Home screen',
+  },
+  {
+    name: 'addTaskScreen',
+    label: 'Add Task',
+    iconName: 'add-circle-outline',
+    accessibilityLabel: 'Go to Add Task screen',
+  },
+  {
+    name: 'calendarScreen',
+    label: 'Calendar',
+    iconName: 'calendar-outline',
+    accessibilityLabel: 'Go to Calendar screen',
+  },
+  // Add more tabs here
+];
+
+// --- TabItem Component ---
+const TabItem: React.FC<TabItemProps> = React.memo(
+  ({ config, isActive, onPress, animationValue, colors }) => {
+    const iconColor = isActive ? colors.primary : colors.inactive;
+    const textColor = isActive ? colors.primary : colors.inactive;
+
+    return (
+      <TouchableOpacity
+        onPress={onPress}
+        style={[
+          styles.navItemBase,
+          isActive && styles.navItemActiveBase,
+          isActive && {
+            borderBottomColor: colors.primary,
+            backgroundColor: colors.navActiveBg,
+          },
+        ]}
+        accessibilityLabel={config.accessibilityLabel}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isActive }}
+      >
+        <Animated.View
+          style={[
+            styles.navItemContent, // Added for consistent alignment
+            { transform: [{ scale: animationValue }] },
+          ]}
+        >
+          <Ionicons name={config.iconName} size={28} color={iconColor} />
+          <Text style={[styles.navTextBase, { color: textColor }]}>{config.label}</Text>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  }
+);
+
+// --- NavBar Component ---
+const NavBar: React.FC<NavBarProps> = React.memo(({ theme, initialRouteName }) => {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const mergedColors = { ...DEFAULT_COLORS, ...theme };
+
+  // Determine initial active tab from navigation state or prop
+  const getInitialActiveTab = () => {
+    try {
+      const navState = navigation.getState();
+      if (navState?.routes && typeof navState.index === 'number') {
+        return navState.routes[navState.index]?.name || initialRouteName || TAB_CONFIG[0].name;
+      }
+    } catch (e) {
+      // Fallback if navigation state is not ready or accessible
+      console.warn("NavBar: Could not get initial route from navigation state.", e);
+    }
+    return initialRouteName || TAB_CONFIG[0].name;
   };
 
-  const handleNavigate = (screen: string, animKey: keyof typeof scaleAnims) => {
-    setActiveTab(screen);
-    navigation.navigate(screen); // Use navigation.navigate instead of router.push
+  const [activeTabName, setActiveTabName] = useState<string>(getInitialActiveTab());
 
-    // Button press animation
-    Animated.sequence([
-      Animated.timing(scaleAnims[animKey], {
-        toValue: 0.9,
-        duration: 50,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnims[animKey], {
-        toValue: 1,
-        duration: 100,
-        easing: Easing.elastic(1.2),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
+  // Initialize animation values dynamically
+  const scaleAnims = useRef(
+    TAB_CONFIG.reduce((acc, tab) => {
+      acc[tab.name] = new Animated.Value(1);
+      return acc;
+    }, {} as Record<string, Animated.Value>)
+  ).current;
 
-  const getIconColor = (screen: string) => {
-    return activeTab === screen ? '#6200EA' : '#ccc'; // Active tab color: purple
-  };
+  // Listen to navigation state changes to update active tab
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('state', (e) => {
+      const currentRoute = e.data.state?.routes[e.data.state.index];
+      if (currentRoute && TAB_CONFIG.some(tab => tab.name === currentRoute.name)) {
+        setActiveTabName(currentRoute.name);
+      }
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  const handleNavigate = useCallback(
+    (screenName: string) => {
+      // setActiveTabName(screenName); // Set immediately for responsiveness, though listener will also catch it
+      navigation.navigate(screenName);
+
+      if (scaleAnims[screenName]) {
+        Animated.sequence([
+          Animated.timing(scaleAnims[screenName], {
+            toValue: 0.9,
+            duration: 60,
+            useNativeDriver: true,
+            easing: Easing.inOut(Easing.ease),
+          }),
+          Animated.timing(scaleAnims[screenName], {
+            toValue: 1,
+            duration: 120,
+            easing: Easing.out(Easing.back(1.8)), // A slightly more playful bounce
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
+    },
+    [navigation, scaleAnims]
+  );
 
   return (
-    <View style={styles.navBar}>
-      <TouchableOpacity onPress={() => handleNavigate('index', 'home')} style={styles.navItem}>
-        <Animated.View style={{ transform: [{ scale: scaleAnims.home }] }}>
-          <Ionicons name="home-outline" size={30} color={getIconColor('index')} />
-          <Text style={[styles.navText, { color: getIconColor('index') }]}>Home</Text>
-        </Animated.View>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => handleNavigate('addTaskScreen', 'addTask')} style={styles.navItem}>
-        <Animated.View style={{ transform: [{ scale: scaleAnims.addTask }] }}>
-          <Ionicons name="add-circle-outline" size={30} color={getIconColor('addTaskScreen')} />
-          <Text style={[styles.navText, { color: getIconColor('addTaskScreen') }]}>Add Task</Text>
-        </Animated.View>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => handleNavigate('calendarScreen', 'calendar')} style={styles.navItem}>
-        <Animated.View style={{ transform: [{ scale: scaleAnims.calendar }] }}>
-          <Ionicons name="calendar-outline" size={30} color={getIconColor('calendarScreen')} />
-          <Text style={[styles.navText, { color: getIconColor('calendarScreen') }]}>Calendar</Text>
-        </Animated.View>
-      </TouchableOpacity>
-    </View>
+    <SafeAreaView style={[styles.safeAreaViewWrapper, { backgroundColor: mergedColors.navBg }]}>
+      <View
+        style={[
+          styles.navBarContainer,
+          {
+            backgroundColor: mergedColors.navBg,
+            borderTopColor: mergedColors.navBorder,
+            shadowColor: mergedColors.shadowColor,
+          },
+        ]}
+      >
+        {TAB_CONFIG.map((tabConfig) => (
+          <TabItem
+            key={tabConfig.name}
+            config={tabConfig}
+            isActive={activeTabName === tabConfig.name}
+            onPress={() => handleNavigate(tabConfig.name)}
+            animationValue={scaleAnims[tabConfig.name]}
+            colors={mergedColors}
+          />
+        ))}
+      </View>
+    </SafeAreaView>
   );
-};
+});
 
 export default NavBar;
 
 const styles = StyleSheet.create({
-  navBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    height: 80,
+  safeAreaViewWrapper: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 10, // For Android shadow effect
+    // backgroundColor is set dynamically
   },
-  navItem: {
+  navBarContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'stretch', // Make items stretch to fill height before padding
+    height: 60, // Height of the actual bar content, SafeAreaView will add padding
+    borderTopWidth: 1,
+    // backgroundColor, borderTopColor, shadowColor are set dynamically
+    ...Platform.select({
+      ios: {
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  navItemBase: {
+    flex: 1, // Each tab takes equal width
     alignItems: 'center',
-    padding: 10,
+    justifyContent: 'center', // Center content vertically
+    paddingVertical: 4, // Minimal vertical padding, height is controlled by navBarContainer
+    paddingHorizontal: 5,
   },
-  navText: {
-    fontSize: 12,
+  navItemActiveBase: {
+    // Styles for active tab, like borderBottomWidth, are applied dynamically
+    // Ensure this doesn't change item dimensions to prevent layout shifts
+    borderBottomWidth: 3, // Example of active indicator (kept from original)
+    // Consider alternative indicators that don't change height (e.g. top border, or just color/bg change)
+    // backgroundColor is set dynamically
+    // borderBottomColor is set dynamically
+     borderRadius: 0, // Original had 8, but for bottom border, 0 might look cleaner or target inner view.
+                      // If navItemActiveBase gets a distinct background, borderRadius: 8 can make sense.
+  },
+  navItemContent: { // Wrapper for icon and text for consistent alignment
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navTextBase: {
+    fontSize: 11,
     fontWeight: '500',
-    marginTop: 4,
+    marginTop: 2,
+    textAlign: 'center',
   },
 });

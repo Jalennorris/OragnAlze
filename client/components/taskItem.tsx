@@ -1,12 +1,12 @@
-import React, { useRef, useCallback, useState } from 'react'; // Added useState
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert, TextInput, Modal, Pressable } from 'react-native'; // Added TextInput, Modal, Pressable
+import React, { useRef, useCallback, useState, memo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert, TextInput, Modal, Pressable, ActivityIndicator, useColorScheme } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import * as Haptics from 'expo-haptics';
-import { zonedTimeToUtc, utcToZonedTime, format } from 'date-fns-tz';
+import { Easing } from 'react-native'; // Add Easing
 import axios from 'axios';
-import Toast from 'react-native-toast-message'; // Import Toast
+import Toast from 'react-native-toast-message';
 
 // Define types for the task structure
 interface Subtask {
@@ -56,6 +56,48 @@ const getPriorityColor = (priority: 'low' | 'medium' | 'high') => {
   }
 };
 
+// Throttle helper
+function throttle<T extends (...args: any[]) => any>(func: T, limit: number): T {
+  let inThrottle: boolean;
+  let lastArgs: any;
+  return function(this: any, ...args: any[]) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => {
+        inThrottle = false;
+        if (lastArgs) {
+          func.apply(this, lastArgs);
+          lastArgs = null;
+        }
+      }, limit);
+    } else {
+      lastArgs = args;
+    }
+  } as T;
+}
+
+// Error Boundary
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean}> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ padding: 20 }}>
+          <Text style={{ color: 'red', fontWeight: 'bold' }}>Something went wrong.</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const TaskItem: React.FC<TaskItemProps> = ({
   task,
   onToggleCompletion,
@@ -102,24 +144,29 @@ const TaskItem: React.FC<TaskItemProps> = ({
       Animated.timing(animatedOpacity, {
         toValue: 0,
         duration: 300,
-        useNativeDriver: false, // Height animation not supported by native driver
+        easing: Easing.elastic(1),
+        useNativeDriver: true,
       }),
       Animated.timing(animatedHeight, {
         toValue: 0,
         duration: 300,
+        easing: Easing.elastic(1),
         useNativeDriver: false,
       }),
-    ]).start(() => callback()); // Execute callback after animation
+    ]).start(() => callback());
   }, [animatedOpacity, animatedHeight]);
+
+  // Loading state for actions
+  const [isLoading, setIsLoading] = useState(false);
 
   // Handle task deletion with Axios and animation
   const handleDelete = useCallback(async () => {
+    setIsLoading(true);
     try {
-      // Optimistically start animation
       animateDelete(async () => {
         try {
           await axios.delete(`http://localhost:8080/api/tasks/${task.taskId}`);
-          onDelete(task.taskId); // Call onDelete prop after animation and API call
+          onDelete(task.taskId);
           Toast.show({
             type: 'success',
             text1: 'Task Deleted',
@@ -127,29 +174,16 @@ const TaskItem: React.FC<TaskItemProps> = ({
             position: 'bottom',
           });
         } catch (error: any) {
-           // If API fails after animation, maybe show an error or revert?
-           console.error('Error deleting task from API after animation:', error);
-           const errorMessage = error.response?.data?.message || error.message || 'Failed to delete the task from server.';
-           Toast.show({
-             type: 'error',
-             text1: 'Deletion Failed',
-             text2: errorMessage,
-             position: 'bottom',
-           });
-           // Reset animation if deletion failed
-           animatedOpacity.setValue(1);
-           animatedHeight.setValue(150); // Reset to original height
+          // ...existing code...
+          animatedOpacity.setValue(1);
+          animatedHeight.setValue(150);
+        } finally {
+          setIsLoading(false);
         }
       });
     } catch (error) {
-        // Catch potential errors before starting animation (less likely here)
-        console.error('Error initiating task deletion:', error);
-        Toast.show({
-          type: 'error',
-          text1: 'Error',
-          text2: 'Could not start task deletion.',
-          position: 'bottom',
-        });
+      // ...existing code...
+      setIsLoading(false);
     }
   }, [task.taskId, task.taskName, onDelete, animateDelete, animatedOpacity, animatedHeight]);
 
@@ -195,18 +229,13 @@ const TaskItem: React.FC<TaskItemProps> = ({
   const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks || []);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
-  // Toggle subtask completion
-  const handleToggleSubtask = async (subtaskId: number) => {
-    const updatedSubtasks = subtasks.map(st =>
-      st.id === subtaskId ? { ...st, completed: !st.completed } : st
-    );
-    setSubtasks(updatedSubtasks);
+  // Throttled subtask update
+  const throttledSubtaskUpdate = useRef(throttle(async (subtaskId: number, completed: boolean) => {
     try {
       await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}/subtasks/${subtaskId}`, {
-        completed: updatedSubtasks.find(st => st.id === subtaskId)?.completed,
+        completed,
       });
-      // Optionally, update parent via onEdit
-      onEdit(task.taskId, { subtasks: updatedSubtasks });
+      onEdit(task.taskId, { subtasks });
     } catch (error: any) {
       Toast.show({
         type: 'error',
@@ -214,8 +243,18 @@ const TaskItem: React.FC<TaskItemProps> = ({
         text2: 'Could not update subtask status.',
         position: 'bottom',
       });
-      setSubtasks(subtasks); // revert
+      setSubtasks(subtasks);
     }
+  }, 1000)).current;
+
+  // Toggle subtask completion
+  const handleToggleSubtask = (subtaskId: number) => {
+    const updatedSubtasks = subtasks.map(st =>
+      st.id === subtaskId ? { ...st, completed: !st.completed } : st
+    );
+    setSubtasks(updatedSubtasks);
+    const completed = updatedSubtasks.find(st => st.id === subtaskId)?.completed ?? false;
+    throttledSubtaskUpdate(subtaskId, completed);
   };
 
   // Edit subtask title
@@ -298,6 +337,47 @@ const TaskItem: React.FC<TaskItemProps> = ({
   // State for More menu
   const [isMoreMenuVisible, setIsMoreMenuVisible] = useState(false);
 
+  // Memoized SubtaskRow
+  const SubtaskRow = memo(({ subtask }: { subtask: Subtask }) => (
+    <View key={subtask.id} style={styles.subtaskRow}>
+      <TouchableOpacity
+        style={styles.subtaskCheckbox}
+        onPress={() => handleToggleSubtask(subtask.id)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: subtask.completed }}
+        accessibilityHint="Toggles subtask completion"
+      >
+        <Ionicons
+          name={subtask.completed ? 'checkbox-outline' : 'square-outline'}
+          size={20}
+          color={subtask.completed ? '#4CAF50' : '#888'}
+        />
+      </TouchableOpacity>
+      <TextInput
+        style={[
+          styles.subtaskText,
+          subtask.completed && { textDecorationLine: 'line-through', color: '#aaa' },
+        ]}
+        value={subtask.title}
+        onChangeText={text => handleEditSubtaskTitle(subtask.id, text)}
+        editable={!isEditing}
+        allowFontScaling
+      />
+    </View>
+  ));
+
+  // Swipe gesture indicators
+  const SwipeIndicator = ({ direction }: { direction: 'left' | 'right' }) => (
+    <View style={{ alignItems: 'center', margin: 4 }}>
+      <Ionicons
+        name={direction === 'left' ? 'arrow-back-circle-outline' : 'arrow-forward-circle-outline'}
+        size={18}
+        color="#888"
+        accessibilityLabel={direction === 'left' ? 'Swipe left to complete' : 'Swipe right to delete'}
+      />
+    </View>
+  );
+
   // Swipeable delete action
   const renderRightActions = (progress: Animated.AnimatedInterpolation, dragX: Animated.AnimatedInterpolation) => {
     const scale = dragX.interpolate({
@@ -320,9 +400,13 @@ const TaskItem: React.FC<TaskItemProps> = ({
           );
         }}
         style={styles.deleteButton}
+        accessibilityRole="button"
+        accessibilityLabel="Delete Task"
+        accessibilityHint="Deletes this task"
       >
         <Animated.View style={{ transform: [{ scale }] }}>
           <Ionicons name="trash-outline" size={24} color="#FFF" />
+          <SwipeIndicator direction="right" />
         </Animated.View>
       </TouchableOpacity>
     );
@@ -331,7 +415,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
   // Swipeable complete action (Swipe Left)
   const renderLeftActions = (progress: Animated.AnimatedInterpolation, dragX: Animated.AnimatedInterpolation) => {
     const scale = dragX.interpolate({
-      inputRange: [0, 100], // Swiping from left to right
+      inputRange: [0, 100],
       outputRange: [0, 1],
       extrapolate: 'clamp',
     });
@@ -343,212 +427,210 @@ const TaskItem: React.FC<TaskItemProps> = ({
           handleToggleCompletion();
         }}
         style={styles.completeButton}
+        accessibilityRole="button"
+        accessibilityLabel={task.completed ? "Mark as Incomplete" : "Mark as Complete"}
+        accessibilityHint="Toggles task completion"
       >
         <Animated.View style={{ transform: [{ scale }] }}>
           <Ionicons name={task.completed ? "close-circle-outline" : "checkmark-circle-outline"} size={24} color="#FFF" />
-          <Text style={styles.actionText}>{task.completed ? 'Incomplete' : 'Complete'}</Text>
+          <Text style={styles.actionText} allowFontScaling>
+            {task.completed ? 'Incomplete' : 'Complete'}
+          </Text>
+          <SwipeIndicator direction="left" />
         </Animated.View>
       </TouchableOpacity>
     );
   };
 
   // Determine background colors based on selection
-  const backgroundColors = isSelected ? ['#E0E0E0', '#E0E0E0'] : ['#FFFFFF', '#FFFFFF']; // Grayish when selected, white otherwise
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const backgroundColors = isSelected
+    ? [isDark ? '#333' : '#E0E0E0', isDark ? '#333' : '#E0E0E0']
+    : [isDark ? '#222' : '#FFFFFF', isDark ? '#222' : '#FFFFFF'];
 
   return (
-    <Animated.View style={{ opacity: animatedOpacity, height: animatedHeight, overflow: 'hidden' }}>
-      {/* More Menu Modal */}
-      <Modal
-        transparent
-        visible={isMoreMenuVisible}
-        animationType="fade"
-        onRequestClose={() => setIsMoreMenuVisible(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setIsMoreMenuVisible(false)}>
-          <View style={styles.moreMenu}>
-            <TouchableOpacity
-              style={styles.moreMenuItem}
-              onPress={() => {
-                setIsMoreMenuVisible(false);
-                setIsEditing(true);
-              }}
-            >
-              <Ionicons name="pencil-outline" size={18} color="#333" style={{ marginRight: 8 }} />
-              <Text style={styles.moreMenuText}>Edit</Text>
-            </TouchableOpacity>
-            {onShare && (
+    <ErrorBoundary>
+      <Animated.View style={{ opacity: animatedOpacity, height: animatedHeight, overflow: 'hidden' }}>
+        {/* More Menu Modal */}
+        <Modal
+          transparent
+          visible={isMoreMenuVisible}
+          animationType="fade"
+          onRequestClose={() => setIsMoreMenuVisible(false)}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setIsMoreMenuVisible(false)}>
+            <View style={styles.moreMenu}>
               <TouchableOpacity
                 style={styles.moreMenuItem}
                 onPress={() => {
                   setIsMoreMenuVisible(false);
-                  onShare();
+                  setIsEditing(true);
                 }}
               >
-                <Ionicons name="share-social-outline" size={18} color="#333" style={{ marginRight: 8 }} />
-                <Text style={styles.moreMenuText}>Share</Text>
+                <Ionicons name="pencil-outline" size={18} color="#333" style={{ marginRight: 8 }} />
+                <Text style={styles.moreMenuText}>Edit</Text>
               </TouchableOpacity>
-            )}
-          </View>
-        </Pressable>
-      </Modal>
-      <Swipeable
-        renderRightActions={renderRightActions}
-        renderLeftActions={renderLeftActions}
-        enabled={!isSelectionModeActive} // Disable swipe actions when in selection mode
-      >
-        <TouchableOpacity
-          style={styles.container}
-          onPress={() => {
-            if (isSelectionModeActive) {
-              onSelectToggle(task.taskId); // Toggle selection if mode is active
-            } else {
-              // Handle regular press action (e.g., navigate to details)
-              console.log('Regular task press:', task.taskId);
-              // You might want to re-introduce the original onPress logic here
-              // or handle navigation/details view differently.
-            }
-          }}
-          onLongPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onSelectToggle(task.taskId); // Initiate selection mode on long press
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`Task: ${task.taskName}. Due: ${formattedDueDate}. Priority: ${task.priority}. ${isSelected ? 'Selected' : 'Not selected'}`}
-        >
-          <View style={styles.row}>
-            {/* Priority Indicator Line */}
-            <View style={[styles.priorityIndicator, { backgroundColor: priorityColor }]} />
-            <LinearGradient
-              colors={backgroundColors} // Use dynamic background colors
-              style={styles.gradientBackground}
-              start={[0, 0]}
-              end={[1, 1]}
-            >
-              {/* Selection Indicator */}
-              {isSelectionModeActive && (
-                <View style={styles.selectionIndicator}>
-                  <Ionicons
-                    name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={24}
-                    color={isSelected ? '#4CAF50' : '#CCCCCC'}
-                  />
-                </View>
+              {onShare && (
+                <TouchableOpacity
+                  style={styles.moreMenuItem}
+                  onPress={() => {
+                    setIsMoreMenuVisible(false);
+                    onShare();
+                  }}
+                >
+                  <Ionicons name="share-social-outline" size={18} color="#333" style={{ marginRight: 8 }} />
+                  <Text style={styles.moreMenuText}>Share</Text>
+                </TouchableOpacity>
               )}
-              {/* Task Information */}
-              <View style={styles.taskInfo}>
-                {isEditing ? (
-                  <>
-                    <View style={styles.header}>
-                      <TextInput
-                        style={[styles.title, { color: '#000', borderBottomWidth: 1, borderColor: '#E0E0E0' }]}
-                        value={editName}
-                        onChangeText={setEditName}
-                        placeholder="Task Name"
-                        autoFocus
-                      />
-                    </View>
-                    <TextInput
-                      style={[styles.description, { color: '#000', borderBottomWidth: 1, borderColor: '#E0E0E0' }]}
-                      value={editDescription}
-                      onChangeText={setEditDescription}
-                      placeholder="Task Description"
-                      multiline
+            </View>
+          </Pressable>
+        </Modal>
+        <Swipeable
+          renderRightActions={renderRightActions}
+          renderLeftActions={renderLeftActions}
+          enabled={!isSelectionModeActive} // Disable swipe actions when in selection mode
+        >
+          <TouchableOpacity
+            style={[styles.container, isDark && styles.containerDark]}
+            onPress={() => {
+              if (isSelectionModeActive) {
+                onSelectToggle(task.taskId); // Toggle selection if mode is active
+              } else {
+                // Handle regular press action (e.g., navigate to details)
+                console.log('Regular task press:', task.taskId);
+                // You might want to re-introduce the original onPress logic here
+                // or handle navigation/details view differently.
+              }
+            }}
+            onLongPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onSelectToggle(task.taskId); // Initiate selection mode on long press
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`Task: ${task.taskName}. Due: ${formattedDueDate}. Priority: ${task.priority}. ${isSelected ? 'Selected' : 'Not selected'}`}
+            accessibilityHint={isSelectionModeActive ? "Toggles selection" : "Opens task details"}
+          >
+            <View style={styles.row}>
+              {/* Priority Indicator Line */}
+              <View style={[styles.priorityIndicator, { backgroundColor: priorityColor }]} />
+              <LinearGradient
+                colors={backgroundColors} // Use dynamic background colors
+                style={styles.gradientBackground}
+                start={[0, 0]}
+                end={[1, 1]}
+              >
+                {/* Selection Indicator */}
+                {isSelectionModeActive && (
+                  <View style={styles.selectionIndicator}>
+                    <Ionicons
+                      name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={24}
+                      color={isSelected ? '#4CAF50' : '#CCCCCC'}
                     />
-                    <View style={{ flexDirection: 'row', marginTop: 8 }}>
-                      <TouchableOpacity onPress={handleSaveEdit} style={[styles.actionButton, { backgroundColor: '#4CAF50', borderRadius: 6 }]}>
-                        <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Save</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={handleCancelEdit} style={[styles.actionButton, { backgroundColor: '#E0E0E0', borderRadius: 6, marginLeft: 10 }]}>
-                        <Text style={{ color: '#333', fontWeight: 'bold' }}>Cancel</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.header}>
-                      <Text style={[styles.title, { color: '#000' }]} numberOfLines={1} ellipsizeMode="tail">
-                        {task.taskName}
-                      </Text>
-                      <Ionicons
-                        name={task.priority === 'high' ? 'alert-circle' : task.priority === 'medium' ? 'alert' : 'checkmark-circle'}
-                        size={16}
-                        color={priorityColor}
-                      />
-                      {/* More button (three dots) */}
-                      {!isSelectionModeActive && (
-                        <TouchableOpacity
-                          onPress={() => setIsMoreMenuVisible(true)}
-                          style={{ marginLeft: 8, padding: 2 }}
-                          accessibilityLabel="More Options"
-                        >
-                          <Ionicons name="ellipsis-horizontal" size={20} color="#888" />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    <Text style={styles.description} numberOfLines={2} ellipsizeMode="tail">
-                      {task.taskDescription}
-                    </Text>
-                    <Text style={styles.category} numberOfLines={1} ellipsizeMode="tail">
-                      {`#${task.category}`}
-                    </Text>
-                    <View style={styles.dueDateContainer}>
-                      <Ionicons name="time-outline" size={14} color={isOverdue ? '#000' : '#000'} />
-                      <Text style={[styles.dueDate, { color: isOverdue ? '#000' : '#000' }]}>
-                        Due: {task.deadline ? formattedDueDate : 'No due date'}
-                      </Text>
-                    </View>
-                    {/* Subtasks */}
-                    {subtasks && subtasks.length > 0 && (
-                      <View style={styles.subtasksContainer}>
-                        {subtasks.map((subtask) => (
-                          <View key={subtask.id} style={styles.subtaskRow}>
-                            <TouchableOpacity
-                              style={styles.subtaskCheckbox}
-                              onPress={() => handleToggleSubtask(subtask.id)}
-                            >
-                              <Ionicons
-                                name={subtask.completed ? 'checkbox-outline' : 'square-outline'}
-                                size={20}
-                                color={subtask.completed ? '#4CAF50' : '#888'}
-                              />
-                            </TouchableOpacity>
-                            <TextInput
-                              style={[
-                                styles.subtaskText,
-                                subtask.completed && { textDecorationLine: 'line-through', color: '#aaa' },
-                              ]}
-                              value={subtask.title}
-                              onChangeText={text => handleEditSubtaskTitle(subtask.id, text)}
-                              editable={!isEditing}
-                            />
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                    {/* Add new subtask */}
-                    {!isEditing && (
-                      <View style={styles.addSubtaskRow}>
-                        <TextInput
-                          style={styles.subtaskText}
-                          value={newSubtaskTitle}
-                          onChangeText={setNewSubtaskTitle}
-                          placeholder="Add subtask..."
-                          onSubmitEditing={handleAddSubtask}
-                          returnKeyType="done"
-                        />
-                        <TouchableOpacity onPress={handleAddSubtask} style={styles.addSubtaskButton}>
-                          <Ionicons name="add-circle-outline" size={22} color="#4CAF50" />
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </>
+                  </View>
                 )}
-              </View>
-            </LinearGradient>
-          </View>
-        </TouchableOpacity>
-      </Swipeable>
-    </Animated.View>
+                {/* Task Information */}
+                <View style={styles.taskInfo}>
+                  {isLoading && (
+                    <View style={{ alignItems: 'center', marginBottom: 8 }}>
+                      <ActivityIndicator size="small" color="#4CAF50" />
+                    </View>
+                  )}
+                  {isEditing ? (
+                    <>
+                      <View style={styles.header}>
+                        <TextInput
+                          style={[styles.title, { color: '#000', borderBottomWidth: 1, borderColor: '#E0E0E0' }]}
+                          value={editName}
+                          onChangeText={setEditName}
+                          placeholder="Task Name"
+                          autoFocus
+                        />
+                      </View>
+                      <TextInput
+                        style={[styles.description, { color: '#000', borderBottomWidth: 1, borderColor: '#E0E0E0' }]}
+                        value={editDescription}
+                        onChangeText={setEditDescription}
+                        placeholder="Task Description"
+                        multiline
+                      />
+                      <View style={{ flexDirection: 'row', marginTop: 8 }}>
+                        <TouchableOpacity onPress={handleSaveEdit} style={[styles.actionButton, { backgroundColor: '#4CAF50', borderRadius: 6 }]}>
+                          <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Save</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleCancelEdit} style={[styles.actionButton, { backgroundColor: '#E0E0E0', borderRadius: 6, marginLeft: 10 }]}>
+                          <Text style={{ color: '#333', fontWeight: 'bold' }}>Cancel</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.header}>
+                        <Text style={[styles.title, { color: '#000' }]} numberOfLines={1} ellipsizeMode="tail">
+                          {task.taskName}
+                        </Text>
+                        <Ionicons
+                          name={task.priority === 'high' ? 'alert-circle' : task.priority === 'medium' ? 'alert' : 'checkmark-circle'}
+                          size={16}
+                          color={priorityColor}
+                        />
+                        {/* More button (three dots) */}
+                        {!isSelectionModeActive && (
+                          <TouchableOpacity
+                            onPress={() => setIsMoreMenuVisible(true)}
+                            style={{ marginLeft: 8, padding: 2 }}
+                            accessibilityLabel="More Options"
+                          >
+                            <Ionicons name="ellipsis-horizontal" size={20} color="#888" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <Text style={styles.description} numberOfLines={2} ellipsizeMode="tail">
+                        {task.taskDescription}
+                      </Text>
+                      <Text style={styles.category} numberOfLines={1} ellipsizeMode="tail">
+                        {`#${task.category}`}
+                      </Text>
+                      <View style={styles.dueDateContainer}>
+                        <Ionicons name="time-outline" size={14} color={isOverdue ? '#000' : '#000'} />
+                        <Text style={[styles.dueDate, { color: isOverdue ? '#000' : '#000' }]}>
+                          Due: {task.deadline ? formattedDueDate : 'No due date'}
+                        </Text>
+                      </View>
+                      {/* Subtasks */}
+                      {subtasks && subtasks.length > 0 && (
+                        <View style={styles.subtasksContainer}>
+                          {subtasks.map((subtask) => (
+                            <SubtaskRow key={`subtask-${subtask.id}`} subtask={subtask} />
+                          ))}
+                        </View>
+                      )}
+                      {/* Add new subtask */}
+                      {!isEditing && (
+                        <View style={styles.addSubtaskRow}>
+                          <TextInput
+                            style={styles.subtaskText}
+                            value={newSubtaskTitle}
+                            onChangeText={setNewSubtaskTitle}
+                            placeholder="Add subtask..."
+                            onSubmitEditing={handleAddSubtask}
+                            returnKeyType="done"
+                          />
+                          <TouchableOpacity onPress={handleAddSubtask} style={styles.addSubtaskButton}>
+                            <Ionicons name="add-circle-outline" size={22} color="#4CAF50" />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </>
+                  )}
+                </View>
+              </LinearGradient>
+            </View>
+          </TouchableOpacity>
+        </Swipeable>
+      </Animated.View>
+    </ErrorBoundary>
   );
 };
 
@@ -632,6 +714,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginRight: 8,
+    color: '#000',
+    allowFontScaling: true,
   },
   description: {
     fontSize: 14,
@@ -639,6 +723,7 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 5,
     opacity: 0.9,
+    allowFontScaling: true,
   },
   category: {
     fontSize: 14,
@@ -697,6 +782,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#888',
     fontStyle: 'italic',
+    allowFontScaling: true,
   },
   priorityIndicator: {
     width: 6, // Width of the priority line
@@ -727,6 +813,7 @@ const styles = StyleSheet.create({
     color: '#333',
     paddingVertical: 2,
     backgroundColor: 'transparent',
+    allowFontScaling: true,
   },
   addSubtaskRow: {
     flexDirection: 'row',
@@ -762,6 +849,11 @@ const styles = StyleSheet.create({
   moreMenuText: {
     fontSize: 16,
     color: '#333',
+  },
+  containerDark: {
+    backgroundColor: '#222',
+    borderColor: '#444',
+    shadowColor: '#000',
   },
 });
 

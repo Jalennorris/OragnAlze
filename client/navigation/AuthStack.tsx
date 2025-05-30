@@ -11,15 +11,35 @@ import EditProfile from '@/Screen/sections/editProfile';
 import ChangePassword from '@/Screen/sections/changePassword';
 import UpdateEmail from '@/Screen/sections/updateEmail';
 import PrivacyPolicy from '@/Screen/sections/PrivacyPolicy';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-const Stack = createNativeStackNavigator();
+// Define your stack param list for type safety
+export type AuthStackParamList = {
+  login: undefined;
+  index: undefined;
+  addTaskScreen: undefined;
+  taskDetail: { taskId: string; userId: string }; // <-- Ensure this matches your navigation
+  calendarScreen: undefined;
+  signup: undefined;
+  welcome: undefined;
+  settings: undefined;
+  'sections/editProfile': undefined;
+  'sections/changePassword': undefined;
+  'sections/updateEmail': undefined;
+  'sections/privacyPolicy': undefined;
+};
+
+const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 const AuthStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="login" component={Login} />
     <Stack.Screen name="index" component={Index} />
     <Stack.Screen name="addTaskScreen" component={AddTaskScreen} />
-    <Stack.Screen name="taskDetail" component={TaskDetail} />
+    <Stack.Screen
+      name="taskDetail"
+      component={TaskDetail}
+    />
     <Stack.Screen name="calendarScreen" component={CalendarScreen} />
     <Stack.Screen name="signup" component={Signup} />
     <Stack.Screen name="welcome" component={Welcome} />

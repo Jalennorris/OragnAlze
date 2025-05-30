@@ -1,0 +1,23 @@
+{
+  "success": "Success",
+  "email_updated_successfully": "Email updated successfully!",
+  "ok": "OK",
+  "error": "Error",
+  "network_error": "Network error. Please check your internet connection and try again.",
+  "something_went_wrong": "Something went wrong. Please try again later.",
+  "update_email": "Update Email",
+  "current_email": "Current Email",
+  "new_email": "New Email",
+  "confirm_new_email": "Confirm New Email",
+  "enter_current_email": "Enter your current email address",
+  "enter_new_email": "Enter your new email address",
+  "reenter_new_email": "Re-enter your new email address to confirm",
+  "save_email_changes": "Save email changes",
+  "saves_new_email": "Saves your new email address",
+  "save_changes": "Save Changes",
+  "Please enter a valid email address": "Please enter a valid email address",
+  "Current email is required": "Current email is required",
+  "New email is required": "New email is required",
+  "Emails must match": "Emails must match",
+  "Confirm email is required": "Confirm email is required"
+}

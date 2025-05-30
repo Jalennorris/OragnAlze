@@ -12,6 +12,8 @@ import {
   useColorScheme,
   Alert, // Add this import
   Share, // Add Share import
+  ScrollView, // Add this import
+  Dimensions, // Add this import
 } from 'react-native';
 import TaskItem from '../components/taskItem';
 import { Ionicons } from '@expo/vector-icons';
@@ -176,6 +178,11 @@ const HomeScreen: React.FC = () => {
   const [offlineQueue, setOfflineQueue] = useState<{ type: string; taskId: number }[]>([]); // Add state for offline queue
   const [showOfflineQueue, setShowOfflineQueue] = useState(false); // Add state to toggle offline queue visibility
 
+  // Track current page for indicator
+  const [currentPage, setCurrentPage] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const PAGE_WIDTH = Dimensions.get('window').width;
+
   const onSearch = useCallback((query: string) => {
     setSearchQuery(query); // Update the search query state
   },);
@@ -184,7 +191,7 @@ const HomeScreen: React.FC = () => {
   const loadTasksFromCache = async () => {
     try {
       console.log('Attempting to load tasks from cache...');
-      const cachedTasks = await AsyncStorage.getItem('cachedTasks');
+      const cachedTasks = await AsyncStorage.getItem('cachedTasks'); // Changed
       if (cachedTasks) {
         const parsedTasks: Task[] = JSON.parse(cachedTasks);
         console.log(`Loaded ${parsedTasks.length} tasks from cache.`);
@@ -204,7 +211,7 @@ const HomeScreen: React.FC = () => {
 
   const syncOfflineChanges = useCallback(async () => {
     try {
-      const offlineChanges = await AsyncStorage.getItem('offlineChanges');
+      const offlineChanges = await AsyncStorage.getItem('offlineChanges'); // Changed
       if (!offlineChanges) {
         console.log('No offline changes to sync.');
         setOfflineQueue([]); // Clear offline queue if no changes
@@ -222,7 +229,7 @@ const HomeScreen: React.FC = () => {
       }
   
       console.log('Syncing offline changes...');
-      const userId = await AsyncStorage.getItem('userId');
+      const userId = await AsyncStorage.getItem('userId'); // Changed
       if (!userId) {
         console.error("User ID not found in AsyncStorage. Cannot sync changes.");
         return;
@@ -234,14 +241,14 @@ const HomeScreen: React.FC = () => {
       if (response.status === 200) {
         console.log('Offline changes synced successfully.');
         setOfflineQueue([]); // Clear offline queue after successful sync
-        await AsyncStorage.removeItem('offlineChanges'); // Clear offline changes
+        await AsyncStorage.removeItem('offlineChanges'); // Changed
       } else {
         console.error('Failed to sync offline changes:', response.status);
         setOfflineQueue(changes); // Keep offline queue if sync fails
       }
     } catch (error) {
       console.error('Error syncing offline changes:', error);
-      const offlineChanges = await AsyncStorage.getItem('offlineChanges');
+      const offlineChanges = await AsyncStorage.getItem('offlineChanges'); // Changed
       if (offlineChanges) {
         const changes = JSON.parse(offlineChanges);
         setOfflineQueue(changes); // Update offline queue on error
@@ -260,7 +267,7 @@ const HomeScreen: React.FC = () => {
 
       if (online) {
         console.log('App is online. Fetching tasks from API...');
-        const userId = await AsyncStorage.getItem('userId');
+        const userId = await AsyncStorage.getItem('userId'); // Changed
         if (!userId) {
           console.error("User ID not found in AsyncStorage. Redirecting to login...");
           navigation.navigate("login");
@@ -276,14 +283,14 @@ const HomeScreen: React.FC = () => {
           if (response.status === 404) {
             console.log("No tasks found for the user on the server.");
             setTasks([]); // Clear tasks if none found on server
-            await AsyncStorage.removeItem('cachedTasks'); // Clear cache if server returns 404
+            await AsyncStorage.removeItem('cachedTasks'); // Changed
             setError("No tasks found. Add some!"); // User-friendly message
           } else {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
         } else {
           const fetchedTasks: Task[] = await response.json();
-          const offlineChanges = await AsyncStorage.getItem('offlineChanges');
+          const offlineChanges = await AsyncStorage.getItem('offlineChanges'); // Changed
           const changes = offlineChanges ? JSON.parse(offlineChanges) : [];
 
           // Resolve conflicts
@@ -299,7 +306,7 @@ const HomeScreen: React.FC = () => {
           });
 
           setTasks(resolvedTasks);
-          await AsyncStorage.setItem('cachedTasks', JSON.stringify(resolvedTasks));
+          await AsyncStorage.setItem('cachedTasks', JSON.stringify(resolvedTasks)); // Changed
           console.log('Tasks successfully cached.');
         }
       } else {
@@ -416,7 +423,20 @@ const HomeScreen: React.FC = () => {
   //Router routes
   //
   const handleTaskPress = useCallback((taskId: string): void => {
-    navigation.navigate('taskDetail', { taskId }); // Use lowercase 'taskDetail' to match your stack
+    console.log('handleTaskPress called with:', taskId);
+    console.log('navigation object:', navigation);
+    if (taskId) {
+      // Get userId from AsyncStorage and navigate with both taskId and userId
+      AsyncStorage.getItem('userId').then((userId) => { // Changed
+        if (userId) {
+          navigation.navigate('taskDetail', { taskId, userId });
+        } else {
+          console.warn('User ID not found');
+        }
+      });
+    } else {
+      console.warn('Invalid taskId provided');
+    }
   }, [navigation]);
 
   // Function to toggle task completion
@@ -447,10 +467,10 @@ const HomeScreen: React.FC = () => {
 
             if (!online) {
               console.log('Offline. Queuing deletion for sync.');
-              const offlineChanges = await AsyncStorage.getItem('offlineChanges');
+              const offlineChanges = await AsyncStorage.getItem('offlineChanges'); // Changed
               const changes = offlineChanges ? JSON.parse(offlineChanges) : [];
               changes.push({ type: 'delete', taskId });
-              await AsyncStorage.setItem('offlineChanges', JSON.stringify(changes));
+              await AsyncStorage.setItem('offlineChanges', JSON.stringify(changes)); // Changed
               Alert.alert("Offline Action", "Task deleted locally. Syncing requires internet connection.");
             } else {
               try {
@@ -701,136 +721,166 @@ const OfflineQueue: React.FC<{
     }
   }, []);
 
+  // Add state for tab switching
+  const [activeTab, setActiveTab] = useState<'greeting' | 'quote'>('greeting');
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={[styles.container, { backgroundColor: COLORS.background }]}>
         <Header />
-        <Greeting />
-        <MotivationalQuotes colors={COLORS} /> {/* Add MotivationalQuotes component */}
-        {isOffline && ( // Display offline indicator
-            <View style={styles.offlineIndicator}>
-                <Text style={styles.offlineText}>Offline Mode</Text>
-            </View>
-        )}
-        <View style={styles.taskcontainer}>
-          {loading && !refreshing ? ( // Show loader only if not refreshing
-            <Loader colors={COLORS} />
-          ) : error && !refreshing ? ( // Show error only if not refreshing
-            <ErrorState 
-              errorMessage="Something went wrong!" 
-              onRetry={() => {
-                setError('');
-                getTasks();
-              }} 
-              colors={COLORS} 
-            />
-          ) : tasks.length > 0 ? ( // Show tasks only if there are tasks
-            <>
-              <View style={styles.iconsContainer}>
-                <SearchBar 
-                  searchQuery={searchQuery} 
-                  setSearchQuery={onSearch} // Pass the onSearch function here
-                  colors={COLORS} 
-                />
-                <TouchableOpacity
-                  style={styles.iconButton}
-                  onPress={() => setShowFilterOptions((prev) => !prev)}
-                  accessibilityLabel="Filter tasks"
-                >
-                  <Ionicons name="filter" size={24} color={COLORS.text} />
-                </TouchableOpacity>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Swipeable horizontal scroll for Greeting and Motivation with indicator */}
+          <View style={styles.horizontalSwipeContainer}>
+            <ScrollView
+              ref={scrollRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalSwipeContent}
+              onScroll={e => {
+                const page = Math.round(
+                  e.nativeEvent.contentOffset.x / PAGE_WIDTH
+                );
+                setCurrentPage(page);
+              }}
+              scrollEventThrottle={16}
+            >
+              <View style={[styles.horizontalSwipePage, { width: PAGE_WIDTH }]}>
+                <Greeting />
               </View>
-
-              {showFilterOptions && 
-                <FilterBar
-                  selectedPriority={selectedPriority}
-                  setSelectedPriority={setSelectedPriority}
-                  selectedCategory={selectedCategory}
-                  setSelectedCategory={setSelectedCategory}
-                  sortBy={sortBy}
-                  setSortBy={setSortBy}
-                  colors={COLORS}
-                />
-              }
-
-              <TaskList
-                tasks={filteredTasks} // Pass filteredTasks here
-                handleTaskPress={handleTaskPress}
-                toggleTaskCompletion={toggleTaskCompletion}
-                deleteTask={deleteTask}
-                getPriorityColor={getPriorityColor}
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                ListHeaderComponent={
-                  searchQuery
-                    ? null
-                    : <>
-                        <TaskSummary 
-                          totalTasks={tasks.length} 
-                          completedTasks={completedTasksCount} 
-                          colors={COLORS} 
-                        />
-                        <DateSection
-                          title="Today"
-                          tasks={todayTasks}
-                          handleTaskPress={handleTaskPress}
-                          toggleTaskCompletion={toggleTaskCompletion}
-                          deleteTask={deleteTask}
-                          getPriorityColor={getPriorityColor}
-                          icon={<Ionicons name="calendar-outline" size={32} color={COLORS.text} />} // Add icon for "Today"
-                          onShare={shareTask} // Pass shareTask to DateSection
-                        />
-                        <DateSection
-                          title="This Week"
-                          tasks={currentWeekTasks}
-                          handleTaskPress={handleTaskPress}
-                          toggleTaskCompletion={toggleTaskCompletion}
-                          deleteTask={deleteTask}
-                          getPriorityColor={getPriorityColor}
-                          icon={<Ionicons name="time-outline" size={32} color={COLORS.text} />} // Add icon for "This Week"
-                          onShare={shareTask} // Pass shareTask to DateSection
-                        />
-                        <FutureTask
-                          futureTasks={futureTasks}
-                          showFutureTasks={showFutureTasks}
-                          setShowFutureTasks={setShowFutureTasks}
-                          handleTaskPress={handleTaskPress}
-                          toggleTaskCompletion={toggleTaskCompletion}
-                          deleteTask={deleteTask}
-                          getPriorityColor={getPriorityColor}
-                          colors={COLORS}
-                        />
-                      </>
-                }
-                searchQuery={searchQuery} // Pass searchQuery to TaskList
+              <View style={[styles.horizontalSwipePage, { width: PAGE_WIDTH }]}>
+                <MotivationalQuotes colors={COLORS} />
+              </View>
+            </ScrollView>
+            <View style={styles.tabSwipeIndicatorRow}>
+              <View
+                style={[
+                  styles.tabSwipeIndicator,
+                  currentPage === 0 && styles.tabSwipeIndicatorActive,
+                ]}
               />
-            </>
-          ) : null /* Render nothing if there are no tasks */}
-          <AskAIButton onTaskAccept={handleTaskAccept} /> {/* Updated AskAIButton now includes the modal */}
+              <View
+                style={[
+                  styles.tabSwipeIndicator,
+                  currentPage === 1 && styles.tabSwipeIndicatorActive,
+                ]}
+              />
+            </View>
+          </View>
+          {/* End swipeable horizontal scroll with indicator */}
           {isOffline && (
-            <>
-              <TouchableOpacity
-                style={styles.syncHistoryToggle}
-                onPress={() => setShowSyncHistory((prev) => !prev)}
-              >
-                <Text style={styles.syncHistoryToggleText}>
-                  {showSyncHistory ? 'Hide Sync History' : 'Show Sync History'}
-                </Text>
-              </TouchableOpacity>
-              {showSyncHistory && <SyncHistory history={syncHistory} />}
-              <TouchableOpacity
-                style={styles.offlineQueueToggle}
-                onPress={() => setShowOfflineQueue((prev) => !prev)}
-              >
-                <Text style={styles.offlineQueueToggleText}>
-                  {showOfflineQueue ? 'Hide Offline Queue' : 'Show Offline Queue'}
-                </Text>
-              </TouchableOpacity>
-              {showOfflineQueue && <OfflineQueue queue={offlineQueue} onRetry={syncOfflineChanges} />}
-            </>
+              <View style={styles.offlineIndicator}>
+                  <Text style={styles.offlineText}>Offline Mode</Text>
+              </View>
           )}
-          <NavBar />  
-        </View>
+          <View style={styles.taskcontainer}>
+            {loading && !refreshing ? (
+              <Loader colors={COLORS} />
+            ) : error && !refreshing ? (
+              <ErrorState 
+                errorMessage="Something went wrong!" 
+                onRetry={() => {
+                  setError('');
+                  getTasks();
+                }} 
+                colors={COLORS} 
+              />
+            ) : tasks.length > 0 ? (
+              <>
+                <View style={styles.iconsContainer}>
+                  <SearchBar 
+                    searchQuery={searchQuery} 
+                    setSearchQuery={onSearch}
+                    colors={COLORS} 
+                  />
+                  <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={() => setShowFilterOptions((prev) => !prev)}
+                    accessibilityLabel="Filter tasks"
+                  >
+                    <Ionicons name="filter" size={24} color={COLORS.text} />
+                  </TouchableOpacity>
+                </View>
+
+                {showFilterOptions && 
+                  <FilterBar
+                    visible={showFilterOptions}
+                    onRequestClose={() => setShowFilterOptions(false)}
+                    selectedPriority={selectedPriority}
+                    setSelectedPriority={setSelectedPriority}
+                    selectedCategory={selectedCategory}
+                    setSelectedCategory={setSelectedCategory}
+                    sortBy={sortBy}
+                    setSortBy={setSortBy}
+                  />
+                }
+
+                <TaskList
+                  tasks={filteredTasks}
+                  handleTaskPress={handleTaskPress}
+                  toggleTaskCompletion={toggleTaskCompletion}
+                  deleteTask={deleteTask}
+                  getPriorityColor={getPriorityColor}
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  ListHeaderComponent={
+                    searchQuery
+                      ? null
+                      : <>
+                          <TaskSummary 
+                            totalTasks={tasks.length} 
+                            completedTasks={completedTasksCount} 
+                            colors={COLORS} 
+                          />
+                          <DateSection
+                            title="Today"
+                            tasks={todayTasks}
+                            handleTaskPress={handleTaskPress}
+                            toggleTaskCompletion={toggleTaskCompletion}
+                            deleteTask={deleteTask}
+                            getPriorityColor={getPriorityColor}
+                            icon={<Ionicons name="calendar-outline" size={32} color={COLORS.text} />}
+                            onShare={shareTask}
+                          />
+                          <DateSection
+                            title="This Week"
+                            tasks={currentWeekTasks}
+                            handleTaskPress={handleTaskPress}
+                            toggleTaskCompletion={toggleTaskCompletion}
+                            deleteTask={deleteTask}
+                            getPriorityColor={getPriorityColor}
+                            icon={<Ionicons name="time-outline" size={32} color={COLORS.text} />}
+                            onShare={shareTask}
+                          />
+                          <FutureTask
+                            futureTasks={futureTasks}
+                            showFutureTasks={showFutureTasks}
+                            setShowFutureTasks={setShowFutureTasks}
+                            handleTaskPress={handleTaskPress}
+                            toggleTaskCompletion={toggleTaskCompletion}
+                            deleteTask={deleteTask}
+                            getPriorityColor={getPriorityColor}
+                            colors={COLORS}
+                          />
+                        </>
+                  }
+                  searchQuery={searchQuery}
+                />
+              </>
+            ) : null}
+          </View>
+         
+        </ScrollView>
+
+
+       <View style={styles.buttonContainer}>
+        <AskAIButton onTaskAccept={handleTaskAccept} />
+       </View>
+        
+        <NavBar />
       </SafeAreaView>
     </GestureHandlerRootView>
   );
@@ -839,122 +889,122 @@ const OfflineQueue: React.FC<{
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: 'relative', // Ensure absolute children are relative to this
   },
   taskcontainer: {
     flex: 1,
-    padding: 20,
-    paddingBottom: 80, // Ensure space for the navbar
+    padding: 28, // Increased padding
+    paddingBottom: 100, // More space for navbar
   },
   title: {
-    fontSize: 24,
+    fontSize: 32, // Larger title
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 28,
     textAlign: 'center',
   },
   dateSection: {
-   
-    marginBottom: 20,
+    marginBottom: 32, // More space
   },
   dateText: {
-    fontSize: 22,
+    fontSize: 28, // Larger section title
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 14,
   },
   todayText: {
     color: '#f44336',
   },
   noTasksText: {
     textAlign: 'center',
-    fontSize: 16,
+    fontSize: 22, // Larger
     fontWeight: 'bold',
-    marginBottom: 40,
-    marginTop: 20,
-    paddingTop: 20,
-    paddingBottom: 20,
+    marginBottom: 48,
+    marginTop: 28,
+    paddingTop: 28,
+    paddingBottom: 28,
   },
   errorText: {
     textAlign: 'center',
-    fontSize: 18,
+    fontSize: 22,
     color: '#f44336',
   },
   searchContainer: {
     overflow: 'hidden',
-    height: 40,
-    borderRadius: 20,
+    height: 54, // Taller search bar
+    borderRadius: 27,
     borderColor: '#ccc',
     borderWidth: 2,
     justifyContent: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 18,
   },
   searchInput: {
-    fontSize: 16,
+    fontSize: 20, // Larger input
   },
   iconsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   iconButton: {
-    marginLeft: 10,
+    marginLeft: 18,
   },
   futureSection: {
-    marginBottom: 20,
+    marginBottom: 32,
   },
   futureHeader: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 14,
   },
   priorityFilterContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 20,
+    marginBottom: 28,
   },
   categoryFilterContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 20,
+    marginBottom: 28,
   },
   categoryText: {
-    fontSize: 16,
-    color: '#000',  // Default text color
+    fontSize: 20,
+    color: '#000',
   },
   selectedCategory: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#f44336',  // Red color for the selected category
+    color: '#f44336',
   },
   priorityText: {
-    fontSize: 16,
+    fontSize: 20,
   },
   selectedPriority: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#f44336',  // Red color for the selected priority
+    color: '#f44336',
   },
   sortContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 28,
   },
   sortLabel: {
-    fontSize: 16,
-    marginRight: 10,
+    fontSize: 20,
+    marginRight: 14,
   },
   sortText: {
-    fontSize: 16,
-    marginRight: 10,
+    fontSize: 20,
+    marginRight: 14,
   },
   selectedSort: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#f44336', // Red for selected sort option
-    marginRight: 10,
+    color: '#f44336',
+    marginRight: 14,
   },
   taskSummary: {
-    fontSize: 14,
+    fontSize: 18,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 28,
   },
   errorContainer: {
     flex: 1,
@@ -962,86 +1012,96 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   retryText: {
-    color: '#f44336', // Red for retry text
-    fontSize: 16,
-    marginTop: 10,
+    color: '#f44336',
+    fontSize: 20,
+    marginTop: 14,
   },
   emptyStateContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 40,
+    marginTop: 54,
   },
   emptyStateImage: {
-    width: 150,
-    height: 150,
-    marginBottom: 20,
+    width: 200,
+    height: 200,
+    marginBottom: 28,
   },
   emptyStateText: {
-    fontSize: 16,
+    fontSize: 20,
     textAlign: 'center',
   },
   iconContainer: {
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 18,
+  },
+  buttonContainer: {
+    position: 'absolute',
+    bottom: 70,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 20, // Adjust this value to move the button up or down
   },
   askAIButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     position: 'absolute',
-    bottom: 80,
-    right: 20,
+    bottom: 120, // Adjust this value so the button sits above the NavBar and does not block it
+    right: 28,
     zIndex: 10,
     elevation: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
-    shadowRadius: 6,
-    backgroundColor: '#000', // Black background
+    shadowRadius: 10,
+    backgroundColor: '#000',
+    // Remove marginBottom if present
   },
   cartoonButton: {
     width: '100%',
     height: '100%',
-    borderRadius: 35,
-    backgroundColor: '#fff', // White inner button
+    borderRadius: 45,
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000', // Box shadow for inner button
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
-    shadowRadius: 6,
+    shadowRadius: 10,
   },
   faceContainer: {
-    width: 40,
-    height: 40,
+    width: 54,
+    height: 54,
     position: 'relative',
   },
   eyes: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 5,
+    marginBottom: 8,
   },
   eye: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: '#333',
   },
   eyeSquint: {
-    height: 6,
-    marginTop: 4,
+    height: 8,
+    marginTop: 6,
   },
   mouthClosed: {
-    width: 20,
-    height: 5,
-    borderRadius: 2,
+    width: 28,
+    height: 7,
+    borderRadius: 3,
     backgroundColor: '#333',
     alignSelf: 'center',
   },
   mouthOpen: {
-    width: 20,
-    height: 10,
-    borderRadius: 10,
+    width: 28,
+    height: 14,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: '#333',
     backgroundColor: '#FF6B6B',
@@ -1049,85 +1109,132 @@ const styles = StyleSheet.create({
   },
   sparkle1: {
     position: 'absolute',
-    top: -10,
-    left: -10,
+    top: -14,
+    left: -14,
     transform: [{ rotate: '-20deg' }],
   },
   sparkle2: {
     position: 'absolute',
-    bottom: -10,
-    right: -10,
+    bottom: -14,
+    right: -14,
     transform: [{ rotate: '20deg' }],
   },
   syncHistoryContainer: {
-    marginTop: 20,
-    padding: 10,
+    marginTop: 28,
+    padding: 16,
     backgroundColor: '#f1f1f1',
-    borderRadius: 10,
+    borderRadius: 14,
   },
   syncHistoryTitle: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 14,
   },
   syncHistoryItem: {
-    marginBottom: 5,
+    marginBottom: 8,
   },
   syncHistoryText: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#333',
   },
   syncHistoryToggle: {
-    marginTop: 20,
+    marginTop: 28,
     alignItems: 'center',
-    padding: 10,
+    padding: 14,
     backgroundColor: '#ddd',
-    borderRadius: 5,
+    borderRadius: 8,
   },
   syncHistoryToggleText: {
-    fontSize: 16,
+    fontSize: 20,
     color: '#333',
   },
   offlineQueueContainer: {
-    marginTop: 20,
-    padding: 10,
+    marginTop: 28,
+    padding: 16,
     backgroundColor: '#f1f1f1',
-    borderRadius: 10,
+    borderRadius: 14,
   },
   offlineQueueTitle: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 14,
   },
   offlineQueueItem: {
-    marginBottom: 5,
+    marginBottom: 8,
   },
   offlineQueueText: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#333',
   },
   retryButton: {
-    marginTop: 10,
-    padding: 10,
+    marginTop: 14,
+    padding: 14,
     backgroundColor: '#f44336',
-    borderRadius: 5,
+    borderRadius: 8,
     alignItems: 'center',
   },
   retryButtonText: {
-    fontSize: 16,
+    fontSize: 20,
     color: '#fff',
     fontWeight: 'bold',
   },
   offlineQueueToggle: {
-    marginTop: 20,
+    marginTop: 28,
     alignItems: 'center',
-    padding: 10,
+    padding: 14,
     backgroundColor: '#ddd',
-    borderRadius: 5,
+    borderRadius: 8,
   },
   offlineQueueToggleText: {
-    fontSize: 16,
+    fontSize: 20,
     color: '#333',
   },
+  horizontalSwipeContainer: {
+    height: 300, // Increased height for larger swipe area
+    marginBottom: 0,
+    marginTop: -5,
+  },
+  horizontalSwipeContent: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  
+  },
+  horizontalSwipePage: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+
+  },
+  tabSwipeIndicatorRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 18,
+    marginBottom: 12,
+  },
+  tabSwipeIndicator: {
+    width: 30,         // Even larger
+    height: 5,
+    borderRadius: 7,
+    backgroundColor: '#ccc',
+    marginHorizontal: 14,
+    marginTop: 0,
+  },
+  tabSwipeIndicatorActive: {
+    backgroundColor: '#f44336',
+  },
+  offlineIndicator: {
+    backgroundColor: '#ff9800',
+    padding: 14,
+    alignItems: 'center',
+    borderRadius: 8,
+    marginBottom: 14,
+  },
+  offlineText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 20,
+  },
 });
+
 export default HomeScreen;

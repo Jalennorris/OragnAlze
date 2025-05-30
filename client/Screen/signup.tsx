@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Google from 'expo-auth-session/providers/google';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import SecureStore from 'expo-secure-store';
 
 type SignupCredentials = {
   firstname: string;
@@ -122,103 +123,136 @@ const Signup: React.FC = () => {
 
   const handleChange = useCallback((name: keyof SignupCredentials, value: string) => {
     setCredentials((prev) => ({ ...prev, [name]: value }));
+    setError(null);
   }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <LinearGradient colors={['#6a11cb', '#2575fc']} style={styles.container}>
-        <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <Ionicons
-            name="arrow-back"
-            size={30}
-            color="white"
-            onPress={() => navigation.navigate('welcome')}
-            style={styles.backButton}
-          />
-          <Text style={styles.title}>Create{"\n"}Your{"\n"}Account.</Text>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={60}
+      >
+        <LinearGradient colors={['#6a11cb', '#2575fc']} style={styles.container}>
+          <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+            <Ionicons
+              name="arrow-back"
+              size={30}
+              color="white"
+              onPress={() => navigation.navigate('welcome')}
+              style={styles.backButton}
+              accessibilityRole="button"
+              accessibilityHint="Go back to welcome screen"
+            />
+            <Text style={styles.title}>Create{"\n"}Your{"\n"}Account.</Text>
 
-          <View style={styles.inputContainer}>
-            <TextInput
-              placeholder="First Name"
-              placeholderTextColor="#999"
-              style={styles.input}
-              value={credentials.firstname}
-              onChangeText={(text) => handleChange('firstname', text)}
-              accessibilityLabel="First Name input"
-            />
-            <TextInput
-              placeholder="Last Name"
-              placeholderTextColor="#999"
-              style={styles.input}
-              value={credentials.lastname}
-              onChangeText={(text) => handleChange('lastname', text)}
-              accessibilityLabel="Last Name input"
-            />
-            <TextInput
-              placeholder="Username"
-              placeholderTextColor="#999"
-              style={styles.input}
-              value={credentials.username}
-              onChangeText={(text) => handleChange('username', text)}
-              accessibilityLabel="Username input"
-            />
-            <TextInput
-              placeholder="Email"
-              placeholderTextColor="#999"
-              style={styles.input}
-              value={credentials.email}
-              onChangeText={(text) => handleChange('email', text)}
-              keyboardType="email-address"
-              accessibilityLabel="Email input"
-            />
-            <TextInput
-              placeholder="Password"
-              placeholderTextColor="#999"
-              secureTextEntry
-              style={styles.input}
-              value={credentials.password}
-              onChangeText={(text) => handleChange('password', text)}
-              accessibilityLabel="Password input"
-            />
-            <TextInput
-              placeholder="Confirm Password"
-              placeholderTextColor="#999"
-              secureTextEntry
-              style={styles.input}
-              value={credentials.confirmPassword}
-              onChangeText={(text) => handleChange('confirmPassword', text)}
-              accessibilityLabel="Confirm Password input"
-            />
-            {loading ? (
-              <ActivityIndicator size="large" color="#fff" />
-            ) : (
-              <TouchableOpacity style={styles.button} onPress={handleSignup} accessibilityRole="button">
-                <Text style={styles.buttonText}>Sign Up</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+            <View style={styles.inputContainer}>
+              <TextInput
+                placeholder="First Name"
+                placeholderTextColor="#999"
+                style={styles.input}
+                value={credentials.firstname}
+                onChangeText={(text) => handleChange('firstname', text)}
+                accessibilityLabel="First Name input"
+                accessibilityHint="Enter your first name"
+                returnKeyType="next"
+              />
+              <TextInput
+                placeholder="Last Name"
+                placeholderTextColor="#999"
+                style={styles.input}
+                value={credentials.lastname}
+                onChangeText={(text) => handleChange('lastname', text)}
+                accessibilityLabel="Last Name input"
+                accessibilityHint="Enter your last name"
+                returnKeyType="next"
+              />
+              <TextInput
+                placeholder="Username"
+                placeholderTextColor="#999"
+                style={styles.input}
+                value={credentials.username}
+                onChangeText={(text) => handleChange('username', text)}
+                accessibilityLabel="Username input"
+                accessibilityHint="Choose a username"
+                returnKeyType="next"
+              />
+              <TextInput
+                placeholder="Email"
+                placeholderTextColor="#999"
+                style={styles.input}
+                value={credentials.email}
+                onChangeText={(text) => handleChange('email', text)}
+                keyboardType="email-address"
+                accessibilityLabel="Email input"
+                accessibilityHint="Enter your email address"
+                returnKeyType="next"
+              />
+              <TextInput
+                placeholder="Password"
+                placeholderTextColor="#999"
+                secureTextEntry
+                style={styles.input}
+                value={credentials.password}
+                onChangeText={(text) => handleChange('password', text)}
+                accessibilityLabel="Password input"
+                accessibilityHint="Enter your password"
+                returnKeyType="next"
+              />
+              <TextInput
+                placeholder="Confirm Password"
+                placeholderTextColor="#999"
+                secureTextEntry
+                style={styles.input}
+                value={credentials.confirmPassword}
+                onChangeText={(text) => handleChange('confirmPassword', text)}
+                accessibilityLabel="Confirm Password input"
+                accessibilityHint="Re-enter your password"
+                returnKeyType="done"
+              />
+              {loading ? (
+                <ActivityIndicator size="large" color="#fff" />
+              ) : (
+                <TouchableOpacity
+                  style={styles.button}
+                  onPress={handleSignup}
+                  accessibilityRole="button"
+                  accessibilityHint="Sign up for a new account"
+                  disabled={loading}
+                >
+                  <Text style={styles.buttonText}>Sign Up</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
-          {error && <Text style={styles.errorText}>{error}</Text>}
+            {error && <Text style={styles.errorText}>{error}</Text>}
 
-          <Text style={styles.text}>or continue with</Text>
-          <TouchableOpacity
-            style={styles.googleButton}
-            onPress={() => promptAsync()}
-            disabled={!request}
-            accessibilityRole="button"
-          >
-            <Ionicons name="logo-google" size={24} color="#fff" />
-            <Text style={styles.googleButtonText}>Sign Up with Google</Text>
-          </TouchableOpacity>
+            <Text style={styles.text}>or continue with</Text>
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={() => promptAsync()}
+              disabled={!request}
+              accessibilityRole="button"
+              accessibilityHint="Sign up with your Google account"
+            >
+              <Ionicons name="logo-google" size={24} color="#fff" />
+              <Text style={styles.googleButtonText}>Sign Up with Google</Text>
+            </TouchableOpacity>
 
-          <Text style={styles.text}>
-            Already have an account?{' '}
-            <Text style={styles.linkText} onPress={() => navigation.navigate('login')} accessibilityRole="link">
-              Log In
+            <Text style={styles.text}>
+              Already have an account?{' '}
+              <Text
+                style={styles.linkText}
+                onPress={() => navigation.navigate('login')}
+                accessibilityRole="link"
+                accessibilityHint="Go to login screen"
+              >
+                Log In
+              </Text>
             </Text>
-          </Text>
-        </Animated.View>
-      </LinearGradient>
+          </Animated.View>
+        </LinearGradient>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };

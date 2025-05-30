@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Animated, Platform } from "react-native";
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { View, Text, StyleSheet, Pressable, Animated, ActivityIndicator, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
 import axios from "axios";
-import { useNavigation} from "expo-router";
+import { useNavigation } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Load custom fonts
@@ -33,11 +33,12 @@ interface Credentials {
 
 const Header: React.FC = () => {
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  const scaleValue = new Animated.Value(1); // For icon animation
+  const scaleValue = useRef(new Animated.Value(1)).current;
   const navigation = useNavigation();
-  const [credentials, setCredentials] = useState<Credentials>({
-    profile_pic: '',
-  });
+  const [credentials, setCredentials] = useState<Credentials>({ profile_pic: '' });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const prepare = async () => {
@@ -47,42 +48,39 @@ const Header: React.FC = () => {
         console.warn(error);
       } finally {
         setFontsLoaded(true);
-        await SplashScreen.hideAsync(); // Hide splash screen once fonts are loaded
+        await SplashScreen.hideAsync();
       }
     };
-
     prepare();
   }, []);
 
-  useEffect(() => {
-    getUserInfo();
-  }, []);
-
-  const getUserInfo = async () => {
+  const fetchUserInfo = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const userId = await AsyncStorage.getItem('userId'); // Use AsyncStorage instead of localStorage
-      console.log(userId);
+      const userId = await AsyncStorage.getItem('userId');
       if (!userId) {
-        console.warn('No userId found in AsyncStorage');
+        setError('No userId found in storage');
+        setLoading(false);
         return;
       }
       const response = await axios.get(`http://localhost:8080/api/users/${userId}`);
       const data = response.data;
-
-      setCredentials({
-        profile_pic: data.profile_pic,
-      });
-      console.log('Successfully fetched user info:');
-      console.log('profile_pic:', data.profile_pic);
-    } catch (error) {
-      console.error('Failed to fetch user info:', error);
+      setCredentials({ profile_pic: data.profile_pic });
+      setLoading(false);
+    } catch (err) {
+      setError('Failed to fetch user info');
+      setLoading(false);
     }
-  };
+  }, []);
 
-  // Handle profile icon press
+  useEffect(() => {
+    fetchUserInfo();
+  }, [fetchUserInfo, retryCount]);
+
+  const handleRetry = () => setRetryCount((c) => c + 1);
+
   const handleProfilePress = () => {
-    console.log("Profile icon pressed");
-    // Add a subtle animation on press
     Animated.sequence([
       Animated.timing(scaleValue, {
         toValue: 0.9,
@@ -99,14 +97,50 @@ const Header: React.FC = () => {
     });
   };
 
-  if (!fontsLoaded) {
-    return null; // Return null or a custom loading indicator
+  if (!fontsLoaded || loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#333" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={{ color: "red" }} allowFontScaling>
+          {error}
+        </Text>
+        <Pressable onPress={handleRetry} accessibilityLabel="Retry loading profile" accessibilityRole="button">
+          <Text style={{ color: "#007AFF", marginTop: 8 }} allowFontScaling>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (!credentials.profile_pic) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={{ color: "red" }} allowFontScaling>
+          Failed to load profile picture
+        </Text>
+        <Pressable onPress={handleRetry} accessibilityLabel="Retry loading profile" accessibilityRole="button">
+          <Text style={{ color: "#007AFF", marginTop: 8 }} allowFontScaling>Retry</Text>
+        </Pressable>
+      </View>
+    );
   }
 
   return (
     <View style={styles.headerContainer}>
-      <Text style={styles.logo}>OrganAIze</Text>
-      <Pressable onPress={handleProfilePress}>
+      <Text style={styles.logo} allowFontScaling>
+        OrganAIze
+      </Text>
+      <Pressable
+        onPress={handleProfilePress}
+        accessibilityLabel="Go to profile settings"
+        accessibilityRole="button"
+      >
         {colorBlocks.includes(credentials.profile_pic) ? (
           <Animated.View style={{ transform: [{ scale: scaleValue }] }}>
             <View style={{ backgroundColor: credentials.profile_pic, width: 30, height: 30, borderRadius: 15 }} />
@@ -147,5 +181,11 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0, 0, 0, 0.1)", // Add subtle text shadow
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
   },
 });

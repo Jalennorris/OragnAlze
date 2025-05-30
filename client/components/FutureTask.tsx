@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, FlatList } from 'react-native';
 import TaskItem from '../components/taskItem';
 import Icon from 'react-native-vector-icons/Ionicons';
 import EmptyState from '../components/EmptyState';
@@ -39,11 +39,29 @@ const FutureTask: React.FC<FutureTaskProps> = ({
   getPriorityColor,
   colors,
 }) => {
+  // Animation state
+  const [heightAnim] = React.useState(new Animated.Value(showFutureTasks ? 1 : 0));
+
+  React.useEffect(() => {
+    Animated.timing(heightAnim, {
+      toValue: showFutureTasks ? 1 : 0,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [showFutureTasks]);
+
+  // Interpolate height for animation (adjust maxHeight as needed)
+  const animatedHeight = heightAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 500], // 500 is an example max height, adjust as needed
+  });
+
   return (
     <View style={styles.futureSection}>
       <TouchableOpacity
         onPress={() => setShowFutureTasks(!showFutureTasks)}
         accessibilityLabel={showFutureTasks ? 'Hide future tasks' : 'Show future tasks'}
+        accessibilityHint="Toggles the visibility of future tasks"
       >
         <Text style={[styles.futureHeader, { color: colors.text }]}>
           Future Tasks{' '}
@@ -54,22 +72,30 @@ const FutureTask: React.FC<FutureTaskProps> = ({
           )}
         </Text>
       </TouchableOpacity>
-      {showFutureTasks && (
-        futureTasks.length > 0 ? (
-          futureTasks.map((task) => (
-            <TaskItem
-              key={task.taskId.toString()}
-              task={task}
-              onPress={() => handleTaskPress(task.taskId.toString())}
-              onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
-              onDelete={() => deleteTask(task.taskId)}
-              priorityColor={getPriorityColor(task.priority)}
-            />
-          ))
-        ) : (
-          <EmptyState message="No future tasks!" colors={colors} />
-        )
-      )}
+      <Animated.View style={{ overflow: 'hidden', height: animatedHeight }}>
+        {showFutureTasks && (
+          <FlatList
+            data={futureTasks}
+            keyExtractor={(item) => item.taskId.toString()}
+            renderItem={({ item }) => (
+              <TaskItem
+                task={item}
+                onPress={() => handleTaskPress(item.taskId.toString())}
+                onToggleCompletion={() => toggleTaskCompletion(item.taskId)}
+                onDelete={() => deleteTask(item.taskId)}
+                priorityColor={getPriorityColor(item.priority)}
+              />
+            )}
+            ListEmptyComponent={
+              <EmptyState
+                message="No future tasks! Try adding tasks with upcoming deadlines."
+                iconName="calendar-outline"
+                colors={colors}
+              />
+            }
+          />
+        )}
+      </Animated.View>
     </View>
   );
 };
@@ -83,6 +109,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 10,
+    paddingHorizontal: 15, // Add padding for better alignment
   },
   emptyStateContainer: {
     alignItems: 'center',

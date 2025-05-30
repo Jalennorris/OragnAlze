@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Google from 'expo-auth-session/providers/google';
 import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
+// Use AsyncStorage for sensitive data
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Credentials = {
@@ -17,21 +18,49 @@ const Login: React.FC = () => {
   const navigation = useNavigation();
   const [credentials, setCredentials] = useState<Credentials>({ username: '', password: '' });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>('');
+  const [error, setError] = useState<string | null>(null);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+
+  // Replace with your actual Google OAuth client ID
   const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: 'neural-cortex-444613-n3', // Replace with your actual client ID
+    clientId: '964543696153-o2t3m0bedk6o1aqe5puscq51f33fq89t.apps.googleusercontent.com',
   });
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(300)).current;
 
+  // Store sensitive data securely
+  const storeUserData = async (data: any) => {
+    await AsyncStorage.setItem('userId', data.userId.toString());
+    await AsyncStorage.setItem('username', data.username);
+    await AsyncStorage.setItem('firstname', data.firstname);
+    await AsyncStorage.setItem('lastname', data.lastname);
+    await AsyncStorage.setItem('email', data.email);
+    await AsyncStorage.setItem('token', data.token);
+  };
+
   useEffect(() => {
-    if (response?.type === 'success') {
-      const { authentication } = response;
-      console.log('Google Authentication Successful: ', authentication);
-      // Handle successful login with Google
-    }
-  }, [response]);
+    const handleGoogleLogin = async () => {
+      if (response?.type === 'success' && response.authentication?.accessToken) {
+        try {
+          // Send token to backend for verification and login/signup
+          const backendResponse = await axios.post('http://localhost:8080/api/auth/google', {
+            token: response.authentication.accessToken,
+          });
+
+          await storeUserData(backendResponse.data);
+
+          navigation.navigate('index');
+        } catch (err: any) {
+          setError(
+            err?.response?.data?.message ||
+            'Google login failed. Please try again.'
+          );
+        }
+      }
+    };
+    handleGoogleLogin();
+  }, [response, navigation]);
 
   useEffect(() => {
     Animated.parallel([
@@ -61,92 +90,137 @@ const Login: React.FC = () => {
     try {
       const response = await axios.post('http://localhost:8080/api/auth/login', credentials);
 
-      console.log('Successfully logged in:', response.data);
-
-      // Store user data in AsyncStorage
-      await AsyncStorage.setItem('userId', response.data.userId.toString());
-      await AsyncStorage.setItem('username', response.data.username);
-      await AsyncStorage.setItem('firstname', response.data.firstname);
-      await AsyncStorage.setItem('lastname', response.data.lastname);
-      await AsyncStorage.setItem('email', response.data.email);
-      await AsyncStorage.setItem('token', response.data.token);
-
-      console.log('User data successfully stored in AsyncStorage.');
+      await storeUserData(response.data);
 
       setLoading(false);
       navigation.navigate('index');
-    } catch (error) {
-      console.error('Login failed:', error);
-      setError('Login failed. Please check your credentials and try again.');
+    } catch (error: any) {
+      setError(
+        error?.response?.data?.message ||
+        'Login failed. Please check your credentials and try again.'
+      );
       setLoading(false);
     }
   }, [credentials, navigation]);
 
   const handleChange = useCallback((name: keyof Credentials, value: string) => {
     setCredentials((prev) => ({ ...prev, [name]: value }));
+    setError(null);
   }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <LinearGradient colors={['#6a11cb', '#2575fc']} style={styles.container}>
-        <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <Ionicons
-            name="arrow-back"
-            size={30}
-            color="white"
-            onPress={() => navigation.navigate('welcome')}
-            style={styles.backButton}
-          />
-          <Text style={styles.title}>Hey,{"\n"}Welcome{"\n"}Back.</Text>
-
-          <View style={styles.inputContainer}>
-            <TextInput
-              placeholder="Username"
-              placeholderTextColor="#999"
-              style={styles.input}
-              value={credentials.username}
-              onChangeText={(text) => handleChange('username', text)}
-              accessibilityLabel="Username input"
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={60}
+      >
+        <LinearGradient colors={['#6a11cb', '#2575fc']} style={styles.container}>
+          <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+            <Ionicons
+              name="arrow-back"
+              size={30}
+              color="white"
+              onPress={() => navigation.navigate('welcome')}
+              style={styles.backButton}
+              accessibilityLabel="Go back"
+              accessibilityHint="Navigates to the welcome screen"
             />
-            <TextInput
-              placeholder="Password"
-              placeholderTextColor="#999"
-              secureTextEntry
-              style={styles.input}
-              value={credentials.password}
-              onChangeText={(text) => handleChange('password', text)}
-              accessibilityLabel="Password input"
-            />
-            {loading ? (
-              <ActivityIndicator size="large" color="#fff" />
-            ) : (
-              <TouchableOpacity style={styles.button} onPress={handleLogin} accessibilityRole="button">
-                <Text style={styles.buttonText}>Log In</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+            <Text style={styles.title}>Hey,{"\n"}Welcome{"\n"}Back.</Text>
 
-          {error && <Text style={styles.errorText}>{error}</Text>}
+            <View style={styles.inputContainer}>
+              <TextInput
+                placeholder="Username"
+                placeholderTextColor="#999"
+                style={styles.input}
+                value={credentials.username}
+                onChangeText={(text) => handleChange('username', text)}
+                accessibilityLabel="Username"
+                accessibilityHint="Enter your username"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                textContentType="username"
+                editable={!loading}
+              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  placeholder="Password"
+                  placeholderTextColor="#999"
+                  secureTextEntry={!passwordVisible}
+                  style={styles.input}
+                  value={credentials.password}
+                  onChangeText={(text) => handleChange('password', text)}
+                  accessibilityLabel="Password"
+                  accessibilityHint="Enter your password"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="go"
+                  textContentType="password"
+                  editable={!loading}
+                  onSubmitEditing={handleLogin}
+                />
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={() => setPasswordVisible((v) => !v)}
+                  accessibilityRole="button"
+                  accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
+                  accessibilityHint="Toggles password visibility"
+                  disabled={loading}
+                >
+                  <Ionicons
+                    name={passwordVisible ? 'eye-off' : 'eye'}
+                    size={22}
+                    color="#fff"
+                  />
+                </TouchableOpacity>
+              </View>
+              {loading ? (
+                <ActivityIndicator size="large" color="#fff" accessibilityLabel="Loading" />
+              ) : (
+                <TouchableOpacity
+                  style={[styles.button, loading && { opacity: 0.6 }]}
+                  onPress={handleLogin}
+                  accessibilityRole="button"
+                  accessibilityLabel="Log In"
+                  accessibilityHint="Attempts to log you in"
+                  disabled={loading}
+                >
+                  <Text style={styles.buttonText}>Log In</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
-          <Text style={styles.text}>or continue with</Text>
-          <TouchableOpacity
-            style={styles.googleButton}
-            onPress={() => promptAsync()}
-            disabled={!request}
-            accessibilityRole="button"
-          >
-            <Ionicons name="logo-google" size={24} color="#fff" />
-            <Text style={styles.googleButtonText}>Login with Google</Text>
-          </TouchableOpacity>
+            {error && <Text style={styles.errorText} accessibilityLiveRegion="polite">{error}</Text>}
 
-          <Text style={styles.text}>
-            Don't have an account?{' '}
-            <Text style={styles.linkText} onPress={() => navigation.navigate('signup')} accessibilityRole="link">
-              Sign Up
+            <Text style={styles.text}>or continue with</Text>
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={() => promptAsync()}
+              disabled={!request || loading}
+              accessibilityRole="button"
+              accessibilityLabel="Login with Google"
+              accessibilityHint="Authenticate using your Google account"
+            >
+              <Ionicons name="logo-google" size={24} color="#fff" />
+              <Text style={styles.googleButtonText}>Login with Google</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.text}>
+              Don't have an account?{' '}
+              <Text
+                style={styles.linkText}
+                onPress={() => navigation.navigate('signup')}
+                accessibilityRole="link"
+                accessibilityLabel="Sign Up"
+                accessibilityHint="Navigate to the sign up screen"
+              >
+                Sign Up
+              </Text>
             </Text>
-          </Text>
-        </Animated.View>
-      </LinearGradient>
+          </Animated.View>
+        </LinearGradient>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -231,6 +305,12 @@ const styles = StyleSheet.create({
     color: '#ff6b6b',
     marginTop: 8, // Reduced margin
     fontSize: 14, // Reduced font size
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 15,
+    top: 10,
+    zIndex: 1,
   },
 });
 
