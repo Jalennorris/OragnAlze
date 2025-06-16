@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     shadowColor: "#000", // Add shadow for iOS
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 6,
+    shadowRadius:0,
   },
   logo: {
     fontSize: 32, // Slightly larger for emphasis

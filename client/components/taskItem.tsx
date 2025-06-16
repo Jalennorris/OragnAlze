@@ -41,6 +41,8 @@ interface TaskItemProps {
   isSelectionModeActive: boolean; // New prop to know if selection mode is active
   onEdit: (taskId: number, updatedFields: Partial<Task>) => void; // Add onEdit prop
   onShare?: () => void; // Add onShare prop
+  onRefresh?: () => void; // Add onRefresh prop for auto refresh
+  isOffline?: boolean; // Add isOffline prop
 }
 
 const getPriorityColor = (priority: 'low' | 'medium' | 'high') => {
@@ -108,6 +110,8 @@ const TaskItem: React.FC<TaskItemProps> = ({
   isSelectionModeActive, // Destructure new prop
   onEdit, // Destructure new prop
   onShare, // Destructure new prop
+  onRefresh, // Destructure new prop
+  isOffline = false, // Destructure isOffline, default to false
 }) => {
   // Animation values
   const animatedOpacity = useRef(new Animated.Value(1)).current;
@@ -161,6 +165,15 @@ const TaskItem: React.FC<TaskItemProps> = ({
 
   // Handle task deletion with Axios and animation
   const handleDelete = useCallback(async () => {
+    if (isOffline) {
+      Toast.show({
+        type: 'error',
+        text1: 'Offline',
+        text2: 'Cannot delete task while offline.',
+        position: 'bottom',
+      });
+      return;
+    }
     setIsLoading(true);
     try {
       animateDelete(async () => {
@@ -173,6 +186,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
             text2: `Task "${task.taskName}" was successfully deleted.`,
             position: 'bottom',
           });
+          if (onRefresh) onRefresh(); // Auto refresh after delete
         } catch (error: any) {
           // ...existing code...
           animatedOpacity.setValue(1);
@@ -185,10 +199,19 @@ const TaskItem: React.FC<TaskItemProps> = ({
       // ...existing code...
       setIsLoading(false);
     }
-  }, [task.taskId, task.taskName, onDelete, animateDelete, animatedOpacity, animatedHeight]);
+  }, [task.taskId, task.taskName, onDelete, animateDelete, animatedOpacity, animatedHeight, onRefresh, isOffline]);
 
   // Handle task completion toggle with Axios
   const handleToggleCompletion = async () => {
+    if (isOffline) {
+      Toast.show({
+        type: 'error',
+        text1: 'Offline',
+        text2: 'Cannot update task while offline.',
+        position: 'bottom',
+      });
+      return;
+    }
     const previousCompleted = task.completed; // Store previous state for potential rollback
     try {
       // Optimistically update UI first (or let parent handle it via onToggleCompletion)
@@ -203,12 +226,12 @@ const TaskItem: React.FC<TaskItemProps> = ({
         text2: `Task "${task.taskName}" marked as ${!task.completed ? 'complete' : 'incomplete'}.`,
         position: 'bottom',
       });
+      if (onRefresh) onRefresh(); // Auto refresh after completion toggle
       // No need to call onToggleCompletion again here if it was called optimistically
     } catch (error: any) {
       console.error('Error toggling task completion:', error);
-      // Revert optimistic UI update if API call fails
-      // This might require the parent component to handle reverting state
-      // For now, just show an error toast.
+      // Since the app is online, this should rarely fail.
+      // Optionally, you can notify the user of the error.
       const errorMessage = error.response?.data?.message || error.message || 'Failed to update the task. Please try again.';
        Toast.show({
          type: 'error',
@@ -216,7 +239,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
          text2: errorMessage,
          position: 'bottom',
        });
-       // Consider calling a revert function passed via props if optimistic UI update needs rollback
+      // If you want to handle rare network errors, you could revert the UI here.
     }
   };
 
@@ -281,6 +304,15 @@ const TaskItem: React.FC<TaskItemProps> = ({
 
   // Add new subtask
   const handleAddSubtask = async () => {
+    if (isOffline) {
+      Toast.show({
+        type: 'error',
+        text1: 'Offline',
+        text2: 'Cannot add subtask while offline.',
+        position: 'bottom',
+      });
+      return;
+    }
     if (!newSubtaskTitle.trim()) return;
     try {
       const response = await axios.post(`http://localhost:8080/api/tasks/${task.taskId}/subtasks`, {
@@ -303,6 +335,15 @@ const TaskItem: React.FC<TaskItemProps> = ({
 
   // Save edit handler
   const handleSaveEdit = async () => {
+    if (isOffline) {
+      Toast.show({
+        type: 'error',
+        text1: 'Offline',
+        text2: 'Cannot edit task while offline.',
+        position: 'bottom',
+      });
+      return;
+    }
     try {
       await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}`, {
         taskName: editName,
@@ -316,6 +357,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
         position: 'bottom',
       });
       setIsEditing(false);
+      if (onRefresh) onRefresh(); // Auto refresh after edit
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Failed to update the task.';
       Toast.show({
@@ -412,7 +454,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
     );
   };
 
-  // Swipeable complete action (Swipe Left)
+  // Swipeable complete/incomplete action (Swipe Left)
   const renderLeftActions = (progress: Animated.AnimatedInterpolation, dragX: Animated.AnimatedInterpolation) => {
     const scale = dragX.interpolate({
       inputRange: [0, 100],
@@ -420,21 +462,28 @@ const TaskItem: React.FC<TaskItemProps> = ({
       extrapolate: 'clamp',
     });
 
+    // Invert logic: show "Incomplete" (red) if completed, "Complete" (green) if not
+    const isCurrentlyCompleted = task.completed;
+    const actionLabel = isCurrentlyCompleted ? 'Mark as Incomplete' : 'Mark as Complete';
+    const actionText = isCurrentlyCompleted ? 'Incomplete' : 'Complete';
+    const actionColor = isCurrentlyCompleted ? '#FF4444' : '#4CAF50';
+    const actionIcon = isCurrentlyCompleted ? "close-circle-outline" : "checkmark-circle-outline";
+
     return (
       <TouchableOpacity
         onPress={() => {
           Haptics.selectionAsync();
           handleToggleCompletion();
         }}
-        style={styles.completeButton}
+        style={[styles.completeButton, { backgroundColor: actionColor }]}
         accessibilityRole="button"
-        accessibilityLabel={task.completed ? "Mark as Incomplete" : "Mark as Complete"}
+        accessibilityLabel={actionLabel}
         accessibilityHint="Toggles task completion"
       >
         <Animated.View style={{ transform: [{ scale }] }}>
-          <Ionicons name={task.completed ? "close-circle-outline" : "checkmark-circle-outline"} size={24} color="#FFF" />
+          <Ionicons name={actionIcon} size={24} color="#FFF" />
           <Text style={styles.actionText} allowFontScaling>
-            {task.completed ? 'Incomplete' : 'Complete'}
+            {actionText}
           </Text>
           <SwipeIndicator direction="left" />
         </Animated.View>
@@ -489,10 +538,11 @@ const TaskItem: React.FC<TaskItemProps> = ({
         <Swipeable
           renderRightActions={renderRightActions}
           renderLeftActions={renderLeftActions}
-          enabled={!isSelectionModeActive} // Disable swipe actions when in selection mode
+          enabled={!isSelectionModeActive && !isOffline} // Disable swipe actions when in selection mode or offline
         >
           <TouchableOpacity
-            style={[styles.container, isDark && styles.containerDark]}
+            style={[styles.container, isDark && styles.containerDark, isOffline && { opacity: 0.6 }]}
+            disabled={isOffline}
             onPress={() => {
               if (isSelectionModeActive) {
                 onSelectToggle(task.taskId); // Toggle selection if mode is active
@@ -623,6 +673,13 @@ const TaskItem: React.FC<TaskItemProps> = ({
                         </View>
                       )}
                     </>
+                  )}
+                  {isOffline && (
+                    <View style={{ padding: 8, backgroundColor: '#ff9800', borderRadius: 6, marginBottom: 6 }}>
+                      <Text style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>
+                        Offline: Actions disabled
+                      </Text>
+                    </View>
                   )}
                 </View>
               </LinearGradient>
@@ -760,12 +817,11 @@ const styles = StyleSheet.create({
     // Ensure the height matches the item or is flexible
   },
   completeButton: {
-    backgroundColor: '#4CAF50', // Green for complete
+    // Remove hardcoded backgroundColor, set dynamically
     justifyContent: 'center',
     alignItems: 'center',
-    width: 100, // Adjust width as needed
-    // Removed borderRadius and marginVertical
-    marginLeft: 10, // Add margin to separate from the edge
+    width: 100,
+    marginLeft: 10,
   },
   actionText: {
     color: '#FFF',

@@ -190,7 +190,7 @@ const TaskSummary: React.FC<TaskSummaryProps> = ({
         ]}
         accessibilityLabel={`Progress: ${percentage} percent completed`}
       >
-        {`${percentage}%`}
+    
       </Text>
     </View>
   );

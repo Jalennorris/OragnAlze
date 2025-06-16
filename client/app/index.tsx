@@ -24,6 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import MotivationalQuotes from '@/components/MotivationalQoutes';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import jwtDecode from 'jwt-decode'; // Import JWT decode library
+import { useFocusEffect } from '@react-navigation/native'; // Add this import
 
 // Define types for the task structure
 interface Task {
@@ -82,6 +83,7 @@ const HomeScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'work' | 'personal' | 'school'| 'other'>('all');
   const [showFilterOptions, setShowFilterOptions] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false); // New state for authentication
+  const [showAllTasks, setShowAllTasks] = useState(false); // Add state for All Tasks section
   
   const searchAnim = useRef(new Animated.Value(0)).current;
 
@@ -173,6 +175,14 @@ const HomeScreen: React.FC = () => {
       getTasks();
     }
   }, [isAuthenticated]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (isAuthenticated) {
+        getTasks();
+      }
+    }, [isAuthenticated])
+  );
 
   //loading Task
 
@@ -530,7 +540,7 @@ const HomeScreen: React.FC = () => {
                             )}
                           </Text>
                         </TouchableOpacity>
-                        {showFutureTasks && gi(
+                        {showFutureTasks && (
                           futureTasks.length > 0 ? (
                             futureTasks.map((task) => (
                               <TaskItem
@@ -553,6 +563,41 @@ const HomeScreen: React.FC = () => {
                     </>
                   }
                 />
+                {/* --- All Tasks Section at the end, styled like Future Tasks --- */}
+                <View style={styles.futureSection}>
+                  <TouchableOpacity
+                    onPress={() => setShowAllTasks(!showAllTasks)}
+                    accessibilityLabel={showAllTasks ? 'Hide all tasks' : 'Show all tasks'}
+                  >
+                    <Text style={styles.futureHeader}>
+                      All Tasks{' '}
+                      {showAllTasks ? (
+                        <Ionicons name="chevron-up" size={18} color={COLORS.text} />
+                      ) : (
+                        <Ionicons name="chevron-down" size={18} color={COLORS.text} />
+                      )}
+                    </Text>
+                  </TouchableOpacity>
+                  {showAllTasks && (
+                    tasks.length > 0 ? (
+                      tasks.map((task) => (
+                        <TaskItem
+                          key={task.taskId.toString()}
+                          task={task}
+                          onPress={() => handleTaskPress(task.taskId.toString())}
+                          onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
+                          onDelete={() => deleteTask(task.taskId)}
+                          priorityColor={getPriorityColor(task.priority)}
+                        />
+                      ))
+                    ) : (
+                      <View style={styles.emptyStateContainer}>
+                        <Icon name="md-checkmark-circle-outline" size={50} color={COLORS.text} />
+                        <Text style={styles.emptyStateText}>No tasks found!</Text>
+                      </View>
+                    )
+                  )}
+                </View>
               </>
             )}
             <NavBar />  
@@ -706,6 +751,17 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     textAlign: 'center',
+  },
+  allTasksSection: {
+    marginTop: 20,
+    marginBottom: 40,
+  },
+  allTasksHeader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+    color: '#6a11cb',
   },
 });
 export default HomeScreen;

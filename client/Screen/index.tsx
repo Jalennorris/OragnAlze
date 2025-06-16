@@ -95,6 +95,7 @@ const TaskList: React.FC<{
   onRefresh: () => void;
   ListHeaderComponent: React.ReactNode;
   searchQuery: string; // Add searchQuery prop
+  isOffline?: boolean; // Add isOffline prop
 }> = ({
   tasks,
   handleTaskPress,
@@ -105,6 +106,7 @@ const TaskList: React.FC<{
   onRefresh,
   ListHeaderComponent,
   searchQuery, // Destructure searchQuery
+  isOffline = false, // Destructure isOffline, default to false
 }) => {
   const filteredTasks = searchQuery
     ? tasks.filter(
@@ -136,6 +138,7 @@ const TaskList: React.FC<{
           onToggleCompletion={() => toggleTaskCompletion(item.taskId)}
           onDelete={() => deleteTask(item.taskId)}
           priorityColor={getPriorityColor(item.priority)}
+          isOffline={isOffline} // Pass isOffline to TaskItem
         />
       )}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -752,7 +755,7 @@ const OfflineQueue: React.FC<{
                 <Greeting />
               </View>
               <View style={[styles.horizontalSwipePage, { width: PAGE_WIDTH }]}>
-                <MotivationalQuotes colors={COLORS} />
+                <MotivationalQuotes  />
               </View>
             </ScrollView>
             <View style={styles.tabSwipeIndicatorRow}>
@@ -865,9 +868,11 @@ const OfflineQueue: React.FC<{
                             getPriorityColor={getPriorityColor}
                             colors={COLORS}
                           />
+
                         </>
                   }
                   searchQuery={searchQuery}
+                  isOffline={isOffline} // Pass isOffline to TaskList
                 />
               </>
             ) : null}
@@ -1209,7 +1214,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 18,
+    marginTop: 10,
     marginBottom: 12,
   },
   tabSwipeIndicator: {
