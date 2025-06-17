@@ -59,10 +59,10 @@ interface Task {
 
 // Constants for colors and styles
 const LIGHT_COLORS = {
-  low: '#000', // black
-  medium: '#ff9800', // orange
-  high: '#f44336', // red
-  today: '#f44336', // red
+  low: '#4CAF50', // green
+  medium: '#FF9800', // orange
+  high: '#F44336', // red
+  today: '#F44336', // red
   text: '#000',
   background: '#fff', // light blue
   searchBackground: '#f1f1f1',
@@ -70,10 +70,10 @@ const LIGHT_COLORS = {
 };
 
 const DARK_COLORS = {
-  low: '#388e3c', // dark green
-  medium: '#f57c00', // dark orange
-  high: '#d32f2f', // dark red
-  today: '#d32f2f', // dark red
+  low: '#4CAF50', // green
+  medium: '#FF9800', // orange
+  high: '#F44336', // red
+  today: '#F44336', // red
   text: '#feefe9',
   background: '#121212',
   searchBackground: '#333',
@@ -97,6 +97,7 @@ const TaskList: React.FC<{
   searchQuery: string; // Add searchQuery prop
   isOffline?: boolean; // Add isOffline prop
 }> = ({
+  
   tasks,
   handleTaskPress,
   toggleTaskCompletion,
@@ -151,6 +152,8 @@ const TaskList: React.FC<{
       removeClippedSubviews={true} // Can improve performance on Android (use with caution)
       // updateCellsBatchingPeriod={50} // Optional: Adjust batching frequency
       // legacyImplementation={false} // Optional: Use newer implementation if available
+      // Add separator for spacing between tasks
+      ItemSeparatorComponent={() => <View style={{ height: 20 }} />}
     />
   );
 };
@@ -180,6 +183,7 @@ const HomeScreen: React.FC = () => {
   const [showSyncHistory, setShowSyncHistory] = useState(false); // Add state to toggle sync history visibility
   const [offlineQueue, setOfflineQueue] = useState<{ type: string; taskId: number }[]>([]); // Add state for offline queue
   const [showOfflineQueue, setShowOfflineQueue] = useState(false); // Add state to toggle offline queue visibility
+  const [showSpinner, setShowSpinner] = useState(true);
 
   // Track current page for indicator
   const [currentPage, setCurrentPage] = useState(0);
@@ -259,98 +263,104 @@ const HomeScreen: React.FC = () => {
     }
   }, []);
 
-  const getTasks = useCallback(async (forceRefresh = false) => {
-    setLoading(true);
-    setError(''); // Clear previous errors
-
-    try {
-      const netInfoState = await NetInfo.fetch();
-      const online = netInfoState.isConnected && netInfoState.isInternetReachable;
-      setIsOffline(!online); // Update offline state
-
-      if (online) {
-        console.log('App is online. Fetching tasks from API...');
-        const userId = await AsyncStorage.getItem('userId'); // Changed
-        if (!userId) {
-          console.error("User ID not found in AsyncStorage. Redirecting to login...");
-          navigation.navigate("login");
-          throw new Error("User ID not found");
-        }
-
-        const apiUrl = `http://localhost:8080/api/tasks/user/${userId}`;
-        console.log(`Fetching tasks from: ${apiUrl}`);
-        const response = await fetch(apiUrl);
-        console.log(`Response status: ${response.status}`);
-
-        if (!response.ok) {
-          if (response.status === 404) {
-            console.log("No tasks found for the user on the server.");
-            setTasks([]); // Clear tasks if none found on server
-            await AsyncStorage.removeItem('cachedTasks'); // Changed
-            setError("No tasks found. Add some!"); // User-friendly message
+  const getTasks = useCallback(
+    async (forceRefresh = false, showLoader = true) => {
+      if (showLoader) setShowSpinner(true);
+      setError(''); // Clear previous errors
+  
+      try {
+        const netInfoState = await NetInfo.fetch();
+        // Use only isConnected for offline/online detection
+        const online = !!netInfoState.isConnected;
+        setIsOffline(!online); // Update offline state
+  
+        if (online) {
+          console.log('App is online. Fetching tasks from API...');
+          const userId = await AsyncStorage.getItem('userId'); // Changed
+          if (!userId) {
+            console.error("User ID not found in AsyncStorage. Redirecting to login...");
+            navigation.navigate("login");
+            throw new Error("User ID not found");
+          }
+  
+          const apiUrl = `http://localhost:8080/api/tasks/user/${userId}`;
+          console.log(`Fetching tasks from: ${apiUrl}`);
+          const response = await fetch(apiUrl);
+          console.log(`Response status: ${response.status}`);
+  
+          if (!response.ok) {
+            if (response.status === 404) {
+              console.log("No tasks found for the user on the server.");
+              setTasks([]); // Clear tasks if none found on server
+              await AsyncStorage.removeItem('cachedTasks'); // Changed
+              setError("No tasks found. Add some!"); // User-friendly message
+            } else {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
           } else {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const fetchedTasks: Task[] = await response.json();
+            const offlineChanges = await AsyncStorage.getItem('offlineChanges'); // Changed
+            const changes = offlineChanges ? JSON.parse(offlineChanges) : [];
+  
+            // Resolve conflicts
+            const resolvedTasks = fetchedTasks.map((task) => {
+              const conflict = changes.find((change) => change.taskId === task.taskId);
+              if (conflict) {
+                if (conflict.type === 'edit') {
+                  console.log(`Resolving conflict for task ${task.taskId}. Using offline changes.`);
+                  return { ...task, ...conflict.updatedTask };
+                }
+              }
+              return task;
+            });
+  
+            setTasks(resolvedTasks);
+            await AsyncStorage.setItem('cachedTasks', JSON.stringify(resolvedTasks)); // Changed
+            console.log('Tasks successfully cached.');
           }
         } else {
-          const fetchedTasks: Task[] = await response.json();
-          const offlineChanges = await AsyncStorage.getItem('offlineChanges'); // Changed
-          const changes = offlineChanges ? JSON.parse(offlineChanges) : [];
-
-          // Resolve conflicts
-          const resolvedTasks = fetchedTasks.map((task) => {
-            const conflict = changes.find((change) => change.taskId === task.taskId);
-            if (conflict) {
-              if (conflict.type === 'edit') {
-                console.log(`Resolving conflict for task ${task.taskId}. Using offline changes.`);
-                return { ...task, ...conflict.updatedTask };
-              }
-            }
-            return task;
-          });
-
-          setTasks(resolvedTasks);
-          await AsyncStorage.setItem('cachedTasks', JSON.stringify(resolvedTasks)); // Changed
-          console.log('Tasks successfully cached.');
-        }
-      } else {
-        console.log('App is offline. Attempting to load from cache...');
-        setError('You are offline. Showing cached tasks.'); // Inform user
-        const cacheLoaded = await loadTasksFromCache();
-        if (!cacheLoaded && isInitialLoad) {
-           // Only set error if initial load fails and cache is empty
-           setError('Offline and no cached tasks available.');
-           setTasks([]); // Ensure tasks are empty if cache load fails
-        }
-      }
-    } catch (err) {
-      const errorMessage = (err as Error).message || 'An unknown error occurred';
-      console.error('Failed to get tasks:', errorMessage);
-      // Try loading from cache as a fallback if API call failed for reasons other than 404
-      if (!errorMessage.includes("No tasks found")) {
+          console.log('App is offline. Attempting to load from cache...');
+          setError('You are offline. Showing cached tasks.'); // Inform user
           const cacheLoaded = await loadTasksFromCache();
-          if (cacheLoaded) {
-              setError('Failed to fetch tasks. Showing cached data.');
-          } else {
-              setError(`Failed to fetch tasks: ${errorMessage}`);
-              setTasks([]); // Clear tasks if fetch and cache fail
+          if (!cacheLoaded && isInitialLoad) {
+             // Only set error if initial load fails and cache is empty
+             setError('Offline and no cached tasks available.');
+             setTasks([]); // Ensure tasks are empty if cache load fails
           }
+        }
+      } catch (err) {
+        const errorMessage = (err as Error).message || 'An unknown error occurred';
+        console.error('Failed to get tasks:', errorMessage);
+        // Try loading from cache as a fallback if API call failed for reasons other than 404
+        if (!errorMessage.includes("No tasks found")) {
+            const cacheLoaded = await loadTasksFromCache();
+            if (cacheLoaded) {
+                setError('Failed to fetch tasks. Showing cached data.');
+            } else {
+                setError(`Failed to fetch tasks: ${errorMessage}`);
+                setTasks([]); // Clear tasks if fetch and cache fail
+            }
+        }
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+        setIsInitialLoad(false); // Mark initial load as complete
+        setShowSpinner(false);
+        console.log('getTasks execution completed.');
       }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setIsInitialLoad(false); // Mark initial load as complete
-      console.log('getTasks execution completed.');
-    }
-  }, [navigation, isInitialLoad]); // Add isInitialLoad dependency
+    },
+    [navigation, isInitialLoad]
+  );
 
   useEffect(() => {
     // Initial fetch
     getTasks();
     syncOfflineChanges(); // Attempt to sync offline changes on app start
-
+  
     // Subscribe to network status changes
     const unsubscribe = NetInfo.addEventListener(state => {
-      const currentlyOffline = !(state.isConnected && state.isInternetReachable);
+      // Use only isConnected for offline/online detection
+      const currentlyOffline = !state.isConnected;
       if (isOffline !== currentlyOffline) { // Only update if status changed
           setIsOffline(currentlyOffline);
           console.log("Network status changed. Offline:", currentlyOffline);
@@ -367,17 +377,23 @@ const HomeScreen: React.FC = () => {
       }
     });
 
+    // Auto-refresh tasks every 10 seconds, no spinner
+    const interval = setInterval(() => {
+      getTasks(false, false);
+    }, 10000);
+  
     return () => {
       // Unsubscribe from network status listener on component unmount
       unsubscribe();
+      clearInterval(interval);
     };
-  }, [getTasks, syncOfflineChanges]); // Rerun effect if getTasks changes (due to navigation dependency)
+  }, [getTasks, syncOfflineChanges, isOffline]); // Add isOffline as dependency
 
   //refresh
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     setError(''); // Clear any existing error
-    getTasks(true); // Force refresh from API if online
+    getTasks(true, true); // Show spinner for manual refresh
   }, [getTasks]);
 
   // Get the user's local timezone
@@ -425,30 +441,62 @@ const HomeScreen: React.FC = () => {
 
   //Router routes
   //
-  const handleTaskPress = useCallback((taskId: string): void => {
-    console.log('handleTaskPress called with:', taskId);
-    console.log('navigation object:', navigation);
-    if (taskId) {
-      // Get userId from AsyncStorage and navigate with both taskId and userId
-      AsyncStorage.getItem('userId').then((userId) => { // Changed
-        if (userId) {
-          navigation.navigate('taskDetail', { taskId, userId });
-        } else {
-          console.warn('User ID not found');
-        }
-      });
-    } else {
-      console.warn('Invalid taskId provided');
-    }
-  }, [navigation]);
+  const handleTaskPress = useCallback(
+    (taskId: string): void => {
+      console.log('handleTaskPress called with:', taskId);
+      console.log('navigation object:', navigation);
+      if (taskId) {
+        // Only pass taskId to taskDetail
+        // @ts-ignore
+        navigation.navigate('taskDetail', { taskId });
+      } else {
+        console.warn('Invalid taskId provided');
+      }
+    },
+    [navigation]
+  );
 
   // Function to toggle task completion
-  const toggleTaskCompletion = useCallback((taskId: number) => {
-    setTasks((prevTasks) =>
-      prevTasks.map((task) => (task.taskId === taskId ? { ...task, completed: !task.completed } : task))
-    );
-    Alert.alert("Offline Action", "Task status changed locally. Syncing requires internet connection."); // Temporary feedback
-  }, []);
+const toggleTaskCompletion = useCallback(async (taskId: number) => {
+  // Optimistically update UI
+  setTasks((prevTasks) =>
+    prevTasks.map((task) =>
+      task.taskId === taskId ? { ...task, completed: !task.completed } : task
+    )
+  );
+
+  const netInfoState = await NetInfo.fetch();
+  const online = !!netInfoState.isConnected;
+
+  if (!online) {
+    // Queue the change for later sync
+    const offlineChanges = await AsyncStorage.getItem('offlineChanges');
+    const changes = offlineChanges ? JSON.parse(offlineChanges) : [];
+    changes.push({ type: 'edit', taskId, updatedTask: { completed: true } }); // You may want to store the full updated task
+    await AsyncStorage.setItem('offlineChanges', JSON.stringify(changes));
+    Alert.alert("Offline Action", "Task status changed locally. Syncing requires internet connection.");
+  } else {
+    // Update on server
+    try {
+      // Find the current completed value to send the correct new value
+      const task = tasks.find((t) => t.taskId === taskId);
+      const newCompleted = task ? !task.completed : true;
+
+      // Try PATCH with completed value in body
+      await axios.patch(`http://localhost:8080/api/tasks/${taskId}`, { completed: newCompleted });
+
+      // Optionally, you can re-fetch tasks here for consistency
+    } catch (error) {
+      // Revert optimistic update if server call fails
+      setTasks((prevTasks) =>
+        prevTasks.map((task) =>
+          task.taskId === taskId ? { ...task, completed: !task.completed } : task
+        )
+      );
+      Alert.alert('Error', 'Failed to update task status on server.');
+    }
+  }
+}, [tasks]);
 
   //delete task function with confirmation
   const deleteTask = useCallback((taskId: number) => {
@@ -477,11 +525,27 @@ const HomeScreen: React.FC = () => {
               Alert.alert("Offline Action", "Task deleted locally. Syncing requires internet connection.");
             } else {
               try {
+                // Try axios first
                 await axios.delete(`http://localhost:8080/api/tasks/${taskId}`);
-                console.log('Task deleted on server.');
-              } catch (error) {
-                console.error('Error deleting task via API:', error);
-                Alert.alert('Error', 'Failed to delete task from server. Please check connection.');
+                // Optionally, you can re-fetch tasks here for consistency
+              } catch (error: any) {
+                // Log error details for debugging
+                console.error('Error deleting task via axios:', error?.response?.data || error?.message || error);
+
+                // Try fetch as a fallback for debugging
+                try {
+                  const response = await fetch(`http://localhost:8080/api/tasks/${taskId}`, {
+                    method: 'DELETE',
+                  });
+                  if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Fetch delete error:', errorText);
+                    Alert.alert('Error', `Failed to delete task from server. Server says: ${errorText}`);
+                  }
+                } catch (fetchError) {
+                  console.error('Fetch delete failed:', fetchError);
+                  Alert.alert('Error', 'Failed to delete task from server. Please check connection and server logs.');
+                }
               }
             }
           },
@@ -625,6 +689,7 @@ const DateSection: React.FC<{
   <View style={styles.dateSection}>
     <Text style={[styles.dateText, title === 'Today' && styles.todayText]}>{title}</Text>
     {icon && <View style={styles.iconContainer}>{icon}</View>} {/* Render icon if provided */}
+ 
     {tasks.length > 0 ? (
       tasks.map((task) => (
         <TaskItem
@@ -636,8 +701,11 @@ const DateSection: React.FC<{
           priorityColor={getPriorityColor(task.priority)}
           onShare={() => onShare(task)} // Add onShare prop
         />
+
       ))
+  
     ) : (
+    
       <EmptyState 
         message={`No tasks for ${title.toLowerCase()}!`} 
         colors={COLORS} 
@@ -780,14 +848,14 @@ const OfflineQueue: React.FC<{
               </View>
           )}
           <View style={styles.taskcontainer}>
-            {loading && !refreshing ? (
+            {showSpinner && !refreshing ? (
               <Loader colors={COLORS} />
             ) : error && !refreshing ? (
               <ErrorState 
                 errorMessage="Something went wrong!" 
                 onRetry={() => {
                   setError('');
-                  getTasks();
+                  getTasks(true, true);
                 }} 
                 colors={COLORS} 
               />
@@ -821,7 +889,11 @@ const OfflineQueue: React.FC<{
                   />
                 }
 
+                {/* Add All Tasks title here */}
+                
+\
                 <TaskList
+                
                   tasks={filteredTasks}
                   handleTaskPress={handleTaskPress}
                   toggleTaskCompletion={toggleTaskCompletion}
@@ -868,6 +940,7 @@ const OfflineQueue: React.FC<{
                             getPriorityColor={getPriorityColor}
                             colors={COLORS}
                           />
+                          <Text style={styles.dateText}>All Tasks</Text>
 
                         </>
                   }
@@ -914,6 +987,8 @@ const styles = StyleSheet.create({
     fontSize: 28, // Larger section title
     fontWeight: 'bold',
     marginBottom: 14,
+    marginTop: 20
+    
   },
   todayText: {
     color: '#f44336',
@@ -1240,6 +1315,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 20,
   },
+    
 });
 
 export default HomeScreen;

@@ -43,10 +43,10 @@ interface Task {
 
 // Constants for colors and styles
 const LIGHT_COLORS = {
-  low: '#4caf50', // green
-  medium: '#ff9800', // orange
-  high: '#f44336', // red
-  today: '#f44336', // red
+  low: '#4CAF50', // green
+  medium: '#FF9800', // orange
+  high: '#F44336', // red
+  today: '#F44336', // red
   text: '#000',
   background: '#fff', // light blue
   searchBackground: '#f1f1f1',
@@ -54,10 +54,10 @@ const LIGHT_COLORS = {
 };
 
 const DARK_COLORS = {
-  low: '#388e3c', // dark green
-  medium: '#f57c00', // dark orange
-  high: '#d32f2f', // dark red
-  today: '#d32f2f', // dark red
+  low: '#4CAF50', // green
+  medium: '#FF9800', // orange
+  high: '#F44336', // red
+  today: '#F44336', // red
   text: '#feefe9',
   background: '#121212',
   searchBackground: '#333',
@@ -563,13 +563,13 @@ const HomeScreen: React.FC = () => {
                     </>
                   }
                 />
-                {/* --- All Tasks Section at the end, styled like Future Tasks --- */}
-                <View style={styles.futureSection}>
+                {/* --- All Tasks Section with toggle, moved outside FlatList --- */}
+                <View style={styles.allTasksSection}>
                   <TouchableOpacity
                     onPress={() => setShowAllTasks(!showAllTasks)}
                     accessibilityLabel={showAllTasks ? 'Hide all tasks' : 'Show all tasks'}
                   >
-                    <Text style={styles.futureHeader}>
+                    <Text style={styles.allTasksHeader}>
                       All Tasks{' '}
                       {showAllTasks ? (
                         <Ionicons name="chevron-up" size={18} color={COLORS.text} />

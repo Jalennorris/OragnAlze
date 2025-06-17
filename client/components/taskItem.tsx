@@ -43,6 +43,7 @@ interface TaskItemProps {
   onShare?: () => void; // Add onShare prop
   onRefresh?: () => void; // Add onRefresh prop for auto refresh
   isOffline?: boolean; // Add isOffline prop
+  onPress?: () => void; // <-- Add this line
 }
 
 const getPriorityColor = (priority: 'low' | 'medium' | 'high') => {
@@ -104,14 +105,16 @@ const TaskItem: React.FC<TaskItemProps> = ({
   task,
   onToggleCompletion,
   onDelete,
-  priorityColor = getPriorityColor(task.priority), // Ensure default color is applied
+  priorityColor, // Remove default assignment, always expect from parent
   isSelected, // Destructure new prop
   onSelectToggle, // Destructure new prop
   isSelectionModeActive, // Destructure new prop
-  onEdit, // Destructure new prop
+
+  onEdit = () => {}, // <-- Default to no-op function
   onShare, // Destructure new prop
   onRefresh, // Destructure new prop
   isOffline = false, // Destructure isOffline, default to false
+  onPress, // <-- Add this line
 }) => {
   // Animation values
   const animatedOpacity = useRef(new Animated.Value(1)).current;
@@ -248,6 +251,13 @@ const TaskItem: React.FC<TaskItemProps> = ({
   const [editName, setEditName] = useState(task.taskName);
   const [editDescription, setEditDescription] = useState(task.taskDescription);
 
+  // Sync edit fields with task prop when entering edit mode
+  const startEditing = () => {
+    setEditName(task.taskName);
+    setEditDescription(task.taskDescription);
+    setIsEditing(true);
+  };
+
   // Subtasks state for editing/adding (local UI only, sync with backend as needed)
   const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks || []);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -344,7 +354,19 @@ const TaskItem: React.FC<TaskItemProps> = ({
       });
       return;
     }
+  // Always close editor and show toast, even if nothing changed
+    if (editName === task.taskName && editDescription === task.taskDescription) {
+      setIsEditing(false);
+      Toast.show({
+        type: 'success',
+        text1: 'Task Updated',
+        text2: `Task "${editName}" updated successfully.`,
+        position: 'bottom',
+      });
+      return;
+    }
     try {
+      console.log('Saving edit:', { editName, editDescription }); // Debug log
       await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}`, {
         taskName: editName,
         taskDescription: editDescription,
@@ -357,8 +379,9 @@ const TaskItem: React.FC<TaskItemProps> = ({
         position: 'bottom',
       });
       setIsEditing(false);
-      if (onRefresh) onRefresh(); // Auto refresh after edit
+      if (onRefresh) onRefresh();
     } catch (error: any) {
+      console.error('Save edit error:', error); // Debug log
       const errorMessage = error.response?.data?.message || error.message || 'Failed to update the task.';
       Toast.show({
         type: 'error',
@@ -514,7 +537,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
                 style={styles.moreMenuItem}
                 onPress={() => {
                   setIsMoreMenuVisible(false);
-                  setIsEditing(true);
+                  startEditing(); // <-- use this instead of setIsEditing(true)
                 }}
               >
                 <Ionicons name="pencil-outline" size={18} color="#333" style={{ marginRight: 8 }} />
@@ -543,16 +566,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
           <TouchableOpacity
             style={[styles.container, isDark && styles.containerDark, isOffline && { opacity: 0.6 }]}
             disabled={isOffline}
-            onPress={() => {
-              if (isSelectionModeActive) {
-                onSelectToggle(task.taskId); // Toggle selection if mode is active
-              } else {
-                // Handle regular press action (e.g., navigate to details)
-                console.log('Regular task press:', task.taskId);
-                // You might want to re-introduce the original onPress logic here
-                // or handle navigation/details view differently.
-              }
-            }}
+            onPress={onPress} // <-- Add this line
             onLongPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               onSelectToggle(task.taskId); // Initiate selection mode on long press
@@ -596,6 +610,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
                           onChangeText={setEditName}
                           placeholder="Task Name"
                           autoFocus
+                          editable={true} // Ensure editable
                         />
                       </View>
                       <TextInput
@@ -604,6 +619,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
                         onChangeText={setEditDescription}
                         placeholder="Task Description"
                         multiline
+                        editable={true} // Ensure editable
                       />
                       <View style={{ flexDirection: 'row', marginTop: 8 }}>
                         <TouchableOpacity onPress={handleSaveEdit} style={[styles.actionButton, { backgroundColor: '#4CAF50', borderRadius: 6 }]}>
@@ -709,6 +725,12 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectTog
     );
   }
 
+  // Add a real onEdit handler (replace with your logic)
+  const handleEdit = (taskId: number, updatedFields: Partial<Task>) => {
+    // Update your state or call your API here
+    console.log('Edit task', taskId, updatedFields);
+  };
+
   return (
     <>
       {tasks.map((task) => (
@@ -721,7 +743,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectTog
           isSelected={selectedTaskIds.includes(task.taskId)} // Pass selection status
           onSelectToggle={onSelectToggle} // Pass selection handler
           isSelectionModeActive={isSelectionModeActive} // Pass selection mode status
-          onEdit={(taskId, updatedFields) => console.log('Edit task', taskId, updatedFields)} // Placeholder - real logic needed in parent
+          onEdit={handleEdit} // <-- Pass a real function here
         />
       ))}
     </>

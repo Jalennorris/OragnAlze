@@ -18,9 +18,10 @@ interface Task {
 }
 
 const TaskDetail: React.FC = () => {
-  const navigation = useNavigation(); // Replaced useRouter with useNavigation
+  const navigation = useNavigation();
   const route = useRoute();
-  const { taskId } = route.params as { taskId: string }; // Extract taskId from route params
+  // Accept both taskId and userId, but only require taskId
+  const { taskId, userId } = route.params as { taskId: string; userId?: string };
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false); // State to toggle edit mode

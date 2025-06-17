@@ -103,6 +103,9 @@ const FutureTask: React.FC<FutureTaskProps> = ({
 const styles = StyleSheet.create({
   futureSection: {
     marginBottom: 20,
+ 
+  
+    padding: 15, // Add padding for better spacing
   },
   futureHeader: {
     fontSize: 18,

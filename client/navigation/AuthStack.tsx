@@ -18,7 +18,7 @@ export type AuthStackParamList = {
   login: undefined;
   index: undefined;
   addTaskScreen: undefined;
-  taskDetail: { taskId: string; userId: string }; // <-- Ensure this matches your navigation
+  taskDetail: { taskId: string }; // <-- Only taskId is required now
   calendarScreen: undefined;
   signup: undefined;
   welcome: undefined;

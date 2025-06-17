@@ -29,12 +29,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
       accessibilityLabel="Empty state message"
       accessibilityRole="text"
     >
-      <Ionicons
-        name={iconName}
-        size={iconSize}
-        color={iconColor}
-        style={styles.icon}
-      />
+     
       <Text
         style={[styles.emptyStateText, { color: colors.text || '#000' }]}
       >
