@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState, memo } from 'react';
+import React, { useRef, useCallback, useState, memo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert, TextInput, Modal, Pressable, ActivityIndicator, useColorScheme } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { Easing } from 'react-native'; // Add Easing
 import axios from 'axios';
 import Toast from 'react-native-toast-message';
+import { format, parse } from 'date-fns';
 
 // Define types for the task structure
 interface Subtask {
@@ -127,6 +128,13 @@ const TaskItem: React.FC<TaskItemProps> = ({
         year: 'numeric',
         month: 'short',
         day: 'numeric',
+      }) +
+      ' ' +
+      new Date(task.deadline).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'America/Chicago',
       })
     : 'No due date';
 
@@ -246,16 +254,48 @@ const TaskItem: React.FC<TaskItemProps> = ({
     }
   };
 
-  // Inline editing state
-  const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(task.taskName);
   const [editDescription, setEditDescription] = useState(task.taskDescription);
+  const [editDeadline, setEditDeadline] = useState(task.deadline);
 
-  // Sync edit fields with task prop when entering edit mode
-  const startEditing = () => {
-    setEditName(task.taskName);
-    setEditDescription(task.taskDescription);
-    setIsEditing(true);
+  // Format for display and editing (date and time)
+  const displayDate = editDeadline
+    ? format(new Date(editDeadline), 'MMM dd, yyyy hh:mm a')
+    : '';
+
+  // Update backend when due date changes (onBlur)
+  const handleDeadlineBlur = async () => {
+    // Try to parse the date in "MMM dd, yyyy HH:mm" format
+    let isoDate = task.deadline;
+    try {
+      const parsed = parse(editDeadline, 'MMM dd, yyyy HH:mm', new Date());
+      if (!isNaN(parsed.getTime())) {
+        isoDate = parsed.toISOString();
+      }
+    } catch {
+      // fallback: keep previous value
+    }
+    if (isoDate !== task.deadline) {
+      try {
+        await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}`, {
+          deadline: isoDate,
+        });
+        onEdit(task.taskId, { deadline: isoDate });
+        Toast.show({
+          type: 'success',
+          text1: 'Task Updated',
+          text2: `Due date updated.`,
+          position: 'bottom',
+        });
+      } catch (error: any) {
+        Toast.show({
+          type: 'error',
+          text1: 'Update Failed',
+          text2: 'Could not update due date.',
+          position: 'bottom',
+        });
+      }
+    }
   };
 
   // Subtasks state for editing/adding (local UI only, sync with backend as needed)
@@ -343,64 +383,24 @@ const TaskItem: React.FC<TaskItemProps> = ({
     }
   };
 
-  // Save edit handler
-  const handleSaveEdit = async () => {
-    if (isOffline) {
-      Toast.show({
-        type: 'error',
-        text1: 'Offline',
-        text2: 'Cannot edit task while offline.',
-        position: 'bottom',
-      });
-      return;
-    }
-  // Always close editor and show toast, even if nothing changed
-    if (editName === task.taskName && editDescription === task.taskDescription) {
-      setIsEditing(false);
-      Toast.show({
-        type: 'success',
-        text1: 'Task Updated',
-        text2: `Task "${editName}" updated successfully.`,
-        position: 'bottom',
-      });
-      return;
-    }
-    try {
-      console.log('Saving edit:', { editName, editDescription }); // Debug log
-      await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}`, {
-        taskName: editName,
-        taskDescription: editDescription,
-      });
-      onEdit(task.taskId, { taskName: editName, taskDescription: editDescription });
-      Toast.show({
-        type: 'success',
-        text1: 'Task Updated',
-        text2: `Task "${editName}" updated successfully.`,
-        position: 'bottom',
-      });
-      setIsEditing(false);
-      if (onRefresh) onRefresh();
-    } catch (error: any) {
-      console.error('Save edit error:', error); // Debug log
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to update the task.';
-      Toast.show({
-        type: 'error',
-        text1: 'Update Failed',
-        text2: errorMessage,
-        position: 'bottom',
-      });
-    }
-  };
-
-  // Cancel edit handler
-  const handleCancelEdit = () => {
-    setEditName(task.taskName);
-    setEditDescription(task.taskDescription);
-    setIsEditing(false);
-  };
-
   // State for More menu
   const [isMoreMenuVisible, setIsMoreMenuVisible] = useState(false);
+
+  // Subtask count state
+  const [subtaskCount, setSubtaskCount] = useState<number>(0);
+
+  // Fetch subtask count from API
+  useEffect(() => {
+    const fetchSubtaskCount = async () => {
+      try {
+        const response = await axios.get(`http://localhost:8080/api/subtasks/${task.taskId}`);
+        setSubtaskCount(Array.isArray(response.data) ? response.data.length : 0);
+      } catch (error) {
+        setSubtaskCount(0);
+      }
+    };
+    fetchSubtaskCount();
+  }, [task.taskId]);
 
   // Memoized SubtaskRow
   const SubtaskRow = memo(({ subtask }: { subtask: Subtask }) => (
@@ -521,6 +521,61 @@ const TaskItem: React.FC<TaskItemProps> = ({
     ? [isDark ? '#333' : '#E0E0E0', isDark ? '#333' : '#E0E0E0']
     : [isDark ? '#222' : '#FFFFFF', isDark ? '#222' : '#FFFFFF'];
 
+  const handleNameBlur = async () => {
+    if (editName.trim() && editName !== task.taskName) {
+      try {
+        await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}`, {
+          taskName: editName,
+        });
+        setEditName(editName); // ensure local state is up to date
+        onEdit(task.taskId, { taskName: editName });
+        Toast.show({
+          type: 'success',
+          text1: 'Task Updated',
+          text2: 'Task name updated.',
+          position: 'bottom',
+        });
+      } catch (error: any) {
+        setEditName(task.taskName); // revert to previous value on error
+        Toast.show({
+          type: 'error',
+          text1: 'Update Failed',
+          text2: 'Could not update task name.',
+          position: 'bottom',
+        });
+      }
+    } else if (!editName.trim()) {
+      setEditName(task.taskName); // revert to previous value if input is empty
+    }
+  };
+
+  const handleDescriptionBlur = async () => {
+    if (editDescription.trim() && editDescription !== task.taskDescription) {
+      try {
+        await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}`, {
+          taskDescription: editDescription,
+        });
+        onEdit(task.taskId, { taskDescription: editDescription });
+        Toast.show({
+          type: 'success',
+          text1: 'Task Updated',
+          text2: 'Task description updated.',
+          position: 'bottom',
+        });
+      } catch (error: any) {
+        setEditDescription(task.taskDescription); // revert to previous value on error
+        Toast.show({
+          type: 'error',
+          text1: 'Update Failed',
+          text2: 'Could not update task description.',
+          position: 'bottom',
+        });
+      }
+    } else if (!editDescription.trim()) {
+      setEditDescription(task.taskDescription); // revert to previous value if input is empty
+    }
+  };
+
   return (
     <ErrorBoundary>
       <Animated.View style={{ opacity: animatedOpacity, height: animatedHeight, overflow: 'hidden' }}>
@@ -537,7 +592,6 @@ const TaskItem: React.FC<TaskItemProps> = ({
                 style={styles.moreMenuItem}
                 onPress={() => {
                   setIsMoreMenuVisible(false);
-                  startEditing(); // <-- use this instead of setIsEditing(true)
                 }}
               >
                 <Ionicons name="pencil-outline" size={18} color="#333" style={{ marginRight: 8 }} />
@@ -601,94 +655,65 @@ const TaskItem: React.FC<TaskItemProps> = ({
                       <ActivityIndicator size="small" color="#4CAF50" />
                     </View>
                   )}
-                  {isEditing ? (
-                    <>
-                      <View style={styles.header}>
-                        <TextInput
-                          style={[styles.title, { color: '#000', borderBottomWidth: 1, borderColor: '#E0E0E0' }]}
-                          value={editName}
-                          onChangeText={setEditName}
-                          placeholder="Task Name"
-                          autoFocus
-                          editable={true} // Ensure editable
-                        />
-                      </View>
+                  {/* Always editable title and description */}
+                  <View style={styles.header}>
+                    <TextInput
+                      style={[styles.title, { color: '#000' }]} // removed borderBottomWidth and borderColor
+                      value={editName}
+                      onChangeText={setEditName}
+                      onBlur={handleNameBlur}
+                      placeholder="Task Name"
+                      editable={!isOffline}
+                    />
+                    <Ionicons
+                      name={task.priority === 'high' ? 'alert-circle' : task.priority === 'medium' ? 'alert' : 'checkmark-circle'}
+                      size={16}
+                      color={priorityColor}
+                    />
+                    {/* More button (three dots) */}
+                    {!isSelectionModeActive && (
+                      <TouchableOpacity
+                        onPress={() => setIsMoreMenuVisible(true)}
+                        style={{ marginLeft: 8, padding: 2 }}
+                        accessibilityLabel="More Options"
+                      >
+                        <Ionicons name="ellipsis-horizontal" size={20} color="#888" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <TextInput
+                    style={[styles.description, { color: '#000' }]} // removed borderBottomWidth and borderColor
+                    value={editDescription}
+                    onChangeText={setEditDescription}
+                    onBlur={handleDescriptionBlur}
+                    placeholder="Task Description"
+                    multiline
+                    editable={!isOffline}
+                  />
+                  <Text style={styles.category} numberOfLines={1} ellipsizeMode="tail">
+                    {`#${task.category}`}
+                  </Text>
+                  {/* Due date with gray shadow box */}
+                  <View style={styles.dueDateShadowBox}>
+                    <View style={styles.dueDateContainer}>
+                      <Ionicons name="time-outline" size={14} color={isOverdue ? '#000' : '#000'} />
                       <TextInput
-                        style={[styles.description, { color: '#000', borderBottomWidth: 1, borderColor: '#E0E0E0' }]}
-                        value={editDescription}
-                        onChangeText={setEditDescription}
-                        placeholder="Task Description"
-                        multiline
-                        editable={true} // Ensure editable
+                        style={[styles.dueDate, { color: isOverdue ? '#000' : '#000', minWidth: 160 }]}
+                        value={displayDate}
+                        onChangeText={setEditDeadline}
+                        onBlur={handleDeadlineBlur}
+                        placeholder="Apr 27, 2024 02:30 PM"
+                        editable={!isOffline}
                       />
-                      <View style={{ flexDirection: 'row', marginTop: 8 }}>
-                        <TouchableOpacity onPress={handleSaveEdit} style={[styles.actionButton, { backgroundColor: '#4CAF50', borderRadius: 6 }]}>
-                          <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Save</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={handleCancelEdit} style={[styles.actionButton, { backgroundColor: '#E0E0E0', borderRadius: 6, marginLeft: 10 }]}>
-                          <Text style={{ color: '#333', fontWeight: 'bold' }}>Cancel</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </>
-                  ) : (
-                    <>
-                      <View style={styles.header}>
-                        <Text style={[styles.title, { color: '#000' }]} numberOfLines={1} ellipsizeMode="tail">
-                          {task.taskName}
-                        </Text>
-                        <Ionicons
-                          name={task.priority === 'high' ? 'alert-circle' : task.priority === 'medium' ? 'alert' : 'checkmark-circle'}
-                          size={16}
-                          color={priorityColor}
-                        />
-                        {/* More button (three dots) */}
-                        {!isSelectionModeActive && (
-                          <TouchableOpacity
-                            onPress={() => setIsMoreMenuVisible(true)}
-                            style={{ marginLeft: 8, padding: 2 }}
-                            accessibilityLabel="More Options"
-                          >
-                            <Ionicons name="ellipsis-horizontal" size={20} color="#888" />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                      <Text style={styles.description} numberOfLines={2} ellipsizeMode="tail">
-                        {task.taskDescription}
+                    </View>
+                  </View>
+                  {/* Subtask count only, fetched from API, hidden if 0 */}
+                  {subtaskCount > 0 && (
+                    <View style={styles.subtasksContainer}>
+                      <Text style={{ fontWeight: 'bold', fontSize: 15 }}>
+                        {subtaskCount} subtask{subtaskCount === 1 ? '' : 's'}
                       </Text>
-                      <Text style={styles.category} numberOfLines={1} ellipsizeMode="tail">
-                        {`#${task.category}`}
-                      </Text>
-                      <View style={styles.dueDateContainer}>
-                        <Ionicons name="time-outline" size={14} color={isOverdue ? '#000' : '#000'} />
-                        <Text style={[styles.dueDate, { color: isOverdue ? '#000' : '#000' }]}>
-                          Due: {task.deadline ? formattedDueDate : 'No due date'}
-                        </Text>
-                      </View>
-                      {/* Subtasks */}
-                      {subtasks && subtasks.length > 0 && (
-                        <View style={styles.subtasksContainer}>
-                          {subtasks.map((subtask) => (
-                            <SubtaskRow key={`subtask-${subtask.id}`} subtask={subtask} />
-                          ))}
-                        </View>
-                      )}
-                      {/* Add new subtask */}
-                      {!isEditing && (
-                        <View style={styles.addSubtaskRow}>
-                          <TextInput
-                            style={styles.subtaskText}
-                            value={newSubtaskTitle}
-                            onChangeText={setNewSubtaskTitle}
-                            placeholder="Add subtask..."
-                            onSubmitEditing={handleAddSubtask}
-                            returnKeyType="done"
-                          />
-                          <TouchableOpacity onPress={handleAddSubtask} style={styles.addSubtaskButton}>
-                            <Ionicons name="add-circle-outline" size={22} color="#4CAF50" />
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                    </>
+                    </View>
                   )}
                   {isOffline && (
                     <View style={{ padding: 8, backgroundColor: '#ff9800', borderRadius: 6, marginBottom: 6 }}>
@@ -821,6 +846,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: 4,
     opacity: 0.8,
+  },
+  dueDateShadowBox: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 8,
+    marginBottom: 4,
+    shadowColor: '#888',
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+    alignSelf: 'flex-end',
+    minWidth: 180,
   },
   actionsContainer: {
     flexDirection: 'row',
