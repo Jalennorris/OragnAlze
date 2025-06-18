@@ -10,7 +10,8 @@ import {
   TextInput,
   Animated,
   Easing,
-  ScrollView
+  ScrollView,
+  Modal
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
@@ -20,15 +21,21 @@ import Header from '@/components/header';
 import NavBar from '@/components/Navbar';
 import { format } from 'date-fns';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Swipeable } from 'react-native-gesture-handler';
 
 interface Task {
   taskId: string;
   title: string;
   description: string;
-  dueDate: string;      // formatted for display
   dueDateISO: string;   // ISO string for Date operations
   completed: boolean;
   priority: 'low' | 'medium' | 'high';
+}
+
+interface Subtask {
+  id: string; // changed from subtask_id to id
+  title: string;
+  completed: boolean;
 }
 
 const TaskDetail: React.FC = () => {
@@ -42,10 +49,17 @@ const TaskDetail: React.FC = () => {
   const [editedTitle, setEditedTitle] = useState('');
   const [editedDescription, setEditedDescription] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [slideAnim] = useState(new Animated.Value(300));
+  const [slideAnim] = useState(new Animated.Value(300)); // <-- add this line
   const [editedDueDate, setEditedDueDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [editedPriority, setEditedPriority] = useState<Task['priority']>('low');
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [addingSubtask, setAddingSubtask] = useState(false);
+  const [subtaskModalVisible, setSubtaskModalVisible] = useState(false);
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [subtasksLoading, setSubtasksLoading] = useState(true);
+  const [showSubtasksSheet, setShowSubtasksSheet] = useState(false);
+  const [selectedSubtask, setSelectedSubtask] = useState<Subtask | null>(null);
 
   // Animation effects
   useEffect(() => {
@@ -121,6 +135,22 @@ const TaskDetail: React.FC = () => {
     }
   }, [task]);
 
+  const fetchSubtasks = async () => {
+    try {
+      setSubtasksLoading(true);
+      const response = await axios.get(`http://localhost:8080/api/subtasks/task/${taskId}`);
+      setSubtasks(response.data || []);
+    } catch (error) {
+      setSubtasks([]);
+    } finally {
+      setSubtasksLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSubtasks();
+  }, [taskId]);
+
   const handleSaveEdit = async () => {
     if (task) {
       try {
@@ -134,6 +164,7 @@ const TaskDetail: React.FC = () => {
 
         const updatedTask = { 
           ...task, 
+          
           title: editedTitle, 
           description: editedDescription,
           dueDate: format(new Date(newDueDateISO), 'MMM dd, yyyy hh:mm a'),
@@ -246,6 +277,88 @@ const TaskDetail: React.FC = () => {
     );
   };
 
+  const handleAddSubtask = async () => {
+    if (!newSubtaskTitle.trim()) return;
+    try {
+      setAddingSubtask(true);
+      await axios.post('http://localhost:8080/api/subtasks', {
+        taskId: taskId,
+        title: newSubtaskTitle.trim(),
+        description: "", // add description field
+        completed: false // add completed field
+      });
+      setNewSubtaskTitle('');
+      setSubtaskModalVisible(false);
+      Alert.alert('Success', 'Subtask created!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add subtask.');
+    } finally {
+      setAddingSubtask(false);
+    }
+  };
+
+  const handleToggleSubtaskCompletion = async (subtask: Subtask) => {
+    console.log('handleToggleSubtaskCompletion called with:', subtask);
+    if (!subtask.id) {
+      console.error('Subtask ID is missing:', subtask);
+      Alert.alert('Error', 'Subtask ID is missing.');
+      return;
+    }
+    try {
+      const url = `http://localhost:8080/api/subtasks/${subtask.id}`;
+      const payload = {
+        completed: !subtask.completed ? true : false,
+      };
+      console.log('PATCH URL:', url);
+      console.log('PATCH payload:', payload);
+
+      const response = await axios.patch(url, payload);
+      console.log('PATCH response:', response?.data);
+
+      setSubtasks((prev) => {
+        const updated = prev.map((s) =>
+          s.id === subtask.id ? { ...s, completed: !s.completed } : s
+        );
+        console.log('Updated subtasks after toggle:', updated);
+        return updated;
+      });
+    } catch (error: any) {
+      console.error('Failed to update subtask status:', error, error?.response?.data);
+      Alert.alert('Error', 'Failed to update subtask status.');
+    }
+  };
+
+  // Add a handler to use the subtask_id from the selected subtask
+  const handleSubtaskItemPress = (subtask: Subtask) => {
+    console.log('Subtask clicked, id:', subtask.id);
+    Alert.alert('Subtask ID', subtask.id);
+    setSelectedSubtask(subtask);
+  };
+
+  const handleDeleteSubtask = async (subtask: Subtask) => {
+    Alert.alert(
+      'Delete Subtask',
+      'Are you sure you want to delete this subtask?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await axios.delete(`http://localhost:8080/api/subtasks/${subtask.id}`);
+              fetchSubtasks();
+              setSelectedSubtask(null);
+              Alert.alert('Deleted', 'Subtask deleted.');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete subtask.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -271,6 +384,34 @@ const TaskDetail: React.FC = () => {
       <View style={styles.container}>
         <Header />
         
+        {/* Show My Task Button */}
+        <View style={{ padding: 16, paddingBottom: 0 }}>
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#03A9F4',
+              borderRadius: 8,
+              padding: 12,
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              marginBottom: 8,
+            }}
+            onPress={() => {
+              if (task) {
+                Alert.alert(
+                  'My Task',
+                  `Title: ${task.title}\n\nDescription: ${task.description}`
+                );
+              }
+            }}
+          >
+            <Ionicons name="eye-outline" size={20} color="#fff" />
+            <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>
+              Show My Task
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <Animated.View 
           style={[
             styles.taskContainer,
@@ -421,6 +562,223 @@ const TaskDetail: React.FC = () => {
                   </Text>
                 </View>
               </View>
+
+              {/* Subtask Creation Modal Trigger */}
+              <View style={{ marginTop: 24 }}>
+                <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 8, color: '#333' }}>
+                  Create Subtask
+                </Text>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#6200EE',
+                    borderRadius: 8,
+                    padding: 12,
+                    alignItems: 'center',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    marginTop: 8,
+                  }}
+                  onPress={() => setSubtaskModalVisible(true)}
+                >
+                  <Ionicons name="add" size={20} color="#fff" />
+                  <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>
+                    New Subtask
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Subtask Creation Modal */}
+              <Modal
+                visible={subtaskModalVisible}
+                animationType="slide"
+                transparent
+                onRequestClose={() => setSubtaskModalVisible(false)}
+              >
+                <View style={{
+                  flex: 1,
+                  backgroundColor: 'rgba(0,0,0,0.3)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}>
+                  <View style={{
+                    backgroundColor: '#fff',
+                    borderRadius: 16,
+                    padding: 24,
+                    width: '85%',
+                    shadowColor: '#000',
+                    shadowOpacity: 0.2,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowRadius: 8,
+                    elevation: 8,
+                  }}>
+                    <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 16, color: '#333' }}>
+                      New Subtask
+                    </Text>
+                    <TextInput
+                      style={{
+                        borderWidth: 1,
+                        borderColor: '#ddd',
+                        borderRadius: 8,
+                        padding: 12,
+                        fontSize: 16,
+                        marginBottom: 16,
+                        backgroundColor: '#fafafa',
+                      }}
+                      placeholder="Subtask title..."
+                      value={newSubtaskTitle}
+                      onChangeText={setNewSubtaskTitle}
+                      editable={!addingSubtask}
+                    />
+                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: '#9E9E9E',
+                          borderRadius: 8,
+                          paddingVertical: 10,
+                          paddingHorizontal: 18,
+                          marginRight: 8,
+                        }}
+                        onPress={() => {
+                          setSubtaskModalVisible(false);
+                          setNewSubtaskTitle('');
+                        }}
+                        disabled={addingSubtask}
+                      >
+                        <Text style={{ color: '#fff', fontWeight: '600' }}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: '#6200EE',
+                          borderRadius: 8,
+                          paddingVertical: 10,
+                          paddingHorizontal: 18,
+                          opacity: addingSubtask || !newSubtaskTitle.trim() ? 0.7 : 1,
+                        }}
+                        onPress={handleAddSubtask}
+                        disabled={addingSubtask || !newSubtaskTitle.trim()}
+                      >
+                        <Text style={{ color: '#fff', fontWeight: '600' }}>Create</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
+
+              {/* Subtasks Section */}
+              <View style={styles.subtasksCard}>
+                <Text style={styles.subtasksTitle}>Subtasks</Text>
+                {subtasksLoading ? (
+                  <ActivityIndicator size="small" color="#6200EE" style={{ marginTop: 24 }} />
+                ) : subtasks.length === 0 ? (
+                  <Text style={{ color: '#888', textAlign: 'center', marginTop: 24 }}>No subtasks found.</Text>
+                ) : (
+                  <ScrollView style={{ maxHeight: 220 }}>
+                    {subtasks.map((s, i) => (
+                      <TouchableOpacity
+                        key={s.id}
+                        style={styles.subtaskItem}
+                        onPress={() => handleSubtaskItemPress(s)}
+                        onLongPress={() => handleDeleteSubtask(s)}
+                        activeOpacity={0.7}
+                      >
+                        <TouchableOpacity
+                          onPress={() => handleToggleSubtaskCompletion(s)}
+                          style={{ padding: 2 }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons
+                            name={s.completed ? 'checkmark-circle' : 'ellipse-outline'}
+                            size={22}
+                            color={s.completed ? '#4CAF50' : '#bbb'}
+                          />
+                        </TouchableOpacity>
+                        <View style={{ marginLeft: 14, flex: 1 }}>
+                          <Text style={{
+                            fontSize: 16,
+                            fontWeight: '600',
+                            color: s.completed ? '#aaa' : '#222',
+                            textDecorationLine: s.completed ? 'line-through' : 'none',
+                          }}>
+                            {s.title}
+                          </Text>
+                          {s.description ? (
+                            <Text style={{
+                              fontSize: 13,
+                              color: '#888',
+                              marginTop: 2,
+                            }}>
+                              {s.description}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+
+              {/* Subtask Description Modal */}
+              <Modal
+                visible={!!selectedSubtask}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setSelectedSubtask(null)}
+              >
+                <View style={{
+                  flex: 1,
+                  backgroundColor: 'rgba(0,0,0,0.25)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}>
+                  <View style={{
+                    backgroundColor: '#fff',
+                    borderRadius: 16,
+                    padding: 24,
+                    width: '85%',
+                    shadowColor: '#000',
+                    shadowOpacity: 0.2,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowRadius: 8,
+                    elevation: 8,
+                    alignItems: 'center',
+                  }}>
+                    <Ionicons
+                      name={selectedSubtask?.completed ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={32}
+                      color={selectedSubtask?.completed ? '#4CAF50' : '#bbb'}
+                      style={{ marginBottom: 12 }}
+                    />
+                    <Text style={{
+                      fontWeight: '700',
+                      fontSize: 20,
+                      color: '#222',
+                      marginBottom: 10,
+                      textAlign: 'center',
+                    }}>
+                      {selectedSubtask?.title}
+                    </Text>
+                    <Text style={{
+                      fontSize: 15,
+                      color: '#555',
+                      textAlign: 'center',
+                      marginBottom: 18,
+                    }}>
+                      {selectedSubtask?.description || 'No description.'}
+                    </Text>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#6200EE',
+                        borderRadius: 8,
+                        paddingVertical: 10,
+                        paddingHorizontal: 32,
+                      }}
+                      onPress={() => setSelectedSubtask(null)}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </Modal>
 
               {/* Action Buttons */}
               <View style={styles.buttonContainer}>
@@ -636,6 +994,37 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#F44336',
     textAlign: 'center',
+  },
+  subtasksCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 18,
+    marginTop: 24,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  subtasksTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 14,
+  },
+  subtaskItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f7f7f7',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 1,
   },
 });
 
