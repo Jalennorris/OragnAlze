@@ -21,7 +21,7 @@ import Header from '@/components/header';
 import NavBar from '@/components/Navbar';
 import { format } from 'date-fns';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Swipeable } from 'react-native-gesture-handler';
+import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 
 interface Task {
   taskId: string;
@@ -30,13 +30,30 @@ interface Task {
   dueDateISO: string;   // ISO string for Date operations
   completed: boolean;
   priority: 'low' | 'medium' | 'high';
+  status?: 'not started' | 'in progress' | 'completed'; // add status
+  category?: string; // add category
 }
 
 interface Subtask {
   id: string; // changed from subtask_id to id
   title: string;
   completed: boolean;
+  description?: string; // add optional description
 }
+
+const CATEGORY_OPTIONS = [
+  { name: 'Work', color: '#6a11cb' },
+  { name: 'Personal', color: '#ff9800' },
+  { name: 'Shopping', color: '#43a047' },
+  { name: 'Health', color: '#e91e63' },
+  { name: 'Other', color: '#607d8b' },
+  { name: 'Custom', color: '#888' },
+];
+
+const getCategoryColor = (category?: string) => {
+  const found = CATEGORY_OPTIONS.find(opt => opt.name.toLowerCase() === (category || '').toLowerCase());
+  return found ? found.color : '#888';
+};
 
 const TaskDetail: React.FC = () => {
   const navigation = useNavigation();
@@ -60,6 +77,12 @@ const TaskDetail: React.FC = () => {
   const [subtasksLoading, setSubtasksLoading] = useState(true);
   const [showSubtasksSheet, setShowSubtasksSheet] = useState(false);
   const [selectedSubtask, setSelectedSubtask] = useState<Subtask | null>(null);
+  const [editSubtaskTitle, setEditSubtaskTitle] = useState('');
+  const [editSubtaskDescription, setEditSubtaskDescription] = useState('');
+  const [editingSubtask, setEditingSubtask] = useState(false);
+  const [editedStatus, setEditedStatus] = useState<Task['status']>('not started');
+  const [editedCategory, setEditedCategory] = useState<string>('Other');
+  const [customCategory, setCustomCategory] = useState<string>('');
 
   // Animation effects
   useEffect(() => {
@@ -132,6 +155,9 @@ const TaskDetail: React.FC = () => {
       setEditedDescription(task.description);
       setEditedDueDate(task.dueDateISO ? new Date(task.dueDateISO) : null);
       setEditedPriority(task.priority);
+      setEditedStatus(task.status || (task.completed ? 'completed' : 'not started'));
+      setEditedCategory(task.category || 'Other');
+      setCustomCategory('');
     }
   }, [task]);
 
@@ -155,11 +181,15 @@ const TaskDetail: React.FC = () => {
     if (task) {
       try {
         const newDueDateISO = editedDueDate ? editedDueDate.toISOString() : task.dueDateISO;
+        const categoryToSave = editedCategory === 'Custom' ? customCategory.trim() : editedCategory;
         await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}`, {
           taskName: editedTitle,
           taskDescription: editedDescription,
           deadline: newDueDateISO,
           priority: editedPriority,
+          status: editedStatus,
+          completed: editedStatus === 'completed', // keep completed in sync
+          category: categoryToSave,
         });
 
         const updatedTask = { 
@@ -170,6 +200,9 @@ const TaskDetail: React.FC = () => {
           dueDate: format(new Date(newDueDateISO), 'MMM dd, yyyy hh:mm a'),
           dueDateISO: newDueDateISO,
           priority: editedPriority,
+          status: editedStatus,
+          completed: editedStatus === 'completed',
+          category: categoryToSave,
         };
         setTask(updatedTask);
         await saveTaskToStorage(updatedTask);
@@ -290,6 +323,7 @@ const TaskDetail: React.FC = () => {
       setNewSubtaskTitle('');
       setSubtaskModalVisible(false);
       Alert.alert('Success', 'Subtask created!');
+      fetchSubtasks(); // <-- ensure subtasks are refreshed after creation
     } catch (error) {
       Alert.alert('Error', 'Failed to add subtask.');
     } finally {
@@ -330,9 +364,31 @@ const TaskDetail: React.FC = () => {
 
   // Add a handler to use the subtask_id from the selected subtask
   const handleSubtaskItemPress = (subtask: Subtask) => {
-    console.log('Subtask clicked, id:', subtask.id);
-    Alert.alert('Subtask ID', subtask.id);
+    // Removed Alert.alert to prevent crash when opening modal
     setSelectedSubtask(subtask);
+    setEditSubtaskTitle(subtask.title);
+    setEditSubtaskDescription(subtask.description || '');
+    setEditingSubtask(false);
+  };
+
+  const handleEditSubtask = () => {
+    setEditingSubtask(true);
+  };
+
+  const handleSaveSubtaskEdit = async () => {
+    if (!selectedSubtask) return;
+    try {
+      await axios.patch(`http://localhost:8080/api/subtasks/${selectedSubtask.id}`, {
+        title: editSubtaskTitle,
+        description: editSubtaskDescription,
+      });
+      setEditingSubtask(false);
+      setSelectedSubtask(null);
+      fetchSubtasks();
+      Alert.alert('Success', 'Subtask updated!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update subtask.');
+    }
   };
 
   const handleDeleteSubtask = async (subtask: Subtask) => {
@@ -349,7 +405,7 @@ const TaskDetail: React.FC = () => {
               await axios.delete(`http://localhost:8080/api/subtasks/${subtask.id}`);
               fetchSubtasks();
               setSelectedSubtask(null);
-              Alert.alert('Deleted', 'Subtask deleted.');
+              // No alert, no button needed
             } catch (error) {
               Alert.alert('Error', 'Failed to delete subtask.');
             }
@@ -358,6 +414,49 @@ const TaskDetail: React.FC = () => {
       ]
     );
   };
+
+  // Render left actions for subtask completion
+  const renderLeftActions = (subtask: Subtask) => (
+    <TouchableOpacity
+      style={{
+        backgroundColor: subtask.completed ? '#FFC107' : '#4CAF50',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 80,
+        height: '100%',
+        borderTopLeftRadius: 10,
+        borderBottomLeftRadius: 10,
+      }}
+      onPress={() => handleToggleSubtaskCompletion(subtask)}
+    >
+      <Ionicons
+        name={subtask.completed ? 'refresh-outline' : 'checkmark-outline'}
+        size={24}
+        color="#fff"
+      />
+      <Text style={{ color: '#fff', fontWeight: 'bold', marginTop: 4 }}>
+        {subtask.completed ? 'Undo' : 'Complete'}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const renderRightActions = (subtask: Subtask) => (
+    <TouchableOpacity
+      style={{
+        backgroundColor: '#F44336',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 80,
+        height: '100%',
+        borderTopRightRadius: 10,
+        borderBottomRightRadius: 10,
+      }}
+      onPress={() => handleDeleteSubtask(subtask)}
+    >
+      <Ionicons name="trash-outline" size={24} color="#fff" />
+      <Text style={{ color: '#fff', fontWeight: 'bold', marginTop: 4 }}>Delete</Text>
+    </TouchableOpacity>
+  );
 
   if (loading) {
     return (
@@ -380,464 +479,645 @@ const TaskDetail: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Header />
-        
-        {/* Show My Task Button */}
-        <View style={{ padding: 16, paddingBottom: 0 }}>
-          <TouchableOpacity
-            style={{
-              backgroundColor: '#03A9F4',
-              borderRadius: 8,
-              padding: 12,
-              alignItems: 'center',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              marginBottom: 8,
-            }}
-            onPress={() => {
-              if (task) {
-                Alert.alert(
-                  'My Task',
-                  `Title: ${task.title}\n\nDescription: ${task.description}`
-                );
-              }
-            }}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <Header />
+          
+          {/* Removed the Show My Task button */}
+
+          <Animated.View 
+            style={[
+              styles.taskContainer,
+              { opacity: fadeAnim, transform: [{ translateX: slideAnim }] }
+            ]}
           >
-            <Ionicons name="eye-outline" size={20} color="#fff" />
-            <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>
-              Show My Task
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <Animated.View 
-          style={[
-            styles.taskContainer,
-            { opacity: fadeAnim, transform: [{ translateX: slideAnim }] }
-          ]}
-        >
-          <ScrollView contentContainerStyle={styles.scrollContainer}>
-            <View style={styles.card}>
-              {/* Header with back button */}
-              <View style={styles.header}>
-                <TouchableOpacity
-                  style={styles.backButton}
-                  onPress={() => navigation.goBack()}
-                >
-                  <Ionicons name="arrow-back" size={24} color="#6200EE" />
-                  <Text style={styles.backButtonText}>Back</Text>
-                </TouchableOpacity>
-                
-                <View style={styles.priorityBadge}>
-                  <Ionicons 
-                    name={priorityIcons[task.priority]} 
-                    size={16} 
-                    color={priorityColors[task.priority]} 
-                  />
-                  <Text style={[styles.priorityText, { color: priorityColors[task.priority] }]}>
-                    {task.priority.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Task Title */}
-              {isEditing ? (
-                <TextInput
-                  style={[styles.input, styles.titleInput]}
-                  value={editedTitle}
-                  onChangeText={setEditedTitle}
-                  placeholder="Task Title"
-                  placeholderTextColor="#999"
-                />
-              ) : (
-                <Text style={styles.title}>{task.title}</Text>
-              )}
-
-              {/* Priority Picker in edit mode */}
-              {isEditing && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{ fontWeight: '600', marginBottom: 8, color: '#333' }}>Priority:</Text>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    {(['low', 'medium', 'high'] as Task['priority'][]).map((level) => (
-                      <TouchableOpacity
-                        key={level}
-                        style={{
-                          flex: 1,
-                          marginHorizontal: 4,
-                          paddingVertical: 10,
-                          borderRadius: 8,
-                          backgroundColor: editedPriority === level ? priorityColors[level] : '#eee',
-                          alignItems: 'center',
-                          flexDirection: 'row',
-                          justifyContent: 'center',
-                        }}
-                        onPress={() => setEditedPriority(level)}
-                      >
-                        <Ionicons
-                          name={priorityIcons[level]}
-                          size={18}
-                          color={editedPriority === level ? '#fff' : priorityColors[level]}
-                          style={{ marginRight: 6 }}
-                        />
-                        <Text style={{
-                          color: editedPriority === level ? '#fff' : priorityColors[level],
-                          fontWeight: '600',
-                          fontSize: 14,
-                        }}>
-                          {level.charAt(0).toUpperCase() + level.slice(1)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+            <ScrollView contentContainerStyle={styles.scrollContainer}>
+              <View style={styles.card}>
+                {/* Header with back button */}
+                <View style={styles.header}>
+                  <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => navigation.goBack()}
+                  >
+                    <Ionicons name="arrow-back" size={24} color="#6200EE" />
+                    <Text style={styles.backButtonText}>Back</Text>
+                  </TouchableOpacity>
+                  
+                  <View style={styles.priorityBadge}>
+                    <Ionicons 
+                      name={priorityIcons[task.priority]} 
+                      size={16} 
+                      color={priorityColors[task.priority]} 
+                    />
+                    <Text style={[styles.priorityText, { color: priorityColors[task.priority] }]}>
+                      {task.priority.toUpperCase()}
+                    </Text>
                   </View>
                 </View>
-              )}
 
-              {/* Divider */}
-              <View style={styles.divider} />
-
-              {/* Task Description */}
-              {isEditing ? (
-                <TextInput
-                  style={[styles.input, styles.descriptionInput]}
-                  value={editedDescription}
-                  onChangeText={setEditedDescription}
-                  placeholder="Task Description"
-                  multiline
-                  placeholderTextColor="#999"
-                />
-              ) : (
-                <Text style={styles.description}>{task.description}</Text>
-              )}
-
-              {/* Due Date Edit */}
-              {isEditing && (
-                <View style={{ marginBottom: 16 }}>
-                  <TouchableOpacity
-                    style={[styles.button, { backgroundColor: '#03A9F4', marginBottom: 0 }]}
-                    onPress={() => setShowDatePicker(true)}
-                  >
-                    <Ionicons name="calendar-outline" size={20} color="#fff" />
-                    <Text style={styles.buttonText}>Edit Due Date</Text>
-                  </TouchableOpacity>
-                  <Text style={{ marginTop: 8, color: '#333', textAlign: 'center' }}>
-                    {editedDueDate
-                      ? format(editedDueDate, 'MMM dd, yyyy hh:mm a')
-                      : ''}
-                  </Text>
-                  {showDatePicker && (
-                    <DateTimePicker
-                      value={editedDueDate || new Date()}
-                      mode="datetime"
-                      display="default"
-                      onChange={(_, selectedDate) => {
-                        setShowDatePicker(false);
-                        if (selectedDate) setEditedDueDate(selectedDate);
-                      }}
-                    />
-                  )}
-                </View>
-              )}
-
-              {/* Task Details */}
-              <View style={styles.detailsContainer}>
-                <View style={styles.detailRow}>
-                  <Ionicons name="calendar-outline" size={20} color="#6200EE" />
-                  <Text style={styles.detailText}>
-                    Due: {isEditing && editedDueDate
-                      ? format(editedDueDate, 'MMM dd, yyyy hh:mm a')
-                      : task.dueDate}
-                  </Text>
-                </View>
-                
-                <View style={styles.detailRow}>
-                  <Ionicons
-                    name={task.completed ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={20}
-                    color={task.completed ? '#4CAF50' : '#999'}
+                {/* Task Title */}
+                {isEditing ? (
+                  <TextInput
+                    style={[styles.input, styles.titleInput]}
+                    value={editedTitle}
+                    onChangeText={setEditedTitle}
+                    placeholder="Task Title"
+                    placeholderTextColor="#999"
                   />
-                  <Text style={styles.detailText}>
-                    Status: {task.completed ? 'Completed' : 'Pending'}
-                  </Text>
-                </View>
-              </View>
+                ) : (
+                  <Text style={styles.title}>{task.title}</Text>
+                )}
 
-              {/* Subtask Creation Modal Trigger */}
-              <View style={{ marginTop: 24 }}>
-                <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 8, color: '#333' }}>
-                  Create Subtask
-                </Text>
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: '#6200EE',
-                    borderRadius: 8,
-                    padding: 12,
-                    alignItems: 'center',
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    marginTop: 8,
-                  }}
-                  onPress={() => setSubtaskModalVisible(true)}
-                >
-                  <Ionicons name="add" size={20} color="#fff" />
-                  <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>
-                    New Subtask
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                {/* Category Picker in edit mode */}
+                {isEditing && (
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontWeight: '600', marginBottom: 8, color: '#333' }}>Category:</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
+                      {CATEGORY_OPTIONS.map(opt => (
+                        <TouchableOpacity
+                          key={opt.name}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: editedCategory === opt.name ? opt.color : '#eee',
+                            borderRadius: 16,
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            marginRight: 8,
+                            marginBottom: 8,
+                          }}
+                          onPress={() => {
+                            setEditedCategory(opt.name);
+                            if (opt.name !== 'Custom') setCustomCategory('');
+                          }}
+                        >
+                          <Text style={{
+                            color: editedCategory === opt.name ? '#fff' : opt.color,
+                            fontWeight: '700',
+                            fontSize: 14,
+                          }}>
+                            #{opt.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {editedCategory === 'Custom' && (
+                      <TextInput
+                        style={{
+                          borderWidth: 1,
+                          borderColor: '#ddd',
+                          borderRadius: 8,
+                          padding: 10,
+                          fontSize: 15,
+                          marginTop: 4,
+                          backgroundColor: '#fafafa',
+                        }}
+                        placeholder="Custom category..."
+                        value={customCategory}
+                        onChangeText={setCustomCategory}
+                      />
+                    )}
+                  </View>
+                )}
 
-              {/* Subtask Creation Modal */}
-              <Modal
-                visible={subtaskModalVisible}
-                animationType="slide"
-                transparent
-                onRequestClose={() => setSubtaskModalVisible(false)}
-              >
-                <View style={{
-                  flex: 1,
-                  backgroundColor: 'rgba(0,0,0,0.3)',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}>
-                  <View style={{
-                    backgroundColor: '#fff',
-                    borderRadius: 16,
-                    padding: 24,
-                    width: '85%',
-                    shadowColor: '#000',
-                    shadowOpacity: 0.2,
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowRadius: 8,
-                    elevation: 8,
-                  }}>
-                    <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 16, color: '#333' }}>
-                      New Subtask
-                    </Text>
-                    <TextInput
+                {/* Category display in view mode */}
+                {!isEditing && task.category && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <Text
                       style={{
-                        borderWidth: 1,
-                        borderColor: '#ddd',
-                        borderRadius: 8,
-                        padding: 12,
-                        fontSize: 16,
-                        marginBottom: 16,
-                        backgroundColor: '#fafafa',
+                        color: '#fff',
+                        backgroundColor: getCategoryColor(task.category),
+                        borderRadius: 14,
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        fontWeight: '700',
+                        fontSize: 13,
+                        marginRight: 8,
                       }}
-                      placeholder="Subtask title..."
-                      value={newSubtaskTitle}
-                      onChangeText={setNewSubtaskTitle}
-                      editable={!addingSubtask}
-                    />
-                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-                      <TouchableOpacity
-                        style={{
-                          backgroundColor: '#9E9E9E',
-                          borderRadius: 8,
-                          paddingVertical: 10,
-                          paddingHorizontal: 18,
-                          marginRight: 8,
-                        }}
-                        onPress={() => {
-                          setSubtaskModalVisible(false);
-                          setNewSubtaskTitle('');
-                        }}
-                        disabled={addingSubtask}
-                      >
-                        <Text style={{ color: '#fff', fontWeight: '600' }}>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={{
-                          backgroundColor: '#6200EE',
-                          borderRadius: 8,
-                          paddingVertical: 10,
-                          paddingHorizontal: 18,
-                          opacity: addingSubtask || !newSubtaskTitle.trim() ? 0.7 : 1,
-                        }}
-                        onPress={handleAddSubtask}
-                        disabled={addingSubtask || !newSubtaskTitle.trim()}
-                      >
-                        <Text style={{ color: '#fff', fontWeight: '600' }}>Create</Text>
-                      </TouchableOpacity>
+                    >
+                      #{task.category}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Status Picker in edit mode */}
+                {isEditing && (
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontWeight: '600', marginBottom: 8, color: '#333' }}>Status:</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      {(['not started', 'in progress', 'completed'] as Task['status'][]).map((status) => (
+                        <TouchableOpacity
+                          key={status}
+                          style={{
+                            flex: 1,
+                            marginHorizontal: 4,
+                            paddingVertical: 10,
+                            borderRadius: 8,
+                            backgroundColor: editedStatus === status ? '#03A9F4' : '#eee',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                          onPress={() => setEditedStatus(status)}
+                        >
+                          <Text style={{
+                            color: editedStatus === status ? '#fff' : '#03A9F4',
+                            fontWeight: '600',
+                            fontSize: 14,
+                            textTransform: 'capitalize',
+                          }}>
+                            {status}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
                     </View>
                   </View>
-                </View>
-              </Modal>
+                )}
 
-              {/* Subtasks Section */}
-              <View style={styles.subtasksCard}>
-                <Text style={styles.subtasksTitle}>Subtasks</Text>
-                {subtasksLoading ? (
-                  <ActivityIndicator size="small" color="#6200EE" style={{ marginTop: 24 }} />
-                ) : subtasks.length === 0 ? (
-                  <Text style={{ color: '#888', textAlign: 'center', marginTop: 24 }}>No subtasks found.</Text>
-                ) : (
-                  <ScrollView style={{ maxHeight: 220 }}>
-                    {subtasks.map((s, i) => (
-                      <TouchableOpacity
-                        key={s.id}
-                        style={styles.subtaskItem}
-                        onPress={() => handleSubtaskItemPress(s)}
-                        onLongPress={() => handleDeleteSubtask(s)}
-                        activeOpacity={0.7}
-                      >
+                {/* Priority Picker in edit mode */}
+                {isEditing && (
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontWeight: '600', marginBottom: 8, color: '#333' }}>Priority:</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      {(['low', 'medium', 'high'] as Task['priority'][]).map((level) => (
                         <TouchableOpacity
-                          onPress={() => handleToggleSubtaskCompletion(s)}
-                          style={{ padding: 2 }}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          key={level}
+                          style={{
+                            flex: 1,
+                            marginHorizontal: 4,
+                            paddingVertical: 10,
+                            borderRadius: 8,
+                            backgroundColor: editedPriority === level ? priorityColors[level] : '#eee',
+                            alignItems: 'center',
+                            flexDirection: 'row',
+                            justifyContent: 'center',
+                          }}
+                          onPress={() => setEditedPriority(level)}
                         >
                           <Ionicons
-                            name={s.completed ? 'checkmark-circle' : 'ellipse-outline'}
-                            size={22}
-                            color={s.completed ? '#4CAF50' : '#bbb'}
+                            name={priorityIcons[level]}
+                            size={18}
+                            color={editedPriority === level ? '#fff' : priorityColors[level]}
+                            style={{ marginRight: 6 }}
                           />
-                        </TouchableOpacity>
-                        <View style={{ marginLeft: 14, flex: 1 }}>
                           <Text style={{
-                            fontSize: 16,
+                            color: editedPriority === level ? '#fff' : priorityColors[level],
                             fontWeight: '600',
-                            color: s.completed ? '#aaa' : '#222',
-                            textDecorationLine: s.completed ? 'line-through' : 'none',
+                            fontSize: 14,
                           }}>
-                            {s.title}
+                            {level.charAt(0).toUpperCase() + level.slice(1)}
                           </Text>
-                          {s.description ? (
-                            <Text style={{
-                              fontSize: 13,
-                              color: '#888',
-                              marginTop: 2,
-                            }}>
-                              {s.description}
-                            </Text>
-                          ) : null}
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
                 )}
-              </View>
 
-              {/* Subtask Description Modal */}
-              <Modal
-                visible={!!selectedSubtask}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setSelectedSubtask(null)}
-              >
-                <View style={{
-                  flex: 1,
-                  backgroundColor: 'rgba(0,0,0,0.25)',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}>
-                  <View style={{
-                    backgroundColor: '#fff',
-                    borderRadius: 16,
-                    padding: 24,
-                    width: '85%',
-                    shadowColor: '#000',
-                    shadowOpacity: 0.2,
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowRadius: 8,
-                    elevation: 8,
-                    alignItems: 'center',
-                  }}>
-                    <Ionicons
-                      name={selectedSubtask?.completed ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={32}
-                      color={selectedSubtask?.completed ? '#4CAF50' : '#bbb'}
-                      style={{ marginBottom: 12 }}
-                    />
-                    <Text style={{
-                      fontWeight: '700',
-                      fontSize: 20,
-                      color: '#222',
-                      marginBottom: 10,
-                      textAlign: 'center',
-                    }}>
-                      {selectedSubtask?.title}
-                    </Text>
-                    <Text style={{
-                      fontSize: 15,
-                      color: '#555',
-                      textAlign: 'center',
-                      marginBottom: 18,
-                    }}>
-                      {selectedSubtask?.description || 'No description.'}
-                    </Text>
+                {/* Divider */}
+                <View style={styles.divider} />
+
+                {/* Task Description */}
+                {isEditing ? (
+                  <TextInput
+                    style={[styles.input, styles.descriptionInput]}
+                    value={editedDescription}
+                    onChangeText={setEditedDescription}
+                    placeholder="Task Description"
+                    multiline
+                    placeholderTextColor="#999"
+                  />
+                ) : (
+                  <Text style={styles.description}>{task.description}</Text>
+                )}
+
+                {/* Due Date Edit */}
+                {isEditing && (
+                  <View style={{ marginBottom: 16 }}>
                     <TouchableOpacity
-                      style={{
-                        backgroundColor: '#6200EE',
-                        borderRadius: 8,
-                        paddingVertical: 10,
-                        paddingHorizontal: 32,
-                      }}
-                      onPress={() => setSelectedSubtask(null)}
+                      style={[styles.button, { backgroundColor: '#03A9F4', marginBottom: 0 }]}
+                      onPress={() => setShowDatePicker(true)}
                     >
-                      <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Close</Text>
+                      <Ionicons name="calendar-outline" size={20} color="#fff" />
+                      <Text style={styles.buttonText}>Edit Due Date</Text>
                     </TouchableOpacity>
+                    <Text style={{ marginTop: 8, color: '#333', textAlign: 'center' }}>
+                      {editedDueDate
+                        ? format(editedDueDate, 'MMM dd, yyyy hh:mm a')
+                        : ''}
+                    </Text>
+                    {showDatePicker && (
+                      <DateTimePicker
+                        value={editedDueDate || new Date()}
+                        mode="datetime"
+                        display="default"
+                        onChange={(_, selectedDate) => {
+                          setShowDatePicker(false);
+                          if (selectedDate) setEditedDueDate(selectedDate);
+                        }}
+                      />
+                    )}
+                  </View>
+                )}
+
+                {/* Task Details */}
+                <View style={styles.detailsContainer}>
+                  <View style={styles.detailRow}>
+                    <Ionicons name="calendar-outline" size={20} color="#6200EE" />
+                    <Text style={styles.detailText}>
+                      Due: {isEditing && editedDueDate
+                        ? format(editedDueDate, 'MMM dd, yyyy hh:mm a')
+                        : task.dueDate}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.detailRow}>
+                    <Ionicons
+                      name={
+                        (task.status === 'completed' || task.completed)
+                          ? 'checkmark-circle'
+                          : task.status === 'in progress'
+                          ? 'time-outline'
+                          : 'ellipse-outline'
+                      }
+                      size={20}
+                      color={
+                        (task.status === 'completed' || task.completed)
+                          ? '#4CAF50'
+                          : task.status === 'in progress'
+                          ? '#FFC107'
+                          : '#999'
+                      }
+                    />
+                    <Text style={styles.detailText}>
+                      Status: {task.status ? task.status.charAt(0).toUpperCase() + task.status.slice(1) : (task.completed ? 'Completed' : 'Not Started')}
+                    </Text>
                   </View>
                 </View>
-              </Modal>
 
-              {/* Action Buttons */}
-              <View style={styles.buttonContainer}>
-                {isEditing ? (
-                  <>
-                    <TouchableOpacity
-                      style={[styles.button, styles.saveButton]}
-                      onPress={handleSaveEdit}
-                    >
-                      <Ionicons name="checkmark" size={20} color="#fff" />
-                      <Text style={styles.buttonText}>Save Changes</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.button, styles.cancelButton]}
-                      onPress={() => setIsEditing(false)}
-                    >
-                      <Ionicons name="close" size={20} color="#fff" />
-                      <Text style={styles.buttonText}>Cancel</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <TouchableOpacity
-                      style={[styles.button, styles.editButton]}
-                      onPress={() => setIsEditing(true)}
-                    >
-                      <Ionicons name="create-outline" size={20} color="#fff" />
-                      <Text style={styles.buttonText}>Edit Task</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.button, styles.completeButton]}
-                      onPress={handleToggleCompletion}
-                    >
-                      <Ionicons 
-                        name={task.completed ? 'refresh-outline' : 'checkmark-outline'} 
-                        size={20} 
-                        color="#fff" 
-                      />
-                      <Text style={styles.buttonText}>
-                        {task.completed ? 'Mark Pending' : 'Mark Complete'}
+                {/* Subtask Creation Modal Trigger */}
+                <View style={{ marginTop: 24 }}>
+                  <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 8, color: '#333' }}>
+                    Create Subtask
+                  </Text>
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#6200EE',
+                      borderRadius: 8,
+                      padding: 12,
+                      alignItems: 'center',
+                      flexDirection: 'row',
+                      justifyContent: 'center',
+                      marginTop: 8,
+                    }}
+                    onPress={() => setSubtaskModalVisible(true)}
+                  >
+                    <Ionicons name="add" size={20} color="#fff" />
+                    <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>
+                      New Subtask
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Subtask Creation Modal */}
+                <Modal
+                  visible={subtaskModalVisible}
+                  animationType="slide"
+                  transparent
+                  onRequestClose={() => setSubtaskModalVisible(false)}
+                >
+                  <View style={{
+                    flex: 1,
+                    backgroundColor: 'rgba(0,0,0,0.3)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}>
+                    <View style={{
+                      backgroundColor: '#fff',
+                      borderRadius: 16,
+                      padding: 24,
+                      width: '85%',
+                      shadowColor: '#000',
+                      shadowOpacity: 0.2,
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowRadius: 8,
+                      elevation: 8,
+                    }}>
+                      <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 16, color: '#333' }}>
+                        New Subtask
                       </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.button, styles.deleteButton]}
-                      onPress={handleDelete}
-                    >
-                      <Ionicons name="trash-outline" size={20} color="#fff" />
-                      <Text style={styles.buttonText}>Delete Task</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
+                      <TextInput
+                        style={{
+                          borderWidth: 1,
+                          borderColor: '#ddd',
+                          borderRadius: 8,
+                          padding: 12,
+                          fontSize: 16,
+                          marginBottom: 16,
+                          backgroundColor: '#fafafa',
+                        }}
+                        placeholder="Subtask title..."
+                        value={newSubtaskTitle}
+                        onChangeText={setNewSubtaskTitle}
+                        editable={!addingSubtask}
+                      />
+                      <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: '#9E9E9E',
+                            borderRadius: 8,
+                            paddingVertical: 10,
+                            paddingHorizontal: 18,
+                            marginRight: 8,
+                          }}
+                          onPress={() => {
+                            setSubtaskModalVisible(false);
+                            setNewSubtaskTitle('');
+                          }}
+                          disabled={addingSubtask}
+                        >
+                          <Text style={{ color: '#fff', fontWeight: '600' }}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: '#6200EE',
+                            borderRadius: 8,
+                            paddingVertical: 10,
+                            paddingHorizontal: 18,
+                            opacity: addingSubtask || !newSubtaskTitle.trim() ? 0.7 : 1,
+                          }}
+                          onPress={handleAddSubtask}
+                          disabled={addingSubtask || !newSubtaskTitle.trim()}
+                        >
+                          <Text style={{ color: '#fff', fontWeight: '600' }}>Create</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                </Modal>
+
+                {/* Subtasks Section */}
+                <View style={styles.subtasksCard}>
+                  <Text style={styles.subtasksTitle}>Subtasks</Text>
+                  {subtasksLoading ? (
+                    <ActivityIndicator size="small" color="#6200EE" style={{ marginTop: 24 }} />
+                  ) : subtasks.length === 0 ? (
+                    <Text style={{ color: '#888', textAlign: 'center', marginTop: 24 }}>No subtasks found.</Text>
+                  ) : (
+                    <ScrollView style={{ maxHeight: 220 }}>
+                      {subtasks.map((s, i) => (
+                        <Swipeable
+                          key={s.id}
+                          renderRightActions={() => renderRightActions(s)}
+                          renderLeftActions={() => renderLeftActions(s)}
+                          overshootRight={false}
+                          overshootLeft={false}
+                        >
+                          <TouchableOpacity
+                            style={styles.subtaskItem}
+                            onPress={() => handleSubtaskItemPress(s)}
+                            // Removed onLongPress for completion
+                            activeOpacity={0.7}
+                          >
+                            <View style={{ padding: 2 }}>
+                              <Ionicons
+                                name={s.completed ? 'checkmark-circle' : 'ellipse-outline'}
+                                size={22}
+                                color={s.completed ? '#4CAF50' : '#bbb'}
+                              />
+                            </View>
+                            <View style={{ marginLeft: 14, flex: 1 }}>
+                              <Text style={{
+                                fontSize: 16,
+                                fontWeight: '600',
+                                color: s.completed ? '#aaa' : '#222',
+                                textDecorationLine: s.completed ? 'line-through' : 'none',
+                              }}>
+                                {s.title}
+                              </Text>
+                              {s.description ? (
+                                <Text style={{
+                                  fontSize: 13,
+                                  color: '#888',
+                                  marginTop: 2,
+                                }}>
+                                  {s.description}
+                                </Text>
+                              ) : null}
+                            </View>
+                          </TouchableOpacity>
+                        </Swipeable>
+                      ))}
+                    </ScrollView>
+                  )}
+                </View>
+
+                {/* Subtask Description Modal */}
+                <Modal
+                  visible={!!selectedSubtask}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => {
+                    setSelectedSubtask(null);
+                    setEditingSubtask(false);
+                  }}
+                >
+                  <View style={{
+                    flex: 1,
+                    backgroundColor: 'rgba(0,0,0,0.25)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}>
+                    <View style={{
+                      backgroundColor: '#fff',
+                      borderRadius: 16,
+                      padding: 24,
+                      width: '85%',
+                      shadowColor: '#000',
+                      shadowOpacity: 0.2,
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowRadius: 8,
+                      elevation: 8,
+                      alignItems: 'center',
+                    }}>
+                      {selectedSubtask && (
+                        <>
+                          <Ionicons
+                            name={selectedSubtask.completed ? 'checkmark-circle' : 'ellipse-outline'}
+                            size={32}
+                            color={selectedSubtask.completed ? '#4CAF50' : '#bbb'}
+                            style={{ marginBottom: 12 }}
+                          />
+                          {editingSubtask ? (
+                            <>
+                              <TextInput
+                                style={{
+                                  fontWeight: '700',
+                                  fontSize: 20,
+                                  color: '#222',
+                                  marginBottom: 10,
+                                  textAlign: 'center',
+                                  borderWidth: 1,
+                                  borderColor: '#ddd',
+                                  borderRadius: 8,
+                                  padding: 8,
+                                  width: '100%',
+                                }}
+                                value={editSubtaskTitle}
+                                onChangeText={setEditSubtaskTitle}
+                                placeholder="Subtask Title"
+                              />
+                              <TextInput
+                                style={{
+                                  fontSize: 15,
+                                  color: '#555',
+                                  textAlign: 'center',
+                                  marginBottom: 18,
+                                  borderWidth: 1,
+                                  borderColor: '#ddd',
+                                  borderRadius: 8,
+                                  padding: 8,
+                                  width: '100%',
+                                  minHeight: 60,
+                                  textAlignVertical: 'top',
+                                }}
+                                value={editSubtaskDescription}
+                                onChangeText={setEditSubtaskDescription}
+                                placeholder="Subtask Description"
+                                multiline
+                              />
+                              <TouchableOpacity
+                                style={{
+                                  backgroundColor: '#4CAF50',
+                                  borderRadius: 8,
+                                  paddingVertical: 10,
+                                  paddingHorizontal: 32,
+                                  marginBottom: 10,
+                                }}
+                                onPress={handleSaveSubtaskEdit}
+                              >
+                                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Save</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={{
+                                  backgroundColor: '#9E9E9E',
+                                  borderRadius: 8,
+                                  paddingVertical: 10,
+                                  paddingHorizontal: 32,
+                                }}
+                                onPress={() => setEditingSubtask(false)}
+                              >
+                                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Cancel</Text>
+                              </TouchableOpacity>
+                            </>
+                          ) : (
+                            <>
+                              <Text style={{
+                                fontWeight: '700',
+                                fontSize: 20,
+                                color: '#222',
+                                marginBottom: 10,
+                                textAlign: 'center',
+                              }}>
+                                {selectedSubtask.title}
+                              </Text>
+                              <Text style={{
+                                fontSize: 15,
+                                color: '#555',
+                                textAlign: 'center',
+                                marginBottom: 18,
+                              }}>
+                                {selectedSubtask.description || 'No description.'}
+                              </Text>
+                              <TouchableOpacity
+                                style={{
+                                  backgroundColor: '#6200EE',
+                                  borderRadius: 8,
+                                  paddingVertical: 10,
+                                  paddingHorizontal: 32,
+                                  marginBottom: 10,
+                                }}
+                                onPress={handleEditSubtask}
+                              >
+                                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Edit</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={{
+                                  backgroundColor: '#9E9E9E',
+                                  borderRadius: 8,
+                                  paddingVertical: 10,
+                                  paddingHorizontal: 32,
+                                }}
+                                onPress={() => setSelectedSubtask(null)}
+                              >
+                                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Close</Text>
+                              </TouchableOpacity>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </View>
+                  </View>
+                </Modal>
+
+                {/* Action Buttons */}
+                <View style={styles.buttonContainer}>
+                  {isEditing ? (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.button, styles.saveButton]}
+                        onPress={handleSaveEdit}
+                      >
+                        <Ionicons name="checkmark" size={20} color="#fff" />
+                        <Text style={styles.buttonText}>Save Changes</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.button, styles.cancelButton]}
+                        onPress={() => setIsEditing(false)}
+                      >
+                        <Ionicons name="close" size={20} color="#fff" />
+                        <Text style={styles.buttonText}>Cancel</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.button, styles.editButton]}
+                        onPress={() => setIsEditing(true)}
+                      >
+                        <Ionicons name="create-outline" size={20} color="#fff" />
+                        <Text style={styles.buttonText}>Edit Task</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.button, styles.completeButton]}
+                        onPress={handleToggleCompletion}
+                      >
+                        <Ionicons 
+                          name={task.completed ? 'refresh-outline' : 'checkmark-outline'} 
+                          size={20} 
+                          color="#fff" 
+                        />
+                        <Text style={styles.buttonText}>
+                          {task.completed ? 'Mark Pending' : 'Mark Complete'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.button, styles.deleteButton]}
+                        onPress={handleDelete}
+                      >
+                        <Ionicons name="trash-outline" size={20} color="#fff" />
+                        <Text style={styles.buttonText}>Delete Task</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
               </View>
-            </View>
-          </ScrollView>
-        </Animated.View>
-        
-        <NavBar />
-      </View>
-    </SafeAreaView>
+            </ScrollView>
+          </Animated.View>
+          
+          <NavBar />
+        </View>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 };
 

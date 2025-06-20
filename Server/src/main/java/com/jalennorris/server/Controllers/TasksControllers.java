@@ -87,6 +87,28 @@ public class TasksControllers {
         }
     }
 
+    // Endpoint to create a batch of tasks
+    @PostMapping("/batch")
+    public CompletableFuture<ResponseEntity<List<TasksDTO>>> createTasksBatch(@RequestBody List<TasksDTO> newTasks) {
+        logger.info("Received POST request to create a batch of {} tasks", newTasks != null ? newTasks.size() : 0);
+        try {
+            List<TasksModels> taskEntities = newTasks.stream()
+                    .map(this::convertToEntity)
+                    .toList();
+            for (TasksModels task : taskEntities) {
+                validateTask(task);
+            }
+            return taskService.createTasksBatch(taskEntities)
+                    .thenApply(tasks -> ResponseEntity.status(201).body(tasks));
+        } catch (IllegalArgumentException e) {
+            logger.error("Validation failed for batch: {}", e.getMessage());
+            return CompletableFuture.completedFuture(ResponseEntity.badRequest().body(null));
+        } catch (Exception e) {
+            logger.error("Failed to create batch of tasks: {}", e.getMessage());
+            return CompletableFuture.completedFuture(ResponseEntity.status(500).body(null));
+        }
+    }
+
     // Endpoint to update a task partially
     @PatchMapping("/{id}")
     public CompletableFuture<ResponseEntity<TasksDTO>> updateTask(@PathVariable long id, @RequestBody Map<String, Object> updatedTask) {

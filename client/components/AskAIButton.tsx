@@ -20,6 +20,7 @@ import Modal from 'react-native-modal';
 import OpenAI from 'openai';
 // import * Haptics from 'expo-haptics'; // Optional: For haptic feedback
 import config from '@/src/config';
+import axios from 'axios';
 
 // --- Constants ---
 const MIN_DAYS = 1;
@@ -29,6 +30,8 @@ const ANIMATION_DURATION_SHORT = 300;
 const ANIMATION_DURATION_MEDIUM = 500;
 const API_MODEL = "microsoft/mai-ds-r1:free"; // Or choose another model like "microsoft/phi-3-medium-128k:free", "google/gemma-2-9b-it:free"
 // const API_MODEL = "openai/gpt-3.5-turbo"; // Example if using OpenAI models via OpenRouter
+
+const USER_ID = 95; // Replace with actual user ID from auth/context if available
 
 // --- Types ---
 interface Task {
@@ -47,6 +50,34 @@ const generateUniqueId = () => `task_${Date.now()}_${Math.random().toString(36).
 
 // Generate numbers for day selector
 const dayOptions = Array.from({ length: MAX_DAYS - MIN_DAYS + 1 }, (_, i) => MIN_DAYS + i);
+
+// Helper to convert AI tasks to API payload
+const isIsoDate = (str: string) => {
+  // Simple ISO-8601 check
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(str);
+};
+
+const mapTasksToApiFormat = (tasks: Task[]): any[] => {
+  return tasks.map((task) => {
+    let deadline = task.suggestedDeadline;
+    if (!deadline || !isIsoDate(deadline)) {
+      deadline = new Date().toISOString();
+    }
+    return {
+      userId: USER_ID,
+      taskName: task.text,
+      taskDescription: task.text, // Or use a separate description if available
+      priority: "Medium", // Or infer from AI if you add that field
+      estimatedDuration: "1 hour", // Or infer from AI if you add that field
+      deadline,
+      status: "Not Started",
+      completed: false,
+      category: "General", // Or infer from AI if you add that field
+      notes: "",
+      createdAt: new Date().toISOString(),
+    };
+  });
+};
 
 const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
   // --- Refs ---
@@ -222,16 +253,24 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
   };
 
   // --- Task Management Handlers ---
-  const handleAcceptAllTasks = useCallback(() => {
+  const handleAcceptAllTasks = useCallback(async () => {
     if (suggestedTasks.length === 0) {
       Alert.alert('No Tasks', 'There are no tasks to accept.');
       return;
     }
-    // Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); // Optional
-    onTaskAccept(suggestedTasks); // Pass the final list
-    resetModalState(false); // Reset state but keep modal open initially for feedback
-    setIsModalVisible(false); // Close modal after acceptance
-  }, [suggestedTasks, onTaskAccept]);
+    try {
+      const apiTasks = mapTasksToApiFormat(suggestedTasks);
+      await axios.post('http://localhost:8080/api/tasks/batch', apiTasks, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      Alert.alert('Success', 'Tasks created successfully!');
+      onTaskAccept(suggestedTasks); // Pass the final list
+      resetModalState(false);
+      setIsModalVisible(false);
+    } catch (error: any) {
+      Alert.alert('Error', error?.response?.data?.message || error.message || 'Failed to save tasks.');
+    }
+  }, [suggestedTasks, onTaskAccept, resetModalState]);
 
   const handleStartEditing = useCallback((task: Task) => {
     setEditingTaskId(task.id);
@@ -533,7 +572,7 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
                         onPress={handleStopGeneration}
                         accessibilityLabel="Stop AI generation"
                       >
-                        <Ionicons name="stop" size={20} color="#FFF" />
+                        <Ionicons name="stop-circle" size={24} color="#FFF" />
                       </TouchableOpacity>
                     ) : (
                       // Generate Button

@@ -13,5 +13,6 @@ public interface TasksRepository extends JpaRepository<TasksModels, Long> {
     List<TasksModels> findByUserId(long userId);
 
 
+
     // You can add custom queries here if needed
 }

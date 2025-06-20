@@ -286,4 +286,17 @@ public class TaskService {
         taskEntity.setNotes(taskDTO.getNotes()); // Map notes field
         return taskEntity;
     }
+
+    public CompletableFuture<List<TasksDTO>> createTasksBatch(List<TasksModels> tasks) {
+        // Validate and save a batch of tasks, then convert them to DTOs
+        return CompletableFuture.supplyAsync(() -> {
+            for (TasksModels task : tasks) {
+                validateTask(task);
+            }
+            List<TasksModels> savedTasks = tasksRepository.saveAll(tasks);
+            return savedTasks.stream()
+                    .map(this::convertToDTO)
+                    .collect(Collectors.toList());
+        });
+    }
 }
