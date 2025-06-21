@@ -39,19 +39,28 @@ const DateSection: React.FC<DateSectionProps> = ({
   colors,
   icon, // Add icon prop
 }) => {
+  // Determine extra spacing for Today/This Week
+  const isSpecialSection = title === 'Today' || title === 'This Week';
   return (
     <View style={styles.container}>
       <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
       {tasks.length > 0 ? (
         tasks.map((task) => (
-          <TaskItem
+          <View
             key={task.taskId.toString()}
-            task={task}
-            onPress={() => onTaskPress(task.taskId.toString())}
-            onToggleCompletion={() => onToggleCompletion(task.taskId)}
-            onDelete={() => onDelete(task.taskId)}
-            priorityColor={getPriorityColor(task.priority)}
-          />
+            style={[
+              styles.taskItemWrapper,
+              isSpecialSection && styles.taskItemWrapperSpecial,
+            ]}
+          >
+            <TaskItem
+              task={task}
+              onPress={() => onTaskPress(task.taskId.toString())}
+              onToggleCompletion={() => onToggleCompletion(task.taskId)}
+              onDelete={() => onDelete(task.taskId)}
+              priorityColor={getPriorityColor(task.priority)}
+            />
+          </View>
         ))
       ) : (
         <View style={styles.emptyStateContainer}>
@@ -67,10 +76,16 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: 20,
   },
+  taskItemWrapper: {
+    marginBottom: 18, // Increased spacing between TaskItems
+  },
+  taskItemWrapperSpecial: {
+    marginBottom: 32, // More space for Today/This Week
+  },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 18, // More space below the section title
   },
   emptyStateContainer: {
     alignItems: 'center',

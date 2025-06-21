@@ -11,8 +11,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator, // Use standard ActivityIndicator for loading inside input
-  // Add Horizontal ScrollView for days
-  ScrollView as HorizontalScrollView,
+  Pressable, // Add Pressable for hover effect
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +20,8 @@ import OpenAI from 'openai';
 // import * Haptics from 'expo-haptics'; // Optional: For haptic feedback
 import config from '@/src/config';
 import axios from 'axios';
+import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // --- Constants ---
 const MIN_DAYS = 1;
@@ -33,11 +34,52 @@ const API_MODEL = "microsoft/mai-ds-r1:free"; // Or choose another model like "m
 
 const USER_ID = 95; // Replace with actual user ID from auth/context if available
 
+const SUGGESTION_IDEAS = [
+  "Plan my week for studying for finals.",
+  "Help me organize a home renovation project.",
+  "Create a fitness routine for 5 days.",
+  "Suggest a daily routine for better sleep.",
+  "Help me prepare for a job interview.",
+  "Organize a meal prep schedule.",
+  "Plan a reading challenge for a month.",
+  "Set up a daily mindfulness routine.",
+  "Prepare a travel itinerary for a city trip.",
+  "Design a project timeline for launching a website."
+];
+
+const suggestionGradientA = ['#A6BFFF', '#D1B3FF', '#F3E8FF'];
+const suggestionGradientB = ['#B7E0FF', '#C6B8FF', '#F9EFFF']; // Slightly different for animation
+
+const pastelGradients = [
+  ['#A6BFFF', '#D1B3FF', '#F3E8FF'],
+  ['#B7E0FF', '#B2FFD6', '#F9EFFF'],
+  ['#FFD6E0', '#F3E8FF', '#B7E0FF'],
+  ['#FFF6B7', '#F3E8FF', '#B2FFD6'],
+  ['#B2FFD6', '#B7E0FF', '#FFF6B7'],
+  ['#F3E8FF', '#FFD6E0', '#A6BFFF'],
+  ['#F9EFFF', '#B2FFD6', '#FFD6E0'],
+  ['#D1B3FF', '#FFF6B7', '#B7E0FF'],
+];
+
+const TEMPLATES = [
+  { label: "Study Plan", prompt: "Plan my study schedule for exams.", days: 7 },
+  { label: "Fitness Plan", prompt: "Create a 5-day fitness routine.", days: 5 },
+  { label: "Sleep Routine", prompt: "Suggest a daily routine for better sleep.", days: 7 },
+  { label: "Meal Prep", prompt: "Organize a meal prep schedule.", days: 7 },
+];
+
+const SHORTCUTS = [
+  { label: "Today", days: 1 },
+  { label: "3 Days", days: 3 },
+  { label: "This Week", days: 7 },
+];
+
 // --- Types ---
 interface Task {
   id: string;
-  text: string;
-  suggestedDeadline?: string; // Optional: Add suggested deadline
+  title: string;
+  description: string;
+  suggestedDeadline?: string;
 }
 
 interface AskAIButtonProps {
@@ -60,13 +102,25 @@ const isIsoDate = (str: string) => {
 const mapTasksToApiFormat = (tasks: Task[]): any[] => {
   return tasks.map((task) => {
     let deadline = task.suggestedDeadline;
-    if (!deadline || !isIsoDate(deadline)) {
-      deadline = new Date().toISOString();
+    const now = new Date();
+    let parsedDeadline: Date | null = null;
+    if (deadline && isIsoDate(deadline)) {
+      parsedDeadline = new Date(deadline);
+      // If deadline is before now, set to today
+      if (parsedDeadline < now) {
+        parsedDeadline = now;
+      }
+    } else {
+      parsedDeadline = now;
     }
+    // Format as ISO string
+    deadline = parsedDeadline.toISOString();
     return {
       userId: USER_ID,
-      taskName: task.text,
-      taskDescription: task.text, // Or use a separate description if available
+      taskName: String(task.title), // <-- Ensure string type
+      // Optionally include 'title' for compatibility
+      // title: task.title,
+      taskDescription: task.description,
       priority: "Medium", // Or infer from AI if you add that field
       estimatedDuration: "1 hour", // Or infer from AI if you add that field
       deadline,
@@ -74,9 +128,86 @@ const mapTasksToApiFormat = (tasks: Task[]): any[] => {
       completed: false,
       category: "General", // Or infer from AI if you add that field
       notes: "",
-      createdAt: new Date().toISOString(),
+      createdAt: now.toISOString(),
     };
   });
+};
+
+// AsyncStorage keys
+const STORAGE_USER_HISTORY = 'ai_taskplanner_user_history';
+
+// Helper to summarize user history for AI prompt
+const summarizeHistory = (history: { goals: string[]; accepted: string[] }) => {
+  let summary = '';
+  if (history.goals.length > 0) {
+    summary += `Previous goals: ${history.goals.slice(0, 5).join('; ')}. `;
+  }
+  if (history.accepted.length > 0) {
+    summary += `Recently accepted tasks: ${history.accepted.slice(0, 5).join('; ')}. `;
+  }
+  return summary.trim();
+};
+
+// --- AnimatedGradientButton helper ---
+const AnimatedGradientButton = ({
+  suggestionGradientAnim,
+  pressed,
+  children,
+}: {
+  suggestionGradientAnim: Animated.Value;
+  pressed: boolean;
+  children: React.ReactNode;
+}) => {
+  // Interpolate gradient colors
+  const [gradientColors, setGradientColors] = useState(suggestionGradientA);
+
+  useEffect(() => {
+    const id = suggestionGradientAnim.addListener(({ value }) => {
+      try {
+        const a = suggestionGradientA;
+        const b = suggestionGradientB;
+        // Interpolate between gradients
+        const lerp = (start: number, end: number, t: number) => Math.round(start + (end - start) * t);
+        const hexToRgb = (hex: string) => {
+          const h = hex.replace('#', '');
+          return [
+            parseInt(h.substring(0, 2), 16),
+            parseInt(h.substring(2, 4), 16),
+            parseInt(h.substring(4, 6), 16),
+          ];
+        };
+        const rgbToHex = (rgb: number[]) =>
+          '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join('');
+        const colors = a.map((color, i) => {
+          const rgbA = hexToRgb(a[i]);
+          const rgbB = hexToRgb(b[i]);
+          return rgbToHex([
+            lerp(rgbA[0], rgbB[0], value),
+            lerp(rgbA[1], rgbB[1], value),
+            lerp(rgbA[2], rgbB[2], value),
+          ]);
+        });
+        setGradientColors(colors);
+      } catch {
+        setGradientColors(suggestionGradientA);
+      }
+    });
+    return () => suggestionGradientAnim.removeListener(id);
+  }, [suggestionGradientAnim]);
+
+  return (
+    <LinearGradient
+      colors={gradientColors}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[
+        styles.suggestionButton,
+        pressed && { opacity: 0.85 },
+      ]}
+    >
+      {children}
+    </LinearGradient>
+  );
 };
 
 const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
@@ -85,12 +216,18 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
   const sparkleAnim = useRef(new Animated.Value(0)).current;
   const abortControllerRef = useRef<AbortController | null>(null);
   const scrollViewRef = useRef<ScrollView>(null); // Add ref for ScrollView
+  const suggestionAnim = useRef(new Animated.Value(1)).current;
+  const inputRef = useRef<TextInput>(null);
 
   // --- State ---
   // UI State
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isFullSize, setIsFullSize] = useState(false);
   const [isButtonPressed, setIsButtonPressed] = useState(false); // Floating button press state
+  const [suggestionPressed, setSuggestionPressed] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showSuggestionsOnOpen, setShowSuggestionsOnOpen] = useState(true); // Add user preference
+  const [suggestionGradientAnim] = useState(new Animated.Value(0)); // 0: A, 1: B
 
   // AI & Task State
   const [aiQuery, setAiQuery] = useState('');
@@ -99,10 +236,57 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [suggestedTasks, setSuggestedTasks] = useState<Task[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null); // For displaying errors inline
+  const [suggestionIdeas, setSuggestionIdeas] = useState<string[]>([]);
+  const [recentIdeas, setRecentIdeas] = useState<string[]>([]);
 
   // Editing State
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editedTaskText, setEditedTaskText] = useState<string>('');
+
+  const [userHistory, setUserHistory] = useState<{ goals: string[]; accepted: string[] }>({ goals: [], accepted: [] });
+  const [smartDefault, setSmartDefault] = useState<string | null>(null);
+
+  // --- Load user history on mount ---
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_USER_HISTORY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setUserHistory(parsed);
+          // Smart default: most frequent goal
+          if (parsed.goals && parsed.goals.length > 0) {
+            const freq: Record<string, number> = {};
+            parsed.goals.forEach(g => { freq[g] = (freq[g] || 0) + 1; });
+            const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]);
+            setSmartDefault(sorted[0][0]);
+          }
+        }
+      } catch {}
+    })();
+  }, []);
+
+  // --- Save user history when changed ---
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_USER_HISTORY, JSON.stringify(userHistory));
+  }, [userHistory]);
+
+  // --- Add to user history ---
+  const addGoalToHistory = (goal: string) => {
+    setUserHistory(prev => ({
+      ...prev,
+      goals: [goal, ...prev.goals.filter(g => g !== goal)].slice(0, 20),
+    }));
+  };
+  const addAcceptedTasksToHistory = (tasks: Task[]) => {
+    setUserHistory(prev => ({
+      ...prev,
+      accepted: [
+        ...tasks.map(t => t.title),
+        ...prev.accepted.filter(t => !tasks.some(nt => nt.title === t)),
+      ].slice(0, 20),
+    }));
+  };
 
   // --- Hooks ---
   const insets = useSafeAreaInsets();
@@ -154,6 +338,64 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }).start();
   }, [scaleAnim]);
 
+  // Suggestion Button Animation Handlers
+  const handleSuggestionPressIn = () => {
+    setSuggestionPressed(true);
+    Animated.spring(suggestionAnim, {
+      toValue: 0.92,
+      useNativeDriver: true,
+    }).start();
+  };
+  const handleSuggestionPressOut = () => {
+    setSuggestionPressed(false);
+    Animated.spring(suggestionAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  // Animate gradient on press
+  useEffect(() => {
+    if (suggestionPressed) {
+      Animated.timing(suggestionGradientAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: false,
+      }).start();
+    } else {
+      Animated.timing(suggestionGradientAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [suggestionPressed, suggestionGradientAnim]);
+
+  // Helper to interpolate between two gradients
+  const interpolateGradient = (a: string[], b: string[], t: number) => {
+    // Only works for hex colors of same length arrays
+    const lerp = (start: number, end: number, t: number) => Math.round(start + (end - start) * t);
+    const hexToRgb = (hex: string) => {
+      const h = hex.replace('#', '');
+      return [
+        parseInt(h.substring(0, 2), 16),
+        parseInt(h.substring(2, 4), 16),
+        parseInt(h.substring(4, 6), 16),
+      ];
+    };
+    const rgbToHex = (rgb: number[]) =>
+      '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join('');
+    return a.map((color, i) => {
+      const rgbA = hexToRgb(a[i]);
+      const rgbB = hexToRgb(b[i]);
+      return rgbToHex([
+        lerp(rgbA[0], rgbB[0], t),
+        lerp(rgbA[1], rgbB[1], t),
+        lerp(rgbA[2], rgbB[2], t),
+      ]);
+    });
+  };
+
   // --- Core AI Logic ---
   const fetchAIResponse = useCallback(async () => {
     const trimmedQuery = aiQuery.trim();
@@ -172,6 +414,10 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     setErrorMessage(null);
 
     try {
+      // Personalization: inject user history summary
+      const historySummary = summarizeHistory(userHistory);
+      const systemPrompt = `You are a helpful task planner. ${historySummary} Generate exactly ${numDays} specific, actionable daily tasks with deadlines. For each task, provide a "title" (short summary), a "description" (detailed steps or explanation), and a "deadline". Return a JSON object with a "tasks" array containing objects with "title", "description", and "deadline" fields.`;
+
       console.log(`Requesting ${numDays} tasks for query: "${trimmedQuery}" using model ${API_MODEL}`);
       const completion = await openai.chat.completions.create(
         {
@@ -179,7 +425,7 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
           messages: [
             {
               role: "system",
-              content: `You are a helpful task planner. Generate exactly ${numDays} specific, actionable daily tasks with deadlines. For each task, suggest a deadline based on the task's type or estimated duration. Return a JSON object with a "tasks" array containing objects with "task" and "deadline" fields.`,
+              content: systemPrompt,
             },
             {
               role: "user",
@@ -200,10 +446,11 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
         .slice(0, numDays)
         .map((task: any) => ({
           id: generateUniqueId(),
-          text: task.task.trim(),
+          title: (task.title || '').trim(),
+          description: (task.description || '').trim(),
           suggestedDeadline: task.deadline?.trim(),
         }))
-        .filter(task => task.text);
+        .filter(task => task.title);
 
       if (finalTasks.length === 0) throw new Error("No valid tasks generated.");
       if (finalTasks.length < numDays) setErrorMessage(`Only ${finalTasks.length} tasks generated.`);
@@ -218,38 +465,65 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [aiQuery, numDays, openai]);
+  }, [aiQuery, numDays, openai, userHistory]);
 
-  const fetchSuggestedTasks = useCallback(async () => {
-    try {
-      const response = await openai.chat.completions.create({
-        model: API_MODEL,
-        messages: [
-          {
-            role: "system",
-            content: "You are an assistant that suggests tasks based on user activity or common patterns. Analyze the user's activity and provide relevant tasks.",
-          },
-          {
-            role: "user",
-            content: "Suggest tasks for me based on my recent activity and recurring patterns.",
-          },
-        ],
-      });
+  // Use hardcoded suggestions instead of AI
+  const fetchSuggestionIdeas = useCallback(async () => {
+    setSuggestionIdeas(SUGGESTION_IDEAS);
+  }, []);
 
-      const tasks = JSON.parse(response.choices[0]?.message?.content || "{}").tasks || [];
-      setSuggestedTasks(tasks.map((task: any) => ({
-        id: generateUniqueId(),
-        text: task.task,
-        suggestedDeadline: task.deadline,
-      })));
-    } catch (error) {
-      console.error("Error fetching suggested tasks:", error);
-      Alert.alert("Error", "Failed to fetch suggested tasks. Please try again.");
-    }
-  }, [openai]);
+  const handleFetchSuggestions = useCallback(() => {
+    setErrorMessage(null);
+    setSuggestedTasks([]);
+    setSuggestionIdeas([]);
+    setIsLoading(true);
+    setShowSuggestions(true); // Show suggestions when button is clicked
+    fetchSuggestionIdeas();
+    setIsLoading(false);
+  }, [fetchSuggestionIdeas]);
 
-  const handleFetchSuggestions = () => {
-    fetchSuggestedTasks();
+  const addRecentIdea = (idea: string) => {
+    setRecentIdeas(prev => {
+      const filtered = prev.filter(i => i !== idea);
+      return [idea, ...filtered].slice(0, 5);
+    });
+  };
+
+  const handleSuggestionIdeaPress = (idea: string) => {
+    setAiQuery(idea);
+    addRecentIdea(idea);
+    addGoalToHistory(idea);
+    setSuggestionIdeas([]); // Clear suggestions after click
+    setShowSuggestions(false); // Hide suggestions after click
+    setIsLoading(true); // Show spinner instantly
+    setTimeout(() => {
+      fetchAIResponse();
+    }, 200); // Small delay to close modal before generating
+  };
+
+  const handleTemplatePress = (template: { label: string; prompt: string; days: number }) => {
+    setAiQuery(template.prompt);
+    setNumDays(template.days);
+    addRecentIdea(template.prompt);
+    addGoalToHistory(template.prompt);
+    setSuggestionIdeas([]);
+    setShowSuggestions(false);
+    setIsLoading(true);
+    setTimeout(() => {
+      fetchAIResponse();
+    }, 200);
+  };
+
+  const handleRecentIdeaPress = (idea: string) => {
+    setAiQuery(idea);
+    setShowSuggestions(false);
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 200);
+  };
+
+  const handleShortcutPress = (days: number) => {
+    setNumDays(days);
   };
 
   // --- Task Management Handlers ---
@@ -260,21 +534,23 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     }
     try {
       const apiTasks = mapTasksToApiFormat(suggestedTasks);
+      console.log("Sending tasks to backend:", apiTasks); // <-- Add this line
       await axios.post('http://localhost:8080/api/tasks/batch', apiTasks, {
         headers: { 'Content-Type': 'application/json' },
       });
       Alert.alert('Success', 'Tasks created successfully!');
       onTaskAccept(suggestedTasks); // Pass the final list
+      addAcceptedTasksToHistory(suggestedTasks);
       resetModalState(false);
       setIsModalVisible(false);
     } catch (error: any) {
       Alert.alert('Error', error?.response?.data?.message || error.message || 'Failed to save tasks.');
     }
-  }, [suggestedTasks, onTaskAccept, resetModalState]);
+  }, [suggestedTasks, onTaskAccept, resetModalState]); // <-- Add resetModalState to dependencies
 
   const handleStartEditing = useCallback((task: Task) => {
     setEditingTaskId(task.id);
-    setEditedTaskText(task.text);
+    setEditedTaskText(task.title);
     // Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // Optional
   }, []);
 
@@ -283,7 +559,7 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     setSuggestedTasks(prevTasks =>
       prevTasks.map(task =>
         task.id === editingTaskId
-          ? { ...task, text: editedTaskText /*, potentially update deadline here too */ }
+          ? { ...task, title: editedTaskText }
           : task
       )
     );
@@ -304,9 +580,14 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
 
   // --- Control Handlers ---
   const openModal = useCallback(() => {
-     resetModalState(true); // Reset when opening
-     setIsModalVisible(true);
-  }, []);
+    resetModalState(true); // Reset when opening
+    setIsModalVisible(true);
+    if (showSuggestionsOnOpen) {
+      setSuggestionIdeas([]);
+      setShowSuggestions(true);
+      fetchSuggestionIdeas();
+    }
+  }, [resetModalState, showSuggestionsOnOpen, fetchSuggestionIdeas]);
 
   const closeModal = useCallback(() => {
     setIsModalVisible(false);
@@ -321,6 +602,8 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
       console.log("User stopped AI generation.");
       // State updates (loading, message) are handled in the fetchAIResponse catch block
     }
+    setIsLoading(false); // Hide spinner
+    setShowSuggestions(false); // Close suggestions modal if open
   }, []);
 
   const resetModalState = useCallback((clearQueryToo: boolean = true) => {
@@ -380,7 +663,10 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
                   <Text style={styles.taskDeadline}> (Due: {task.suggestedDeadline})</Text>
                 )}
               </View>
-              <Text style={styles.taskText}>{task.text}</Text>
+              <Text style={styles.taskTitle}>{task.title}</Text>
+              {task.description ? (
+                <Text style={styles.taskDescription}>{task.description}</Text>
+              ) : null}
             </View>
             <View style={styles.taskActions}>
               <TouchableOpacity style={styles.taskActionButton} onPress={() => handleStartEditing(task)}>
@@ -561,6 +847,7 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
                       multiline
                       editable={!isLoading}
                       blurOnSubmit={true} // Dismiss keyboard on return key
+                      ref={inputRef}
                     />
                     {/* REMOVED Days Input Container */}
                     {/* <View style={styles.daysInputContainer}> ... </View> */}
@@ -615,15 +902,190 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
                      )}
                   </View>
                 </View>
-                <TouchableOpacity
-                  style={styles.suggestionButton}
-                  onPress={handleFetchSuggestions}
-                  accessibilityLabel="Get AI-suggested tasks"
-                >
-                  <Text style={styles.suggestionButtonText}>Get Suggestions</Text>
-                </TouchableOpacity>
+                <Animated.View style={{ transform: [{ scale: suggestionAnim }] }}>
+                  <Pressable
+                    style={styles.suggestionButtonWrapper}
+                    onPress={handleFetchSuggestions}
+                    onPressIn={handleSuggestionPressIn}
+                    onPressOut={handleSuggestionPressOut}
+                    accessibilityLabel="Show example prompts for AI task planner"
+                    disabled={isLoading}
+                  >
+                    <AnimatedGradientButton
+                      suggestionGradientAnim={suggestionGradientAnim}
+                      pressed={suggestionPressed || isLoading}
+                    >
+                      <Text style={styles.suggestionButtonText}>Suggestions</Text>
+                    </AnimatedGradientButton>
+                  </Pressable>
+                </Animated.View>
+                {/* Show suggestion ideas as chips/buttons */}
+                {showSuggestions && suggestionIdeas.length > 0 && (
+                  <View style={styles.suggestionIdeasContainer}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                      <Text style={styles.suggestionIdeasTitle}>Try one of these:</Text>
+                      <TouchableOpacity
+                        onPress={() => { setShowSuggestions(false); setSuggestionIdeas([]); }}
+                        style={{ marginLeft: 'auto', padding: 8 }}
+                        accessibilityLabel="Hide suggestions"
+                      >
+                        <Ionicons name="close" size={20} color="#AAA" />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.suggestionIdeasScrollWrapper}>
+                      <ScrollView
+                        style={{ maxHeight: 180 }}
+                        showsVerticalScrollIndicator={true}
+                        contentContainerStyle={styles.suggestionIdeasList}
+                      >
+                        {suggestionIdeas.map((idea, idx) => (
+                          <LinearGradient
+                            key={idx}
+                            colors={pastelGradients[idx % pastelGradients.length]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.suggestionIdeaChip}
+                          >
+                            <TouchableOpacity
+                              style={{ flex: 1 }}
+                              onPress={() => handleSuggestionIdeaPress(idea)}
+                            >
+                              <Text style={styles.suggestionIdeaText}>{idea}</Text>
+                            </TouchableOpacity>
+                          </LinearGradient>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  </View>
+                )}
+                {/* Smart Default Suggestion */}
+                {smartDefault && (
+                  <View style={{ alignItems: 'center', marginTop: 10 }}>
+                    <TouchableOpacity
+                      style={[styles.suggestionIdeaChip, { backgroundColor: pastelGradients[0][0] }]}
+                      onPress={() => handleSuggestionIdeaPress(smartDefault)}
+                    >
+                      <Text style={styles.suggestionIdeaText}>Start again: {smartDefault}</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
+      {/* --- Suggestions Modal (Enhanced) --- */}
+      <Modal
+        isVisible={showSuggestions}
+        onBackdropPress={() => setShowSuggestions(false)}
+        onBackButtonPress={() => setShowSuggestions(false)}
+        style={styles.modalWrapper}
+        backdropTransitionOutTiming={0}
+      >
+        <SafeAreaView style={[styles.modalContainerOuter, { height: '60%' }]}>
+          <View style={styles.modalContainerInner}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Suggestions</Text>
+              <TouchableOpacity
+                onPress={() => { setShowSuggestions(false); setSuggestionIdeas([]); }}
+                style={styles.modalControlButton}
+                accessibilityLabel="Close suggestions"
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            {/* Templates */}
+            <Text style={styles.suggestionIdeasTitle}>Templates</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10 }}>
+              {TEMPLATES.map((tpl, idx) => (
+                <TouchableOpacity
+                  key={tpl.label}
+                  style={[styles.suggestionIdeaChip, { marginRight: 8, marginBottom: 8, backgroundColor: pastelGradients[idx % pastelGradients.length][1] }]}
+                  onPress={() => handleTemplatePress(tpl)}
+                >
+                  <Text style={styles.suggestionIdeaText}>{tpl.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {/* Shortcuts */}
+            <Text style={styles.suggestionIdeasTitle}>Quick Duration</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 10 }}>
+              {SHORTCUTS.map((sc, idx) => (
+                <TouchableOpacity
+                  key={sc.label}
+                  style={[styles.dayButton, numDays === sc.days && styles.dayButtonSelected]}
+                  onPress={() => handleShortcutPress(sc.days)}
+                >
+                  <Text style={[styles.dayButtonText, numDays === sc.days && styles.dayButtonTextSelected]}>{sc.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {/* Recent Ideas */}
+            {recentIdeas.length > 0 && (
+              <>
+                <Text style={styles.suggestionIdeasTitle}>Recent</Text>
+                <View style={styles.suggestionIdeasScrollWrapper}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row' }}>
+                    {recentIdeas.map((idea, idx) => (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[styles.suggestionIdeaChip, { marginRight: 8, backgroundColor: pastelGradients[idx % pastelGradients.length][2] }]}
+                        onPress={() => handleRecentIdeaPress(idea)}
+                      >
+                        <Text style={styles.suggestionIdeaText}>{idea}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </>
+            )}
+            {/* Popular Ideas */}
+            <Text style={styles.suggestionIdeasTitle}>Popular</Text>
+            <View style={styles.suggestionIdeasScrollWrapper}>
+              <ScrollView
+                style={{ maxHeight: 120 }}
+                showsVerticalScrollIndicator={true}
+                contentContainerStyle={styles.suggestionIdeasList}
+              >
+                {suggestionIdeas.map((idea, idx) => (
+                  <LinearGradient
+                    key={idx}
+                    colors={pastelGradients[idx % pastelGradients.length]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.suggestionIdeaChip}
+                  >
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={() => handleSuggestionIdeaPress(idea)}
+                    >
+                      <Text style={styles.suggestionIdeaText}>{idea}</Text>
+                    </TouchableOpacity>
+                  </LinearGradient>
+                ))}
+              </ScrollView>
+            </View>
+            {/* Show spinner if loading from suggestion/template */}
+            {isLoading && (
+              <View style={{ alignItems: 'center', marginTop: 16 }}>
+                <ActivityIndicator size="small" color="#BB86FC" />
+                <Text style={{ color: '#AAA', marginTop: 6 }}>Generating tasks...</Text>
+              </View>
+            )}
+            {/* Optionally add a toggle for user preference */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+              <TouchableOpacity
+                onPress={() => setShowSuggestionsOnOpen(!showSuggestionsOnOpen)}
+                style={{ marginRight: 8 }}
+              >
+                <Ionicons
+                  name={showSuggestionsOnOpen ? "checkbox-outline" : "square-outline"}
+                  size={20}
+                  color="#BB86FC"
+                />
+              </TouchableOpacity>
+              <Text style={{ color: '#AAA', fontSize: 14 }}>Show suggestions when opening planner</Text>
+            </View>
+          </View>
         </SafeAreaView>
       </Modal>
     </>
@@ -804,6 +1266,19 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 22,
   },
+  taskTitle: {
+    color: '#E0E0E0',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 2,
+    lineHeight: 22,
+  },
+  taskDescription: {
+    color: '#B0B0B0',
+    fontSize: 14,
+    marginBottom: 0,
+    lineHeight: 20,
+  },
   taskText: {
     // flex: 1, // Removed flex: 1 here, handled by wrapper
     color: '#E0E0E0', // Lighter text
@@ -963,18 +1438,67 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
+  suggestionButtonWrapper: {
+    alignItems: 'center',
+    marginTop: 10,
+  },
   suggestionButton: {
-    backgroundColor: '#6200EE',
+    // Remove backgroundColor, use gradient instead
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 10,
+    justifyContent: 'center',
+    minWidth: 320,
   },
   suggestionButtonText: {
-    color: '#FFF',
+    color: '#232B3A', // Changed from '#fff' to dark for contrast
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  suggestionIdeasContainer: {
+    marginTop: 18,
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  suggestionIdeasTitle: {
+    color: '#AAA',
+    fontSize: 15,
+    marginBottom: 8,
+    marginLeft: 4,
+    fontWeight: '600',
+  },
+  suggestionIdeasScrollWrapper: {
+    width: '100%',
+    maxHeight: 180,
+  },
+  suggestionIdeasList: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    paddingHorizontal: 8,
+  },
+  suggestionIdeaChip: {
+    borderRadius: 24, // More rounded for bubble
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    marginRight: 10,
+    marginBottom: 10,
+    minWidth: 140,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(180,180,200,0.12)',
+  },
+  suggestionIdeaText: {
+    color: '#232B3A', // Dark text for pastel backgrounds
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 

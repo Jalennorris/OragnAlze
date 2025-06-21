@@ -576,6 +576,9 @@ const TaskItem: React.FC<TaskItemProps> = ({
     }
   };
 
+  const TITLE_MAX_LENGTH = 25; // Minimum length before truncating title
+  const DESCRIPTION_MAX_LENGTH = 60;
+
   return (
     <ErrorBoundary>
       <Animated.View style={{ opacity: animatedOpacity, height: animatedHeight, overflow: 'hidden' }}>
@@ -659,7 +662,11 @@ const TaskItem: React.FC<TaskItemProps> = ({
                   <View style={styles.header}>
                     <TextInput
                       style={[styles.title, { color: '#000' }]} // removed borderBottomWidth and borderColor
-                      value={editName}
+                      value={
+                        editName.length > TITLE_MAX_LENGTH
+                          ? editName.slice(0, TITLE_MAX_LENGTH) + '...'
+                          : editName
+                      }
                       onChangeText={setEditName}
                       onBlur={handleNameBlur}
                       placeholder="Task Name"
@@ -683,7 +690,11 @@ const TaskItem: React.FC<TaskItemProps> = ({
                   </View>
                   <TextInput
                     style={[styles.description, { color: '#000' }]} // removed borderBottomWidth and borderColor
-                    value={editDescription}
+                    value={
+                      editDescription.length > DESCRIPTION_MAX_LENGTH
+                        ? editDescription.slice(0, DESCRIPTION_MAX_LENGTH) + '...'
+                        : editDescription
+                    }
                     onChangeText={setEditDescription}
                     onBlur={handleDescriptionBlur}
                     placeholder="Task Description"
@@ -756,6 +767,18 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectTog
     console.log('Edit task', taskId, updatedFields);
   };
 
+  // Add a real onShare handler (replace with your logic)
+  const handleShare = (task: Task) => {
+    // Implement your share logic here, e.g., using Share API or custom logic
+    console.log('Share task', task);
+    Toast.show({
+      type: 'info',
+      text1: 'Share',
+      text2: `Sharing "${task.taskName}"...`,
+      position: 'bottom',
+    });
+  };
+
   return (
     <>
       {tasks.map((task) => (
@@ -769,6 +792,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectTog
           onSelectToggle={onSelectToggle} // Pass selection handler
           isSelectionModeActive={isSelectionModeActive} // Pass selection mode status
           onEdit={handleEdit} // <-- Pass a real function here
+          onShare={() => handleShare(task)} // <-- Pass share handler
         />
       ))}
     </>
@@ -779,7 +803,7 @@ const styles = StyleSheet.create({
   container: {
     marginLeft: 10,
     marginRight: 10, // Added marginRight for consistency
-    marginBottom: 8, // Keep bottom margin for spacing between items
+    marginBottom: 28, // Even more spacing between tasks
     borderRadius: 12,
     overflow: 'hidden',
     shadowColor: '#808080', // Neutral shadow color
@@ -792,6 +816,7 @@ const styles = StyleSheet.create({
     boxShadow: '0 2px 4px rgba(128, 128, 128, 0.3)', // Neutral shadow
     borderWidth: 1,
     borderColor: '#E0E0E0', // Light gray border
+     minHeight: 135, // Increased minimum height for more spacious layout
   },
   gradientBackground: {
     flex: 1, // Ensure gradient fills the row space after indicator

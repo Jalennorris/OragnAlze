@@ -153,7 +153,7 @@ const TaskList: React.FC<{
       // updateCellsBatchingPeriod={50} // Optional: Adjust batching frequency
       // legacyImplementation={false} // Optional: Use newer implementation if available
       // Add separator for spacing between tasks
-      ItemSeparatorComponent={() => <View style={{ height: 20 }} />}
+      ItemSeparatorComponent={() => <View style={{ height: 30 }} />}
     />
   );
 };
@@ -685,35 +685,47 @@ const DateSection: React.FC<{
   getPriorityColor: (priority: 'low' | 'medium' | 'high') => string;
   icon?: React.ReactNode; // Add icon prop
   onShare: (task: Task) => void; // Add onShare prop
-}> = ({ title, tasks, handleTaskPress, toggleTaskCompletion, deleteTask, getPriorityColor, icon, onShare }) => (
-  <View style={styles.dateSection}>
-    <Text style={[styles.dateText, title === 'Today' && styles.todayText]}>{title}</Text>
-    {icon && <View style={styles.iconContainer}>{icon}</View>} {/* Render icon if provided */}
- 
-    {tasks.length > 0 ? (
-      tasks.map((task) => (
-        <TaskItem
-          key={task.taskId.toString()}
-          task={task}
-          onPress={() => handleTaskPress(task.taskId.toString())}
-          onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
-          onDelete={() => deleteTask(task.taskId)}
-          priorityColor={getPriorityColor(task.priority)}
-          onShare={() => onShare(task)} // Add onShare prop
+}> = ({ title, tasks, handleTaskPress, toggleTaskCompletion, deleteTask, getPriorityColor, icon, onShare }) => {
+  const isSpecialSection = title === 'Today' || title === 'This Week';
+  return (
+    <View style={styles.dateSection}>
+      <Text style={[styles.dateText, title === 'Today' && styles.todayText]}>{title}</Text>
+      {icon && <View style={styles.iconContainer}>{icon}</View>}
+      {tasks.length > 0 ? (
+        tasks.map((task) =>
+          isSpecialSection ? (
+            <View key={task.taskId.toString()} style={styles.specialTaskItemWrapper}>
+              <TaskItem
+                task={task}
+                onPress={() => handleTaskPress(task.taskId.toString())}
+                onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
+                onDelete={() => deleteTask(task.taskId)}
+                priorityColor={getPriorityColor(task.priority)}
+                onShare={() => onShare(task)}
+              />
+            </View>
+          ) : (
+            <TaskItem
+              key={task.taskId.toString()}
+              task={task}
+              onPress={() => handleTaskPress(task.taskId.toString())}
+              onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
+              onDelete={() => deleteTask(task.taskId)}
+              priorityColor={getPriorityColor(task.priority)}
+              onShare={() => onShare(task)}
+            />
+          )
+        )
+      ) : (
+        <EmptyState
+          message={`No tasks for ${title.toLowerCase()}!`}
+          colors={COLORS}
+          showIcon={title === 'Today'}
         />
-
-      ))
-  
-    ) : (
-    
-      <EmptyState 
-        message={`No tasks for ${title.toLowerCase()}!`} 
-        colors={COLORS} 
-        showIcon={title === 'Today'} 
-      />
-    )}
-  </View>
-);
+      )}
+    </View>
+  );
+};
 
   const handleTaskAccept = (tasks: string[]) => {
     console.log('Accepted tasks:', tasks);
@@ -1314,6 +1326,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 20,
+  },
+  specialTaskItemWrapper: {
+    marginBottom: 32, // Extra space for Today/This Week tasks
   },
     
 });
