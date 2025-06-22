@@ -10,9 +10,9 @@ public class AcceptedTask {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
-    private UserModels user;
+    // No JPA association, just a user ID
+    @Column(name = "user_id", nullable = false)
+    private Long user;
 
     @Column(name = "task_title", nullable = false)
     private String taskTitle;
@@ -28,7 +28,7 @@ public class AcceptedTask {
 
     public AcceptedTask() {}
 
-    public AcceptedTask(UserModels user, String taskTitle, String taskDescription, LocalDateTime deadline, LocalDateTime acceptedAt) {
+    public AcceptedTask(Long user, String taskTitle, String taskDescription, LocalDateTime deadline, LocalDateTime acceptedAt) {
         this.user = user;
         this.taskTitle = taskTitle;
         this.taskDescription = taskDescription;
@@ -39,8 +39,8 @@ public class AcceptedTask {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public UserModels getUser() { return user; }
-    public void setUser(UserModels user) { this.user = user; }
+    public Long getUser() { return user; }
+    public void setUser(Long user) { this.user = user; }
 
     public String getTaskTitle() { return taskTitle; }
     public void setTaskTitle(String taskTitle) { this.taskTitle = taskTitle; }

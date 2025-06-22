@@ -1,7 +1,6 @@
 package com.jalennorris.server.service;
 
 import com.jalennorris.server.Models.AcceptedTask;
-import com.jalennorris.server.Models.UserModels;
 import com.jalennorris.server.Repository.AcceptRepository;
 import com.jalennorris.server.dto.AcceptedDTO;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +45,9 @@ public class AcceptedService {
     }
 
     public AcceptedDTO createAccepted(AcceptedDTO acceptedDTO) {
+        if (acceptedDTO.getTaskTitle() == null) {
+            throw new IllegalArgumentException("taskTitle must not be null");
+        }
         AcceptedTask saved = acceptedRepository.save(toEntity(acceptedDTO));
         return toDTO(saved);
     }
@@ -54,7 +56,7 @@ public class AcceptedService {
         return acceptedRepository.findById(id).map(this::toDTO);
     }
 
-    public List<AcceptedDTO> getAcceptedByUser(UserModels user) {
+    public List<AcceptedDTO> getAcceptedByUser(Long user) {
         return acceptedRepository.findByUser(user)
                 .stream()
                 .map(this::toDTO)
@@ -81,11 +83,23 @@ public class AcceptedService {
 
     public Optional<AcceptedDTO> patchAccepted(Long id, AcceptedDTO patchDTO) {
         return acceptedRepository.findById(id).map(accepted -> {
-            if (patchDTO.getUser() != null) accepted.setUser(patchDTO.getUser());
-            if (patchDTO.getTaskTitle() != null) accepted.setTaskTitle(patchDTO.getTaskTitle());
-            if (patchDTO.getTaskDescription() != null) accepted.setTaskDescription(patchDTO.getTaskDescription());
-            if (patchDTO.getDeadline() != null) accepted.setDeadline(patchDTO.getDeadline());
-            if (patchDTO.getAcceptedAt() != null) accepted.setAcceptedAt(patchDTO.getAcceptedAt());
+            // Only update fields that are not null in patchDTO
+            if (patchDTO.getUser() != null) {
+                accepted.setUser(patchDTO.getUser());
+            }
+            if (patchDTO.getTaskTitle() != null) {
+                accepted.setTaskTitle(patchDTO.getTaskTitle());
+            }
+            if (patchDTO.getTaskDescription() != null) {
+                accepted.setTaskDescription(patchDTO.getTaskDescription());
+            }
+            if (patchDTO.getDeadline() != null) {
+                accepted.setDeadline(patchDTO.getDeadline());
+            }
+            if (patchDTO.getAcceptedAt() != null) {
+                accepted.setAcceptedAt(patchDTO.getAcceptedAt());
+            }
+            // Save only if at least one field was patched
             return toDTO(acceptedRepository.save(accepted));
         });
     }

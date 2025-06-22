@@ -246,21 +246,43 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
   const [userHistory, setUserHistory] = useState<{ goals: string[]; accepted: string[] }>({ goals: [], accepted: [] });
   const [smartDefault, setSmartDefault] = useState<string | null>(null);
 
-  // --- Load user history on mount ---
+  // --- Load user history and previous goals on mount ---
   useEffect(() => {
     (async () => {
       try {
+        // Fetch previous goals from backend
+        const resp = await axios.get('http://localhost:8080/api/goals', {
+          params: { userId: USER_ID },
+        });
+        const backendGoals: string[] = Array.isArray(resp.data)
+          ? resp.data.map((g: any) => typeof g === 'string' ? g : g.goal || g.title || '')
+          : [];
+        // Remove empty strings
+        const filteredBackendGoals = backendGoals.filter(Boolean);
+
+        // Load local history
         const raw = await AsyncStorage.getItem(STORAGE_USER_HISTORY);
+        let parsed = { goals: [], accepted: [] };
         if (raw) {
-          const parsed = JSON.parse(raw);
-          setUserHistory(parsed);
-          // Smart default: most frequent goal
-          if (parsed.goals && parsed.goals.length > 0) {
-            const freq: Record<string, number> = {};
-            parsed.goals.forEach(g => { freq[g] = (freq[g] || 0) + 1; });
-            const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]);
-            setSmartDefault(sorted[0][0]);
-          }
+          parsed = JSON.parse(raw);
+        }
+        // Merge backend goals with local goals, dedupe, prioritize backend
+        const mergedGoals = [
+          ...filteredBackendGoals,
+          ...parsed.goals.filter(g => !filteredBackendGoals.includes(g)),
+        ].slice(0, 20);
+
+        setUserHistory({
+          ...parsed,
+          goals: mergedGoals,
+        });
+
+        // Smart default: most frequent goal
+        if (mergedGoals.length > 0) {
+          const freq: Record<string, number> = {};
+          mergedGoals.forEach(g => { freq[g] = (freq[g] || 0) + 1; });
+          const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]);
+          setSmartDefault(sorted[0][0]);
         }
       } catch {}
     })();
@@ -402,6 +424,17 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     if (!trimmedQuery) {
       Alert.alert('Input Required', 'Please describe what you need help planning.');
       return;
+    }
+
+    // Always create a new goal in backend with the user's input, using correct fields
+    try {
+      await axios.post('http://localhost:8080/api/goals', {
+        user: USER_ID,
+        goalText: trimmedQuery,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      // Optionally log or ignore errors here
     }
 
     if (abortControllerRef.current) {

@@ -17,23 +17,45 @@ public class GoalService {
 
     // Create
     public UserGoalDTO createGoal(UserGoalDTO goalDTO) {
-        UserGoal userGoal = UserGoal.fromDTO(goalDTO);
+        UserGoal userGoal = new UserGoal();
+        userGoal.setUser(goalDTO.getUser());
+        userGoal.setGoalText(goalDTO.getGoalText());
+        userGoal.setCreatedAt(goalDTO.getCreatedAt());
+        // ...set other fields as needed...
         UserGoal saved = goalRepository.save(userGoal);
-        return saved.toDTO();
+        return new UserGoalDTO(
+            saved.getId(),
+            saved.getUser(),
+            saved.getGoalText(),
+            saved.getCreatedAt()
+            // ...add other fields as needed...
+        );
     }
 
     // Read all
     public List<UserGoalDTO> getAllGoals() {
         return goalRepository.findAll()
                 .stream()
-                .map(UserGoal::toDTO)
+                .map(goal -> new UserGoalDTO(
+                    goal.getId(),
+                    goal.getUser(),
+                    goal.getGoalText(),
+                    goal.getCreatedAt()
+                    // ...add other fields as needed...
+                ))
                 .collect(Collectors.toList());
     }
 
     // Read by id
     public Optional<UserGoalDTO> getGoalById(Long id) {
         return goalRepository.findById(id)
-                .map(UserGoal::toDTO);
+                .map(goal -> new UserGoalDTO(
+                    goal.getId(),
+                    goal.getUser(),
+                    goal.getGoalText(),
+                    goal.getCreatedAt()
+                    // ...add other fields as needed...
+                ));
     }
 
     // Update
@@ -44,7 +66,13 @@ public class GoalService {
             goal.setCreatedAt(updatedGoalDTO.getCreatedAt());
             // ...add other fields as needed...
             UserGoal saved = goalRepository.save(goal);
-            return saved.toDTO();
+            return new UserGoalDTO(
+                saved.getId(),
+                saved.getUser(),
+                saved.getGoalText(),
+                saved.getCreatedAt()
+                // ...add other fields as needed...
+            );
         });
     }
 

@@ -1,7 +1,7 @@
 package com.jalennorris.server.service;
 
 import com.jalennorris.server.Models.SubTaskModels;
-import com.jalennorris.server.repository.SubTaskRepository;
+import com.jalennorris.server.Repository.SubTaskRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 

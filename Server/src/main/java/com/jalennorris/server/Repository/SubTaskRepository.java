@@ -1,4 +1,4 @@
-package com.jalennorris.server.repository;
+package com.jalennorris.server.Repository;
 
 import com.jalennorris.server.Models.SubTaskModels;
 import org.springframework.data.jpa.repository.JpaRepository;

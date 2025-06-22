@@ -1,4 +1,4 @@
-package com.jalennorris.server.Service;
+package com.jalennorris.server.service;
 
 import com.jalennorris.server.Models.UserQuoteLike;
 import com.jalennorris.server.Models.MotivationalQuotesModel;

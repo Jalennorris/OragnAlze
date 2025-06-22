@@ -1,17 +1,16 @@
 package com.jalennorris.server.dto;
 
 import java.time.LocalDateTime;
-import com.jalennorris.server.Models.UserModels;
 
 public class UserGoalDTO {
     private Long id;
-    private UserModels user;
+    private Long user;
     private String goalText;
     private LocalDateTime createdAt;
 
     public UserGoalDTO() {}
 
-    public UserGoalDTO(Long id, UserModels user, String goalText, LocalDateTime createdAt) {
+    public UserGoalDTO(Long id, Long user, String goalText, LocalDateTime createdAt) {
         this.id = id;
         this.user = user;
         this.goalText = goalText;
@@ -21,8 +20,8 @@ public class UserGoalDTO {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public UserModels getUser() { return user; }
-    public void setUser(UserModels user) { this.user = user; }
+    public Long getUser() { return user; }
+    public void setUser(Long user) { this.user = user; }
 
     public String getGoalText() { return goalText; }
     public void setGoalText(String goalText) { this.goalText = goalText; }

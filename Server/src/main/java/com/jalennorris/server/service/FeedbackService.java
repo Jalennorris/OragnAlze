@@ -27,7 +27,7 @@ public class FeedbackService {
     }
 
     public List<UserFeedback> getFeedbackByUserId(Long userId) {
-        return feedbackRepository.findByUser_Id(userId);
+        return feedbackRepository.findByUser(userId);
     }
 
     public List<UserFeedback> getAllFeedback() {
@@ -36,7 +36,9 @@ public class FeedbackService {
 
     public Optional<UserFeedback> updateFeedback(Long id, UserFeedback updatedFeedback) {
         return feedbackRepository.findById(id).map(feedback -> {
-            feedback.setUser(updatedFeedback.getUser());
+            if (updatedFeedback.getUser() != null) {
+                feedback.setUser(updatedFeedback.getUser());
+            }
             feedback.setFeedbackText(updatedFeedback.getFeedbackText());
             feedback.setRating(updatedFeedback.getRating());
             feedback.setCreatedAt(updatedFeedback.getCreatedAt());

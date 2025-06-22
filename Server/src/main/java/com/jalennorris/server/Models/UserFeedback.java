@@ -10,9 +10,8 @@ public class UserFeedback {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
-    private UserModels user;
+    @Column(name = "user_id", nullable = false)
+    private Long user;
 
     @Column(name = "feedback_text")
     private String feedbackText;
@@ -25,7 +24,7 @@ public class UserFeedback {
 
     public UserFeedback() {}
 
-    public UserFeedback(UserModels user, String feedbackText, Integer rating, LocalDateTime createdAt) {
+    public UserFeedback( Long user, String feedbackText, Integer rating, LocalDateTime createdAt) {
         this.user = user;
         this.feedbackText = feedbackText;
         this.rating = rating;
@@ -35,8 +34,8 @@ public class UserFeedback {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public UserModels getUser() { return user; }
-    public void setUser(UserModels user) { this.user = user; }
+    public Long getUser() { return user; }
+    public void setUser(Long user) { this.user = user; }
 
     public String getFeedbackText() { return feedbackText; }
     public void setFeedbackText(String feedbackText) { this.feedbackText = feedbackText; }

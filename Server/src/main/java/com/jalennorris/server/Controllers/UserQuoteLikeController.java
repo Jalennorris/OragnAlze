@@ -1,7 +1,7 @@
 package com.jalennorris.server.Controllers;
 
 import com.jalennorris.server.Models.UserQuoteLike;
-import com.jalennorris.server.Service.UserQuoteLikeService;
+import com.jalennorris.server.service.UserQuoteLikeService;
 import com.jalennorris.server.dto.UserQuoteLikeDTO;
 
 import org.springframework.beans.factory.annotation.Autowired;

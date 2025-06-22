@@ -1,6 +1,7 @@
 package com.jalennorris.server.Controllers;
 
 import com.jalennorris.server.Models.UserFeedback;
+import com.jalennorris.server.Models.UserModels;
 import com.jalennorris.server.service.FeedbackService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;

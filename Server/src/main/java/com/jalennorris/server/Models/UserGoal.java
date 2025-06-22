@@ -2,6 +2,7 @@ package com.jalennorris.server.Models;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import com.jalennorris.server.dto.UserGoalDTO;
 
 @Entity
 @Table(name = "user_goals")
@@ -10,9 +11,8 @@ public class UserGoal {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
-    private UserModels user;
+    @Column(name = "user_id", nullable = false)
+    private Long user;
 
     @Column(name = "goal_text", nullable = false)
     private String goalText;
@@ -22,17 +22,44 @@ public class UserGoal {
 
     public UserGoal() {}
 
-    public UserGoal(UserModels user, String goalText, LocalDateTime createdAt) {
+    public UserGoal(Long id, Long user, String goalText, LocalDateTime createdAt) {
+        this.id = id;
         this.user = user;
         this.goalText = goalText;
         this.createdAt = createdAt;
     }
 
+    public UserGoal(Long user, String goalText, LocalDateTime createdAt) {
+        this.user = user;
+        this.goalText = goalText;
+        this.createdAt = createdAt;
+    }
+
+    // Convert Entity to DTO
+    public UserGoalDTO toDTO() {
+        return new UserGoalDTO(
+            this.id,
+            this.user,
+            this.goalText,
+            this.createdAt
+        );
+    }
+
+    // Create Entity from DTO
+    public static UserGoal fromDTO(UserGoalDTO dto) {
+        return new UserGoal(
+            dto.getId(),
+            dto.getUser(),
+            dto.getGoalText(),
+            dto.getCreatedAt()
+        );
+    }
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public UserModels getUser() { return user; }
-    public void setUser(UserModels user) { this.user = user; }
+    public Long getUser() { return user; }
+    public void setUser(Long user) { this.user = user; }
 
     public String getGoalText() { return goalText; }
     public void setGoalText(String goalText) { this.goalText = goalText; }

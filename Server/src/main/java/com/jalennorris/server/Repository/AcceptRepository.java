@@ -9,5 +9,5 @@ import java.util.List;
 @Repository
 public interface AcceptRepository extends JpaRepository<AcceptedTask, Long> {
     // Add custom query methods if needed
-    List<AcceptedTask> findByUser(UserModels user);
+    List<AcceptedTask> findByUser( Long user);
 }

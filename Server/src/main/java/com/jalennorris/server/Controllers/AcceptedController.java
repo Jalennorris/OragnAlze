@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -28,7 +30,7 @@ public class AcceptedController {
     }
 
     @PostMapping
-    public ResponseEntity<AcceptedDTO> createAccepted(@RequestBody AcceptedDTO accepted) {
+    public ResponseEntity<AcceptedDTO> createAccepted(@Valid @RequestBody AcceptedDTO accepted) {
         return ResponseEntity.status(201).body(acceptedService.createAccepted(accepted));
     }
 
