@@ -3,15 +3,20 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   Animated,
   Easing,
   SafeAreaView,
-  Dimensions, // For potential responsive adjustments
+  Dimensions,
   Platform,
+  ColorValue,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
+// Add BlurView for glassmorphism
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // --- Types ---
 interface ThemeColors {
@@ -26,7 +31,7 @@ interface ThemeColors {
 interface TabConfigItem {
   name: string; // Screen name, also used as animation key
   label: string;
-  iconName: keyof typeof Ionicons.glyphMap; // For type safety with Ionicons
+  iconName: string; // Changed from keyof typeof Ionicons.glyphMap to string
   accessibilityLabel: string;
 }
 
@@ -44,13 +49,13 @@ interface NavBarProps {
 }
 
 // --- Default Configuration & Theme ---
-const DEFAULT_COLORS: ThemeColors = {
-  primary: '#6200EA', // Purple
-  inactive: '#757575', // Medium Grey
-  navBg: '#ffffff',
-  navBorder: '#e0e0e0',
-  navActiveBg: '#f3eaff', // Lighter purple
-  shadowColor: '#000000',
+const MODERN_COLORS: ThemeColors = {
+  primary: '#6366F1', // Indigo-500
+  inactive: '#9CA3AF', // Gray-400
+  navBg: 'rgba(255,255,255,0.55)', // Glassmorphism
+  navBorder: 'rgba(120,120,120,0.08)',
+  navActiveBg: 'rgba(99,102,241,0.10)', // Indigo-100
+  shadowColor: '#6366F1',
 };
 
 const TAB_CONFIG: TabConfigItem[] = [
@@ -62,9 +67,9 @@ const TAB_CONFIG: TabConfigItem[] = [
   },
   {
     name: 'addTaskScreen',
-    label: 'Add Task',
-    iconName: 'add-circle-outline',
-    accessibilityLabel: 'Go to Add Task screen',
+    label: 'Add',
+    iconName: 'add',
+    accessibilityLabel: 'Add a new task',
   },
   {
     name: 'calendarScreen',
@@ -78,34 +83,67 @@ const TAB_CONFIG: TabConfigItem[] = [
 // --- TabItem Component ---
 const TabItem: React.FC<TabItemProps> = React.memo(
   ({ config, isActive, onPress, animationValue, colors }) => {
-    const iconColor = isActive ? colors.primary : colors.inactive;
+    const isAdd = config.name === 'addTaskScreen';
+    const iconColor = isAdd && isActive ? '#fff' : isAdd ? colors.primary : isActive ? colors.primary : colors.inactive;
     const textColor = isActive ? colors.primary : colors.inactive;
 
     return (
-      <TouchableOpacity
+      <Pressable
         onPress={onPress}
-        style={[
+        style={({ pressed }) => [
           styles.navItemBase,
           isActive && styles.navItemActiveBase,
           isActive && {
-            borderBottomColor: colors.primary,
             backgroundColor: colors.navActiveBg,
           },
+          isAdd && styles.addButtonWrapper,
+          pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
         ]}
         accessibilityLabel={config.accessibilityLabel}
-        accessibilityRole="button"
+        accessibilityRole="tab"
         accessibilityState={{ selected: isActive }}
       >
         <Animated.View
           style={[
-            styles.navItemContent, // Added for consistent alignment
+            styles.navItemContent,
+            isAdd && styles.addButton,
+            isAdd && isActive && { backgroundColor: 'transparent' },
+            isAdd && { shadowColor: colors.primary },
             { transform: [{ scale: animationValue }] },
           ]}
         >
-          <Ionicons name={config.iconName} size={28} color={iconColor} />
-          <Text style={[styles.navTextBase, { color: textColor }]}>{config.label}</Text>
+          {isAdd ? (
+            <LinearGradient
+              colors={isActive ? ['#6366F1', '#A5B4FC'] : ['#fff', '#fff']}
+              start={[0, 0]}
+              end={[1, 1]}
+              style={[
+                styles.fabGradient,
+                isActive && { shadowColor: colors.primary },
+              ]}
+            >
+              <Ionicons
+                name={config.iconName}
+                size={28} // reduced from 38
+                color={isActive ? '#fff' : colors.primary}
+                style={{ marginBottom: 0 }}
+              />
+            </LinearGradient>
+          ) : (
+            <>
+              <Ionicons
+                name={config.iconName}
+                size={20} // reduced from 28
+                color={iconColor}
+                style={{ marginBottom: 0 }}
+              />
+              <Text style={[styles.navTextBase, { color: textColor }]}>
+                {config.label}
+              </Text>
+            </>
+          )}
         </Animated.View>
-      </TouchableOpacity>
+      </Pressable>
     );
   }
 );
@@ -113,7 +151,7 @@ const TabItem: React.FC<TabItemProps> = React.memo(
 // --- NavBar Component ---
 const NavBar: React.FC<NavBarProps> = React.memo(({ theme, initialRouteName }) => {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const mergedColors = { ...DEFAULT_COLORS, ...theme };
+  const mergedColors = { ...MODERN_COLORS, ...theme };
 
   // Determine initial active tab from navigation state or prop
   const getInitialActiveTab = () => {
@@ -131,13 +169,33 @@ const NavBar: React.FC<NavBarProps> = React.memo(({ theme, initialRouteName }) =
 
   const [activeTabName, setActiveTabName] = useState<string>(getInitialActiveTab());
 
-  // Initialize animation values dynamically
+  // Animated values for scale and indicator
   const scaleAnims = useRef(
     TAB_CONFIG.reduce((acc, tab) => {
-      acc[tab.name] = new Animated.Value(1);
+      acc[tab.name] = new Animated.Value(tab.name === activeTabName ? 1.08 : 1);
       return acc;
     }, {} as Record<string, Animated.Value>)
   ).current;
+
+  const indicatorAnim = useRef(new Animated.Value(TAB_CONFIG.findIndex(t => t.name === activeTabName))).current;
+
+  // Animate active tab on change
+  useEffect(() => {
+    TAB_CONFIG.forEach(tab => {
+      Animated.spring(scaleAnims[tab.name], {
+        toValue: tab.name === activeTabName ? 1.08 : 1,
+        useNativeDriver: true,
+        speed: 16,
+        bounciness: 7,
+      }).start();
+    });
+    Animated.spring(indicatorAnim, {
+      toValue: TAB_CONFIG.findIndex(t => t.name === activeTabName),
+      useNativeDriver: false,
+      speed: 16,
+      bounciness: 7,
+    }).start();
+  }, [activeTabName]);
 
   // Listen to navigation state changes to update active tab
   useEffect(() => {
@@ -152,52 +210,48 @@ const NavBar: React.FC<NavBarProps> = React.memo(({ theme, initialRouteName }) =
 
   const handleNavigate = useCallback(
     (screenName: string) => {
-      // setActiveTabName(screenName); // Set immediately for responsiveness, though listener will also catch it
+      Haptics.selectionAsync();
       navigation.navigate(screenName);
-
-      if (scaleAnims[screenName]) {
-        Animated.sequence([
-          Animated.timing(scaleAnims[screenName], {
-            toValue: 0.9,
-            duration: 60,
-            useNativeDriver: true,
-            easing: Easing.inOut(Easing.ease),
-          }),
-          Animated.timing(scaleAnims[screenName], {
-            toValue: 1,
-            duration: 120,
-            easing: Easing.out(Easing.back(1.8)), // A slightly more playful bounce
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }
     },
-    [navigation, scaleAnims]
+    [navigation]
   );
 
+  // Responsive width
+  const deviceWidth = Dimensions.get('window').width;
+  const maxBarWidth = Math.min(deviceWidth - 16, 420);
+  const tabWidth = maxBarWidth / TAB_CONFIG.length;
+
   return (
-    <SafeAreaView style={[styles.safeAreaViewWrapper, { backgroundColor: mergedColors.navBg }]}>
-      <View
-        style={[
-          styles.navBarContainer,
-          {
-            backgroundColor: mergedColors.navBg,
-            borderTopColor: mergedColors.navBorder,
-            shadowColor: mergedColors.shadowColor,
-          },
-        ]}
-      >
-        {TAB_CONFIG.map((tabConfig) => (
-          <TabItem
-            key={tabConfig.name}
-            config={tabConfig}
-            isActive={activeTabName === tabConfig.name}
-            onPress={() => handleNavigate(tabConfig.name)}
-            animationValue={scaleAnims[tabConfig.name]}
-            colors={mergedColors}
-          />
-        ))}
-      </View>
+    <SafeAreaView style={[styles.safeAreaViewWrapper, { backgroundColor: 'transparent' }]}>
+      <BlurView intensity={38} tint="light" style={[
+        styles.blurView,
+        { width: maxBarWidth, left: (deviceWidth - maxBarWidth) / 2 }
+      ]}>
+        <View
+          style={[
+            styles.navBarContainer,
+            {
+              backgroundColor: mergedColors.navBg,
+              borderTopColor: mergedColors.navBorder,
+              shadowColor: mergedColors.shadowColor,
+              width: maxBarWidth,
+              left: 0,
+            },
+          ]}
+        >
+          {/* Animated indicator removed */}
+          {TAB_CONFIG.map((tabConfig) => (
+            <TabItem
+              key={tabConfig.name}
+              config={tabConfig}
+              isActive={activeTabName === tabConfig.name}
+              onPress={() => handleNavigate(tabConfig.name)}
+              animationValue={scaleAnims[tabConfig.name]}
+              colors={mergedColors}
+            />
+          ))}
+        </View>
+      </BlurView>
     </SafeAreaView>
   );
 });
@@ -207,54 +261,107 @@ export default NavBar;
 const styles = StyleSheet.create({
   safeAreaViewWrapper: {
     position: 'absolute',
-    bottom: 0,
+    bottom: 18,
     left: 0,
     right: 0,
-    // backgroundColor is set dynamically
+    alignItems: 'center',
+    zIndex: 20,
+    backgroundColor: 'transparent',
+  },
+  blurView: {
+    borderRadius: 28,
+    overflow: 'hidden',
+    position: 'absolute',
+    bottom: 0,
+    alignSelf: 'center',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 16,
   },
   navBarContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    alignItems: 'stretch', // Make items stretch to fill height before padding
-    height: 60, // Height of the actual bar content, SafeAreaView will add padding
-    borderTopWidth: 1,
-    // backgroundColor, borderTopColor, shadowColor are set dynamically
-    ...Platform.select({
-      ios: {
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    alignItems: 'center',
+    height: 74,
+    borderTopWidth: 0,
+    borderRadius: 28,
+    marginHorizontal: 0,
+    marginBottom: 0,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.13,
+    shadowRadius: 24,
+    elevation: 12,
+    backgroundColor: 'transparent',
+    overflow: Platform.OS === 'android' ? 'hidden' : 'visible',
+    position: 'relative',
   },
   navItemBase: {
-    flex: 1, // Each tab takes equal width
-    alignItems: 'center',
-    justifyContent: 'center', // Center content vertically
-    paddingVertical: 4, // Minimal vertical padding, height is controlled by navBarContainer
-    paddingHorizontal: 5,
-  },
-  navItemActiveBase: {
-    // Styles for active tab, like borderBottomWidth, are applied dynamically
-    // Ensure this doesn't change item dimensions to prevent layout shifts
-    borderBottomWidth: 3, // Example of active indicator (kept from original)
-    // Consider alternative indicators that don't change height (e.g. top border, or just color/bg change)
-    // backgroundColor is set dynamically
-    // borderBottomColor is set dynamically
-     borderRadius: 0, // Original had 8, but for bottom border, 0 might look cleaner or target inner view.
-                      // If navItemActiveBase gets a distinct background, borderRadius: 8 can make sense.
-  },
-  navItemContent: { // Wrapper for icon and text for consistent alignment
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    minWidth: 64,
+    height: 64,
+    borderBottomWidth: 0,
+    backgroundColor: 'transparent',
+    borderRadius: 20,
+  },
+  navItemActiveBase: {
+    borderBottomWidth: 0,
+    backgroundColor: 'transparent',
+  },
+  navItemContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'column',
+    gap: 0,
   },
   navTextBase: {
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 2,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 3,
     textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  // Floating action button style for Add tab
+  addButtonWrapper: {
+    position: 'absolute',
+    left: '50%',
+    transform: [{ translateX: -40 }], // half of width (80/2)
+    bottom: 0, // moved up from -24
+    zIndex: 2,
+    minWidth: 80,
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'auto',
+  },
+  addButton: {
+    backgroundColor: 'transparent',
+    borderRadius: 40,
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  fabGradient: {
+    borderRadius: 40,
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 10,
   },
 });

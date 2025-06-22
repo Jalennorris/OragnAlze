@@ -24,7 +24,8 @@ public class UserFeedback {
 
     public UserFeedback() {}
 
-    public UserFeedback( Long user, String feedbackText, Integer rating, LocalDateTime createdAt) {
+    public UserFeedback(Long id, Long user, String feedbackText, Integer rating, LocalDateTime createdAt) {
+        this.id = id;
         this.user = user;
         this.feedbackText = feedbackText;
         this.rating = rating;

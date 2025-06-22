@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, Animated, ActivityIndicator, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, Animated, ActivityIndicator, Platform, Dimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
@@ -39,6 +39,7 @@ const Header: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const logoAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const prepare = async () => {
@@ -52,6 +53,14 @@ const Header: React.FC = () => {
       }
     };
     prepare();
+  }, []);
+
+  useEffect(() => {
+    Animated.timing(logoAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   const fetchUserInfo = useCallback(async () => {
@@ -108,11 +117,16 @@ const Header: React.FC = () => {
   if (error) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={{ color: "red" }} allowFontScaling>
+        <Text style={styles.errorText} allowFontScaling>
           {error}
         </Text>
-        <Pressable onPress={handleRetry} accessibilityLabel="Retry loading profile" accessibilityRole="button">
-          <Text style={{ color: "#007AFF", marginTop: 8 }} allowFontScaling>Retry</Text>
+        <Pressable
+          onPress={handleRetry}
+          accessibilityLabel="Retry loading profile"
+          accessibilityRole="button"
+          style={styles.retryButton}
+        >
+          <Text style={styles.retryButtonText} allowFontScaling>Retry</Text>
         </Pressable>
       </View>
     );
@@ -121,11 +135,16 @@ const Header: React.FC = () => {
   if (!credentials.profile_pic) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={{ color: "red" }} allowFontScaling>
+        <Text style={styles.errorText} allowFontScaling>
           Failed to load profile picture
         </Text>
-        <Pressable onPress={handleRetry} accessibilityLabel="Retry loading profile" accessibilityRole="button">
-          <Text style={{ color: "#007AFF", marginTop: 8 }} allowFontScaling>Retry</Text>
+        <Pressable
+          onPress={handleRetry}
+          accessibilityLabel="Retry loading profile"
+          accessibilityRole="button"
+          style={styles.retryButton}
+        >
+          <Text style={styles.retryButtonText} allowFontScaling>Retry</Text>
         </Pressable>
       </View>
     );
@@ -133,21 +152,53 @@ const Header: React.FC = () => {
 
   return (
     <View style={styles.headerContainer}>
-      <Text style={styles.logo} allowFontScaling>
+      <Animated.Text
+        style={[
+          styles.logo,
+          {
+            opacity: logoAnim,
+            transform: [
+              {
+                translateY: logoAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+        allowFontScaling
+        accessibilityRole="header"
+      >
         OrganAIze
-      </Text>
+      </Animated.Text>
       <Pressable
         onPress={handleProfilePress}
         accessibilityLabel="Go to profile settings"
         accessibilityRole="button"
+        style={({ pressed }) => [
+          styles.profileButton,
+          pressed && styles.profileButtonPressed,
+        ]}
       >
         {colorBlocks.includes(credentials.profile_pic) ? (
-          <Animated.View style={{ transform: [{ scale: scaleValue }] }}>
-            <View style={{ backgroundColor: credentials.profile_pic, width: 30, height: 30, borderRadius: 15 }} />
-          </Animated.View>
+          <Animated.View
+            style={[
+              styles.profilePic,
+              {
+                backgroundColor: credentials.profile_pic,
+                transform: [{ scale: scaleValue }],
+                shadowColor: credentials.profile_pic,
+                shadowOpacity: 0.18,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: 6,
+              },
+            ]}
+          />
         ) : (
           <Animated.View style={{ transform: [{ scale: scaleValue }] }}>
-            <Ionicons name="person-circle-outline" size={30} color="#333" />
+            <Ionicons name="person-circle" size={44} color="#6366f1" style={styles.profileIcon} />
           </Animated.View>
         )}
       </Pressable>
@@ -157,35 +208,88 @@ const Header: React.FC = () => {
 
 export default Header;
 
+const { width } = Dimensions.get("window");
+
 const styles = StyleSheet.create({
   headerContainer: {
-    backgroundColor: "#fff",
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    width: "100%",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderBottomColor: "#e0e0e0",
-    borderBottomWidth: 1,
-    elevation: 4, // Add shadow for Android
-    shadowColor: "#000", // Add shadow for iOS
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius:0,
+    paddingHorizontal: 32,
+    paddingVertical: 18,
+    backgroundColor: "#f8fafc", // solid background color
+    borderRadius: 20,
+    marginTop: 0,
+    marginBottom: 8,
+    shadowColor: "#6366f1",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.10,
+    shadowRadius: 16,
+    elevation: 8,
+    minHeight: 72,
   },
   logo: {
-    fontSize: 32, // Slightly larger for emphasis
-    color: "#333",
+    fontSize: 30,
+    color: "#22223b",
     fontFamily: "GreatVibes-Regular",
-    letterSpacing: 1.5,
-    textShadowColor: "rgba(0, 0, 0, 0.1)", // Add subtle text shadow
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    letterSpacing: 2.5,
+    textShadowColor: "rgba(34, 34, 59, 0.12)",
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 6,
+    flex: 1,
   },
   loadingContainer: {
+    width: "100%",
+    minHeight: 72,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 20,
+    backgroundColor: "#f8fafc",
+    borderBottomColor: "#e0e7ef",
+    borderBottomWidth: 1,
+  },
+  errorText: {
+    color: "#e63946",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  retryButton: {
+    marginTop: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#f1f3f4",
+    borderRadius: 8,
+    alignSelf: "center",
+  },
+  retryButtonText: {
+    color: "#007AFF",
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  profileButton: {
+    borderRadius: 24,
+    padding: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  profileButtonPressed: {
+    opacity: 0.8,
+    backgroundColor: "#e0e7ef",
+  },
+  profilePic: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  profileIcon: {
+    shadowColor: "#6366f1",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
 });

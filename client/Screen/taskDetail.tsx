@@ -22,6 +22,8 @@ import NavBar from '@/components/Navbar';
 import { format } from 'date-fns';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 
 interface Task {
   taskId: string;
@@ -55,6 +57,28 @@ const getCategoryColor = (category?: string) => {
   return found ? found.color : '#888';
 };
 
+const MODERN_COLORS = {
+  background: ['#e0eafc', '#cfdef3'], // softer blue gradient
+  card: '#fff',
+  accent: '#6a11cb',
+  accent2: '#2575fc',
+  accent3: '#43cea2',
+  danger: '#F44336',
+  success: '#4CAF50',
+  warning: '#FFC107',
+  text: '#232946',
+  muted: '#9a8c98',
+  border: '#e0e0e0',
+  shadow: '#000',
+  fab: '#6a11cb',
+};
+
+const MODERN_FONT = {
+  fontFamily: 'System',
+  fontWeight: '500',
+  letterSpacing: 0.1,
+};
+
 const TaskDetail: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
@@ -83,6 +107,10 @@ const TaskDetail: React.FC = () => {
   const [editedStatus, setEditedStatus] = useState<Task['status']>('not started');
   const [editedCategory, setEditedCategory] = useState<string>('Other');
   const [customCategory, setCustomCategory] = useState<string>('');
+
+  // Progress bar for subtasks
+  const completedCount = subtasks.filter(s => s.completed).length;
+  const progress = subtasks.length > 0 ? completedCount / subtasks.length : 0;
 
   // Animation effects
   useEffect(() => {
@@ -460,54 +488,50 @@ const TaskDetail: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6200EE" />
-      </View>
+      <LinearGradient colors={MODERN_COLORS.background} style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={MODERN_COLORS.accent} />
+      </LinearGradient>
     );
   }
 
   if (!task) {
     return (
-      <View style={styles.container}>
+      <LinearGradient colors={MODERN_COLORS.background} style={styles.container}>
         <Header />
         <View style={styles.taskContainer}>
           <Text style={styles.errorText}>Task not found!</Text>
         </View>
         <NavBar />
-      </View>
+      </LinearGradient>
     );
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
+      <LinearGradient colors={MODERN_COLORS.background} style={styles.safeArea}>
+        <SafeAreaView style={{ flex: 1 }}>
           <Header />
-          
-          {/* Removed the Show My Task button */}
-
           <Animated.View 
             style={[
               styles.taskContainer,
               { opacity: fadeAnim, transform: [{ translateX: slideAnim }] }
             ]}
           >
-            <ScrollView contentContainerStyle={styles.scrollContainer}>
-              <View style={styles.card}>
+            <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+              <Animated.View style={styles.modernCard}>
                 {/* Header with back button */}
                 <View style={styles.header}>
                   <TouchableOpacity
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
                   >
-                    <Ionicons name="arrow-back" size={24} color="#6200EE" />
+                    <Ionicons name="arrow-back" size={24} color={MODERN_COLORS.accent} />
                     <Text style={styles.backButtonText}>Back</Text>
                   </TouchableOpacity>
-                  
-                  <View style={styles.priorityBadge}>
+                  <View style={[styles.priorityBadge, { backgroundColor: MODERN_COLORS.card, borderColor: priorityColors[task.priority], borderWidth: 1 }]}>
                     <Ionicons 
                       name={priorityIcons[task.priority]} 
-                      size={16} 
+                      size={18} 
                       color={priorityColors[task.priority]} 
                     />
                     <Text style={[styles.priorityText, { color: priorityColors[task.priority] }]}>
@@ -519,11 +543,11 @@ const TaskDetail: React.FC = () => {
                 {/* Task Title */}
                 {isEditing ? (
                   <TextInput
-                    style={[styles.input, styles.titleInput]}
+                    style={[styles.input, styles.titleInput, styles.modernInput]}
                     value={editedTitle}
                     onChangeText={setEditedTitle}
                     placeholder="Task Title"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={MODERN_COLORS.muted}
                   />
                 ) : (
                   <Text style={styles.title}>{task.title}</Text>
@@ -532,7 +556,7 @@ const TaskDetail: React.FC = () => {
                 {/* Category Picker in edit mode */}
                 {isEditing && (
                   <View style={{ marginBottom: 16 }}>
-                    <Text style={{ fontWeight: '600', marginBottom: 8, color: '#333' }}>Category:</Text>
+                    <Text style={styles.modernLabel}>Category:</Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
                       {CATEGORY_OPTIONS.map(opt => (
                         <TouchableOpacity
@@ -540,12 +564,14 @@ const TaskDetail: React.FC = () => {
                           style={{
                             flexDirection: 'row',
                             alignItems: 'center',
-                            backgroundColor: editedCategory === opt.name ? opt.color : '#eee',
+                            backgroundColor: editedCategory === opt.name ? opt.color : '#f0f0f0',
                             borderRadius: 16,
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
+                            paddingHorizontal: 14,
+                            paddingVertical: 7,
                             marginRight: 8,
                             marginBottom: 8,
+                            borderWidth: editedCategory === opt.name ? 2 : 0,
+                            borderColor: '#fff',
                           }}
                           onPress={() => {
                             setEditedCategory(opt.name);
@@ -555,7 +581,7 @@ const TaskDetail: React.FC = () => {
                           <Text style={{
                             color: editedCategory === opt.name ? '#fff' : opt.color,
                             fontWeight: '700',
-                            fontSize: 14,
+                            fontSize: 15,
                           }}>
                             #{opt.name}
                           </Text>
@@ -564,15 +590,7 @@ const TaskDetail: React.FC = () => {
                     </View>
                     {editedCategory === 'Custom' && (
                       <TextInput
-                        style={{
-                          borderWidth: 1,
-                          borderColor: '#ddd',
-                          borderRadius: 8,
-                          padding: 10,
-                          fontSize: 15,
-                          marginTop: 4,
-                          backgroundColor: '#fafafa',
-                        }}
+                        style={[styles.modernInput, { marginTop: 4 }]}
                         placeholder="Custom category..."
                         value={customCategory}
                         onChangeText={setCustomCategory}
@@ -589,11 +607,17 @@ const TaskDetail: React.FC = () => {
                         color: '#fff',
                         backgroundColor: getCategoryColor(task.category),
                         borderRadius: 14,
-                        paddingHorizontal: 10,
-                        paddingVertical: 4,
+                        paddingHorizontal: 12,
+                        paddingVertical: 5,
                         fontWeight: '700',
-                        fontSize: 13,
+                        fontSize: 14,
                         marginRight: 8,
+                        ...MODERN_FONT,
+                        shadowColor: MODERN_COLORS.shadow,
+                        shadowOpacity: 0.13,
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowRadius: 4,
+                        elevation: 2,
                       }}
                     >
                       #{task.category}
@@ -604,7 +628,7 @@ const TaskDetail: React.FC = () => {
                 {/* Status Picker in edit mode */}
                 {isEditing && (
                   <View style={{ marginBottom: 16 }}>
-                    <Text style={{ fontWeight: '600', marginBottom: 8, color: '#333' }}>Status:</Text>
+                    <Text style={styles.modernLabel}>Status:</Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                       {(['not started', 'in progress', 'completed'] as Task['status'][]).map((status) => (
                         <TouchableOpacity
@@ -612,18 +636,18 @@ const TaskDetail: React.FC = () => {
                           style={{
                             flex: 1,
                             marginHorizontal: 4,
-                            paddingVertical: 10,
+                            paddingVertical: 12,
                             borderRadius: 8,
-                            backgroundColor: editedStatus === status ? '#03A9F4' : '#eee',
+                            backgroundColor: editedStatus === status ? MODERN_COLORS.accent2 : '#f0f0f0',
                             alignItems: 'center',
                             justifyContent: 'center',
                           }}
                           onPress={() => setEditedStatus(status)}
                         >
                           <Text style={{
-                            color: editedStatus === status ? '#fff' : '#03A9F4',
+                            color: editedStatus === status ? '#fff' : MODERN_COLORS.accent2,
                             fontWeight: '600',
-                            fontSize: 14,
+                            fontSize: 15,
                             textTransform: 'capitalize',
                           }}>
                             {status}
@@ -637,7 +661,7 @@ const TaskDetail: React.FC = () => {
                 {/* Priority Picker in edit mode */}
                 {isEditing && (
                   <View style={{ marginBottom: 16 }}>
-                    <Text style={{ fontWeight: '600', marginBottom: 8, color: '#333' }}>Priority:</Text>
+                    <Text style={styles.modernLabel}>Priority:</Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                       {(['low', 'medium', 'high'] as Task['priority'][]).map((level) => (
                         <TouchableOpacity
@@ -645,9 +669,9 @@ const TaskDetail: React.FC = () => {
                           style={{
                             flex: 1,
                             marginHorizontal: 4,
-                            paddingVertical: 10,
+                            paddingVertical: 12,
                             borderRadius: 8,
-                            backgroundColor: editedPriority === level ? priorityColors[level] : '#eee',
+                            backgroundColor: editedPriority === level ? priorityColors[level] : '#f0f0f0',
                             alignItems: 'center',
                             flexDirection: 'row',
                             justifyContent: 'center',
@@ -656,14 +680,14 @@ const TaskDetail: React.FC = () => {
                         >
                           <Ionicons
                             name={priorityIcons[level]}
-                            size={18}
+                            size={19}
                             color={editedPriority === level ? '#fff' : priorityColors[level]}
-                            style={{ marginRight: 6 }}
+                            style={{ marginRight: 7 }}
                           />
                           <Text style={{
                             color: editedPriority === level ? '#fff' : priorityColors[level],
                             fontWeight: '600',
-                            fontSize: 14,
+                            fontSize: 15,
                           }}>
                             {level.charAt(0).toUpperCase() + level.slice(1)}
                           </Text>
@@ -679,12 +703,12 @@ const TaskDetail: React.FC = () => {
                 {/* Task Description */}
                 {isEditing ? (
                   <TextInput
-                    style={[styles.input, styles.descriptionInput]}
+                    style={[styles.input, styles.descriptionInput, styles.modernInput]}
                     value={editedDescription}
                     onChangeText={setEditedDescription}
                     placeholder="Task Description"
                     multiline
-                    placeholderTextColor="#999"
+                    placeholderTextColor={MODERN_COLORS.muted}
                   />
                 ) : (
                   <Text style={styles.description}>{task.description}</Text>
@@ -694,13 +718,13 @@ const TaskDetail: React.FC = () => {
                 {isEditing && (
                   <View style={{ marginBottom: 16 }}>
                     <TouchableOpacity
-                      style={[styles.button, { backgroundColor: '#03A9F4', marginBottom: 0 }]}
+                      style={[styles.button, { backgroundColor: MODERN_COLORS.accent2, marginBottom: 0 }]}
                       onPress={() => setShowDatePicker(true)}
                     >
                       <Ionicons name="calendar-outline" size={20} color="#fff" />
                       <Text style={styles.buttonText}>Edit Due Date</Text>
                     </TouchableOpacity>
-                    <Text style={{ marginTop: 8, color: '#333', textAlign: 'center' }}>
+                    <Text style={{ marginTop: 8, color: MODERN_COLORS.text, textAlign: 'center' }}>
                       {editedDueDate
                         ? format(editedDueDate, 'MMM dd, yyyy hh:mm a')
                         : ''}
@@ -722,14 +746,13 @@ const TaskDetail: React.FC = () => {
                 {/* Task Details */}
                 <View style={styles.detailsContainer}>
                   <View style={styles.detailRow}>
-                    <Ionicons name="calendar-outline" size={20} color="#6200EE" />
+                    <Ionicons name="calendar-outline" size={20} color={MODERN_COLORS.accent} />
                     <Text style={styles.detailText}>
                       Due: {isEditing && editedDueDate
                         ? format(editedDueDate, 'MMM dd, yyyy hh:mm a')
                         : task.dueDate}
                     </Text>
                   </View>
-                  
                   <View style={styles.detailRow}>
                     <Ionicons
                       name={
@@ -742,10 +765,10 @@ const TaskDetail: React.FC = () => {
                       size={20}
                       color={
                         (task.status === 'completed' || task.completed)
-                          ? '#4CAF50'
+                          ? MODERN_COLORS.success
                           : task.status === 'in progress'
-                          ? '#FFC107'
-                          : '#999'
+                          ? MODERN_COLORS.warning
+                          : MODERN_COLORS.muted
                       }
                     />
                     <Text style={styles.detailText}>
@@ -754,116 +777,49 @@ const TaskDetail: React.FC = () => {
                   </View>
                 </View>
 
-                {/* Subtask Creation Modal Trigger */}
-                <View style={{ marginTop: 24 }}>
-                  <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 8, color: '#333' }}>
-                    Create Subtask
-                  </Text>
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: '#6200EE',
-                      borderRadius: 8,
-                      padding: 12,
-                      alignItems: 'center',
-                      flexDirection: 'row',
-                      justifyContent: 'center',
-                      marginTop: 8,
-                    }}
-                    onPress={() => setSubtaskModalVisible(true)}
-                  >
-                    <Ionicons name="add" size={20} color="#fff" />
-                    <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>
-                      New Subtask
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Subtask Creation Modal */}
-                <Modal
-                  visible={subtaskModalVisible}
-                  animationType="slide"
-                  transparent
-                  onRequestClose={() => setSubtaskModalVisible(false)}
-                >
+                {/* Subtask Progress Bar */}
+                <View style={{ marginTop: 12, marginBottom: 8 }}>
                   <View style={{
-                    flex: 1,
-                    backgroundColor: 'rgba(0,0,0,0.3)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
+                    height: 8,
+                    borderRadius: 8,
+                    backgroundColor: '#e0e0e0',
+                    overflow: 'hidden',
                   }}>
-                    <View style={{
-                      backgroundColor: '#fff',
-                      borderRadius: 16,
-                      padding: 24,
-                      width: '85%',
-                      shadowColor: '#000',
-                      shadowOpacity: 0.2,
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowRadius: 8,
-                      elevation: 8,
-                    }}>
-                      <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 16, color: '#333' }}>
-                        New Subtask
-                      </Text>
-                      <TextInput
-                        style={{
-                          borderWidth: 1,
-                          borderColor: '#ddd',
-                          borderRadius: 8,
-                          padding: 12,
-                          fontSize: 16,
-                          marginBottom: 16,
-                          backgroundColor: '#fafafa',
-                        }}
-                        placeholder="Subtask title..."
-                        value={newSubtaskTitle}
-                        onChangeText={setNewSubtaskTitle}
-                        editable={!addingSubtask}
-                      />
-                      <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-                        <TouchableOpacity
-                          style={{
-                            backgroundColor: '#9E9E9E',
-                            borderRadius: 8,
-                            paddingVertical: 10,
-                            paddingHorizontal: 18,
-                            marginRight: 8,
-                          }}
-                          onPress={() => {
-                            setSubtaskModalVisible(false);
-                            setNewSubtaskTitle('');
-                          }}
-                          disabled={addingSubtask}
-                        >
-                          <Text style={{ color: '#fff', fontWeight: '600' }}>Cancel</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={{
-                            backgroundColor: '#6200EE',
-                            borderRadius: 8,
-                            paddingVertical: 10,
-                            paddingHorizontal: 18,
-                            opacity: addingSubtask || !newSubtaskTitle.trim() ? 0.7 : 1,
-                          }}
-                          onPress={handleAddSubtask}
-                          disabled={addingSubtask || !newSubtaskTitle.trim()}
-                        >
-                          <Text style={{ color: '#fff', fontWeight: '600' }}>Create</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
+                    <Animated.View style={{
+                      width: `${progress * 100}%`,
+                      height: 8,
+                      backgroundColor: MODERN_COLORS.accent3,
+                      borderRadius: 8,
+                    }} />
                   </View>
-                </Modal>
+                  <Text style={{
+                    fontSize: 13,
+                    color: MODERN_COLORS.muted,
+                    marginTop: 4,
+                    textAlign: 'right',
+                  }}>
+                    {completedCount} of {subtasks.length} subtasks completed
+                  </Text>
+                </View>
 
                 {/* Subtasks Section */}
                 <View style={styles.subtasksCard}>
                   <Text style={styles.subtasksTitle}>Subtasks</Text>
+                  {/* Move FAB here for visibility */}
+                  <TouchableOpacity
+                    style={styles.fabInline}
+                    onPress={() => setSubtaskModalVisible(true)}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="add" size={22} color="#fff" />
+                    <Text style={styles.fabInlineText}>Add Subtask</Text>
+                  </TouchableOpacity>
                   {subtasksLoading ? (
-                    <ActivityIndicator size="small" color="#6200EE" style={{ marginTop: 24 }} />
+                    <ActivityIndicator size="small" color={MODERN_COLORS.accent} style={{ marginTop: 24 }} />
                   ) : subtasks.length === 0 ? (
-                    <Text style={{ color: '#888', textAlign: 'center', marginTop: 24 }}>No subtasks found.</Text>
+                    <Text style={{ color: MODERN_COLORS.muted, textAlign: 'center', marginTop: 24 }}>No subtasks found.</Text>
                   ) : (
-                    <ScrollView style={{ maxHeight: 220 }}>
+                    <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
                       {subtasks.map((s, i) => (
                         <Swipeable
                           key={s.id}
@@ -875,29 +831,29 @@ const TaskDetail: React.FC = () => {
                           <TouchableOpacity
                             style={styles.subtaskItem}
                             onPress={() => handleSubtaskItemPress(s)}
-                            // Removed onLongPress for completion
                             activeOpacity={0.7}
                           >
                             <View style={{ padding: 2 }}>
                               <Ionicons
                                 name={s.completed ? 'checkmark-circle' : 'ellipse-outline'}
                                 size={22}
-                                color={s.completed ? '#4CAF50' : '#bbb'}
+                                color={s.completed ? MODERN_COLORS.success : MODERN_COLORS.muted}
                               />
                             </View>
                             <View style={{ marginLeft: 14, flex: 1 }}>
                               <Text style={{
                                 fontSize: 16,
                                 fontWeight: '600',
-                                color: s.completed ? '#aaa' : '#222',
+                                color: s.completed ? MODERN_COLORS.muted : MODERN_COLORS.text,
                                 textDecorationLine: s.completed ? 'line-through' : 'none',
+                                ...MODERN_FONT,
                               }}>
                                 {s.title}
                               </Text>
                               {s.description ? (
                                 <Text style={{
                                   fontSize: 13,
-                                  color: '#888',
+                                  color: MODERN_COLORS.muted,
                                   marginTop: 2,
                                 }}>
                                   {s.description}
@@ -911,6 +867,46 @@ const TaskDetail: React.FC = () => {
                   )}
                 </View>
 
+                {/* Subtask Creation Bottom Sheet */}
+                <Modal
+                  visible={subtaskModalVisible}
+                  animationType="slide"
+                  transparent
+                  onRequestClose={() => setSubtaskModalVisible(false)}
+                >
+                  <BlurView intensity={60} tint="light" style={styles.blurOverlay}>
+                    <Animated.View style={styles.bottomSheet}>
+                      <Text style={styles.bottomSheetTitle}>New Subtask</Text>
+                      <TextInput
+                        style={[styles.modernInput, { marginBottom: 16 }]}
+                        placeholder="Subtask title..."
+                        value={newSubtaskTitle}
+                        onChangeText={setNewSubtaskTitle}
+                        editable={!addingSubtask}
+                      />
+                      <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                        <TouchableOpacity
+                          style={styles.bottomSheetCancel}
+                          onPress={() => {
+                            setSubtaskModalVisible(false);
+                            setNewSubtaskTitle('');
+                          }}
+                          disabled={addingSubtask}
+                        >
+                          <Text style={{ color: '#fff', fontWeight: '600' }}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.bottomSheetCreate, { opacity: addingSubtask || !newSubtaskTitle.trim() ? 0.7 : 1 }]}
+                          onPress={handleAddSubtask}
+                          disabled={addingSubtask || !newSubtaskTitle.trim()}
+                        >
+                          <Text style={{ color: '#fff', fontWeight: '600' }}>Create</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </Animated.View>
+                  </BlurView>
+                </Modal>
+
                 {/* Subtask Description Modal */}
                 <Modal
                   visible={!!selectedSubtask}
@@ -921,142 +917,70 @@ const TaskDetail: React.FC = () => {
                     setEditingSubtask(false);
                   }}
                 >
-                  <View style={{
-                    flex: 1,
-                    backgroundColor: 'rgba(0,0,0,0.25)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}>
-                    <View style={{
-                      backgroundColor: '#fff',
-                      borderRadius: 16,
-                      padding: 24,
-                      width: '85%',
-                      shadowColor: '#000',
-                      shadowOpacity: 0.2,
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowRadius: 8,
-                      elevation: 8,
-                      alignItems: 'center',
-                    }}>
+                  <BlurView intensity={60} tint="light" style={styles.blurOverlay}>
+                    <View style={styles.subtaskModalCard}>
                       {selectedSubtask && (
                         <>
                           <Ionicons
                             name={selectedSubtask.completed ? 'checkmark-circle' : 'ellipse-outline'}
                             size={32}
-                            color={selectedSubtask.completed ? '#4CAF50' : '#bbb'}
+                            color={selectedSubtask.completed ? MODERN_COLORS.success : MODERN_COLORS.muted}
                             style={{ marginBottom: 12 }}
                           />
                           {editingSubtask ? (
                             <>
                               <TextInput
-                                style={{
-                                  fontWeight: '700',
-                                  fontSize: 20,
-                                  color: '#222',
-                                  marginBottom: 10,
-                                  textAlign: 'center',
-                                  borderWidth: 1,
-                                  borderColor: '#ddd',
-                                  borderRadius: 8,
-                                  padding: 8,
-                                  width: '100%',
-                                }}
+                                style={[styles.modernInput, styles.subtaskModalTitleInput]}
                                 value={editSubtaskTitle}
                                 onChangeText={setEditSubtaskTitle}
                                 placeholder="Subtask Title"
                               />
                               <TextInput
-                                style={{
-                                  fontSize: 15,
-                                  color: '#555',
-                                  textAlign: 'center',
-                                  marginBottom: 18,
-                                  borderWidth: 1,
-                                  borderColor: '#ddd',
-                                  borderRadius: 8,
-                                  padding: 8,
-                                  width: '100%',
-                                  minHeight: 60,
-                                  textAlignVertical: 'top',
-                                }}
+                                style={[styles.modernInput, styles.subtaskModalDescInput]}
                                 value={editSubtaskDescription}
                                 onChangeText={setEditSubtaskDescription}
                                 placeholder="Subtask Description"
                                 multiline
                               />
                               <TouchableOpacity
-                                style={{
-                                  backgroundColor: '#4CAF50',
-                                  borderRadius: 8,
-                                  paddingVertical: 10,
-                                  paddingHorizontal: 32,
-                                  marginBottom: 10,
-                                }}
+                                style={styles.subtaskModalSave}
                                 onPress={handleSaveSubtaskEdit}
                               >
-                                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Save</Text>
+                                <Text style={styles.subtaskModalSaveText}>Save</Text>
                               </TouchableOpacity>
                               <TouchableOpacity
-                                style={{
-                                  backgroundColor: '#9E9E9E',
-                                  borderRadius: 8,
-                                  paddingVertical: 10,
-                                  paddingHorizontal: 32,
-                                }}
+                                style={styles.subtaskModalCancel}
                                 onPress={() => setEditingSubtask(false)}
                               >
-                                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Cancel</Text>
+                                <Text style={styles.subtaskModalCancelText}>Cancel</Text>
                               </TouchableOpacity>
                             </>
                           ) : (
                             <>
-                              <Text style={{
-                                fontWeight: '700',
-                                fontSize: 20,
-                                color: '#222',
-                                marginBottom: 10,
-                                textAlign: 'center',
-                              }}>
+                              <Text style={styles.subtaskModalTitle}>
                                 {selectedSubtask.title}
                               </Text>
-                              <Text style={{
-                                fontSize: 15,
-                                color: '#555',
-                                textAlign: 'center',
-                                marginBottom: 18,
-                              }}>
+                              <Text style={styles.subtaskModalDesc}>
                                 {selectedSubtask.description || 'No description.'}
                               </Text>
                               <TouchableOpacity
-                                style={{
-                                  backgroundColor: '#6200EE',
-                                  borderRadius: 8,
-                                  paddingVertical: 10,
-                                  paddingHorizontal: 32,
-                                  marginBottom: 10,
-                                }}
+                                style={styles.subtaskModalEdit}
                                 onPress={handleEditSubtask}
                               >
-                                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Edit</Text>
+                                <Text style={styles.subtaskModalEditText}>Edit</Text>
                               </TouchableOpacity>
                               <TouchableOpacity
-                                style={{
-                                  backgroundColor: '#9E9E9E',
-                                  borderRadius: 8,
-                                  paddingVertical: 10,
-                                  paddingHorizontal: 32,
-                                }}
+                                style={styles.subtaskModalCancel}
                                 onPress={() => setSelectedSubtask(null)}
                               >
-                                <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Close</Text>
+                                <Text style={styles.subtaskModalCancelText}>Close</Text>
                               </TouchableOpacity>
                             </>
                           )}
                         </>
                       )}
                     </View>
-                  </View>
+                  </BlurView>
                 </Modal>
 
                 {/* Action Buttons */}
@@ -1110,13 +1034,11 @@ const TaskDetail: React.FC = () => {
                     </>
                   )}
                 </View>
-              </View>
+              </Animated.View>
             </ScrollView>
           </Animated.View>
-          
-          <NavBar />
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </LinearGradient>
     </GestureHandlerRootView>
   );
 };
@@ -1124,187 +1046,403 @@ const TaskDetail: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f6f8fb',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f6f8fb',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f6f8fb',
   },
   taskContainer: {
     flex: 1,
-    padding: 16,
+    padding: 0,
   },
   scrollContainer: {
     flexGrow: 1,
+    padding: 0,
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 5,
+  modernCard: {
+    backgroundColor: MODERN_COLORS.card,
+    borderRadius: 28,
+    padding: 32,
+    margin: 18,
+    shadowColor: MODERN_COLORS.shadow,
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 24,
+    elevation: 12,
+    borderWidth: 0.5,
+    borderColor: '#f0f0f0',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 26,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#f3f6fa',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    shadowColor: MODERN_COLORS.shadow,
+    shadowOpacity: 0.07,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 2,
+    elevation: 1,
   },
   backButtonText: {
-    fontSize: 16,
+    fontSize: 18,
     marginLeft: 8,
-    color: '#6200EE',
-    fontWeight: '500',
+    color: MODERN_COLORS.accent,
+    fontWeight: '700',
+    ...MODERN_FONT,
   },
   priorityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: 'rgba(98, 0, 238, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: MODERN_COLORS.card,
+    shadowColor: MODERN_COLORS.shadow,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
   },
   priorityText: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
+    fontSize: 15,
+    fontWeight: '800',
+    marginLeft: 7,
+    ...MODERN_FONT,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 12,
+    fontSize: 30,
+    fontWeight: '900',
+    color: MODERN_COLORS.text,
+    marginBottom: 18,
+    ...MODERN_FONT,
+    letterSpacing: 0.2,
   },
   titleInput: {
-    fontSize: 24,
-    fontWeight: '700',
-    padding: 12,
-    borderColor: '#ddd',
-    marginBottom: 12,
+    fontSize: 30,
+    fontWeight: '900',
+    padding: 16,
+    borderColor: MODERN_COLORS.border,
+    marginBottom: 18,
+    ...MODERN_FONT,
+    backgroundColor: '#f3f6fa',
+  },
+  modernInput: {
+    borderWidth: 1,
+    borderColor: MODERN_COLORS.border,
+    borderRadius: 12,
+    fontSize: 17,
+    color: MODERN_COLORS.text,
+    backgroundColor: '#f3f6fa',
+    padding: 14,
+    ...MODERN_FONT,
+    marginBottom: 4,
+  },
+  modernLabel: {
+    fontWeight: '800',
+    marginBottom: 8,
+    color: MODERN_COLORS.text,
+    fontSize: 16,
+    ...MODERN_FONT,
   },
   divider: {
-    height: 1,
-    backgroundColor: '#eee',
-    marginVertical: 12,
+    height: 1.5,
+    backgroundColor: MODERN_COLORS.border,
+    marginVertical: 18,
+    borderRadius: 1,
   },
   description: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#555',
-    marginBottom: 20,
+    fontSize: 18,
+    lineHeight: 28,
+    color: MODERN_COLORS.text,
+    marginBottom: 26,
+    ...MODERN_FONT,
+    fontWeight: '500',
   },
   descriptionInput: {
-    minHeight: 100,
+    minHeight: 110,
     textAlignVertical: 'top',
-    padding: 12,
-    borderColor: '#ddd',
-    marginBottom: 20,
-    lineHeight: 24,
+    padding: 16,
+    borderColor: MODERN_COLORS.border,
+    marginBottom: 26,
+    lineHeight: 28,
+    ...MODERN_FONT,
+    backgroundColor: '#f3f6fa',
   },
   detailsContainer: {
-    marginVertical: 16,
+    marginVertical: 22,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 15,
   },
   detailText: {
-    fontSize: 15,
-    marginLeft: 12,
-    color: '#666',
+    fontSize: 17,
+    marginLeft: 15,
+    color: MODERN_COLORS.text,
+    ...MODERN_FONT,
+    fontWeight: '600',
   },
   buttonContainer: {
-    marginTop: 24,
+    marginTop: 34,
   },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 2,
+    paddingVertical: 18,
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: MODERN_COLORS.shadow,
+    shadowOpacity: 0.10,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 6,
+    elevation: 3,
   },
   editButton: {
-    backgroundColor: '#6200EE',
+    backgroundColor: MODERN_COLORS.accent,
   },
   completeButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: MODERN_COLORS.success,
   },
   deleteButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: MODERN_COLORS.danger,
   },
   saveButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: MODERN_COLORS.success,
   },
   cancelButton: {
-    backgroundColor: '#9E9E9E',
+    backgroundColor: MODERN_COLORS.muted,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+    fontSize: 18,
+    fontWeight: '800',
+    marginLeft: 12,
+    ...MODERN_FONT,
+    letterSpacing: 0.2,
   },
   input: {
     borderWidth: 1,
-    borderRadius: 8,
-    fontSize: 16,
-    color: '#333',
+    borderRadius: 12,
+    fontSize: 17,
+    color: MODERN_COLORS.text,
+    ...MODERN_FONT,
+    backgroundColor: '#f3f6fa',
   },
   errorText: {
-    fontSize: 18,
-    color: '#F44336',
+    fontSize: 20,
+    color: MODERN_COLORS.danger,
     textAlign: 'center',
+    ...MODERN_FONT,
+    fontWeight: '700',
   },
   subtasksCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 18,
-    marginTop: 24,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 2,
+    backgroundColor: MODERN_COLORS.card,
+    borderRadius: 22,
+    padding: 24,
+    marginTop: 34,
+    marginBottom: 14,
+    shadowColor: MODERN_COLORS.shadow,
+    shadowOpacity: 0.10,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 0.5,
+    borderColor: '#f0f0f0',
   },
   subtasksTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 14,
+    fontSize: 21,
+    fontWeight: '900',
+    color: MODERN_COLORS.text,
+    marginBottom: 18,
+    ...MODERN_FONT,
+    letterSpacing: 0.2,
   },
   subtaskItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f7f7f7',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
+    backgroundColor: '#f7f7fa',
+    borderRadius: 14,
+    padding: 17,
+    marginBottom: 13,
+    shadowColor: MODERN_COLORS.shadow,
+    shadowOpacity: 0.06,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
+    shadowRadius: 5,
     elevation: 1,
+    borderWidth: 0.5,
+    borderColor: '#f0f0f0',
+  },
+  fabInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    backgroundColor: MODERN_COLORS.fab,
+    borderRadius: 22,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    marginBottom: 16,
+    marginTop: 2,
+    shadowColor: MODERN_COLORS.shadow,
+    shadowOpacity: 0.13,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 7,
+    elevation: 2,
+  },
+  fabInlineText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 16,
+    marginLeft: 10,
+    ...MODERN_FONT,
+    letterSpacing: 0.2,
+  },
+  blurOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    backgroundColor: 'rgba(240,245,255,0.25)',
+  },
+  bottomSheet: {
+    backgroundColor: MODERN_COLORS.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 32,
+    width: '100%',
+    shadowColor: MODERN_COLORS.shadow,
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: -10 },
+    shadowRadius: 20,
+    elevation: 10,
+    borderWidth: 0.5,
+    borderColor: '#f0f0f0',
+  },
+  bottomSheetTitle: {
+    fontWeight: '900',
+    fontSize: 22,
+    color: MODERN_COLORS.text,
+    marginBottom: 22,
+    textAlign: 'center',
+    ...MODERN_FONT,
+    letterSpacing: 0.2,
+  },
+  bottomSheetCancel: {
+    backgroundColor: MODERN_COLORS.muted,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 26,
+    marginRight: 10,
+  },
+  bottomSheetCreate: {
+    backgroundColor: MODERN_COLORS.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 26,
+  },
+  subtaskModalCard: {
+    backgroundColor: MODERN_COLORS.card,
+    borderRadius: 24,
+    padding: 32,
+    width: '88%',
+    shadowColor: MODERN_COLORS.shadow,
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 10,
+    alignItems: 'center',
+    marginBottom: 90,
+    borderWidth: 0.5,
+    borderColor: '#f0f0f0',
+  },
+  subtaskModalTitle: {
+    fontWeight: '900',
+    fontSize: 23,
+    color: MODERN_COLORS.text,
+    marginBottom: 14,
+    textAlign: 'center',
+    ...MODERN_FONT,
+    letterSpacing: 0.2,
+  },
+  subtaskModalDesc: {
+    fontSize: 17,
+    color: MODERN_COLORS.muted,
+    textAlign: 'center',
+    marginBottom: 22,
+    ...MODERN_FONT,
+    fontWeight: '500',
+  },
+  subtaskModalTitleInput: {
+    fontWeight: '800',
+    fontSize: 20,
+    color: MODERN_COLORS.text,
+    marginBottom: 12,
+    textAlign: 'center',
+    width: '100%',
+    backgroundColor: '#f3f6fa',
+  },
+  subtaskModalDescInput: {
+    fontSize: 16,
+    color: MODERN_COLORS.text,
+    textAlign: 'center',
+    marginBottom: 20,
+    width: '100%',
+    minHeight: 70,
+    textAlignVertical: 'top',
+    backgroundColor: '#f3f6fa',
+  },
+  subtaskModalSave: {
+    backgroundColor: MODERN_COLORS.success,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 36,
+    marginBottom: 12,
+  },
+  subtaskModalSaveText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 17,
+    ...MODERN_FONT,
+  },
+  subtaskModalEdit: {
+    backgroundColor: MODERN_COLORS.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 36,
+    marginBottom: 12,
+  },
+  subtaskModalEditText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 17,
+    ...MODERN_FONT,
+  },
+  subtaskModalCancel: {
+    backgroundColor: MODERN_COLORS.muted,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 36,
+  },
+  subtaskModalCancelText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 17,
+    ...MODERN_FONT,
   },
 });
 

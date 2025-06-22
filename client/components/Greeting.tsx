@@ -6,251 +6,423 @@ import {
   Animated,
   Easing,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   ActivityIndicator,
   Platform,
   Keyboard,
-  // Alert, // Can be replaced by inline error or custom toast
+  Dimensions,
+  AccessibilityRole,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'; // Ensure @expo/vector-icons is installed
+import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics'; // Import Haptics
+import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // --- Constants ---
-const API_BASE_URL = 'http://localhost:8080/api'; // Centralize API URL
+const API_BASE_URL = 'http://localhost:8080/api';
 const ASYNC_STORAGE_KEYS = {
   DISPLAY_NAME: 'displayName',
   USER_ID: 'userId',
 };
 const ANIMATION_DURATION = {
-  MOUNT: 1000,
+  MOUNT: 900,
   INPUT_TOGGLE: 350,
-  SKELETON: 1500, // Duration for skeleton shimmer
+  SKELETON: 1200,
+  GREETING: 500,
+  CONFETTI: 900,
 };
 const COLORS = {
-  primary: '#4A6FA5',
-  text: '#333333',
-  placeholder: '#999999',
-  error: '#E74C3C',
-  success: '#2ECC71', // Added success color
-  background: '#FFFFFF',
-  inputBackground: '#FAFAFA',
-  buttonBackground: '#F0F4F8',
-  borderColor: '#E0E0E0',
-  shadow: '#000000',
-  skeletonBackground: '#E0E0E0', // Light grey for skeleton
-  skeletonHighlight: '#F5F5F5', // Lighter grey for shimmer
+  primary: '#7C3AED',
+  accent: '#C4B5FD',
+  text: '#18181B',
+  placeholder: '#A1A1AA',
+  error: '#EF4444',
+  success: '#22D3EE',
+  background: 'rgba(255,255,255,0.7)',
+  inputBackground: 'rgba(245,245,255,0.85)',
+  buttonBackground: '#F3F4F6',
+  borderColor: '#E0E7FF',
+  shadow: '#7C3AED',
+  skeletonBackground: '#E0E7FF',
+  skeletonHighlight: '#F1F5F9',
+  glass: 'rgba(255,255,255,0.5)',
+  darkText: '#18181B',
+  // Modern blue-cyan-violet gradient
+  gradient1: '#60A5FA', // blue-400
+  gradient2: '#38BDF8', // sky-400
+  gradient3: '#22D3EE', // cyan-400
+  gradient4: '#A5B4FC', // indigo-200
+  gradient5: '#C084FC', // violet-400
 };
 const MAX_NAME_LENGTH = 30;
 
 // --- Helper Components ---
 
-// Simple Skeleton Loader View
-const SkeletonLoader: React.FC<{ width: number | string; height: number; borderRadius?: number }> = ({ width, height, borderRadius = 4 }) => {
-    const shimmerAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        const animation = Animated.loop(
-            Animated.timing(shimmerAnim, {
-                toValue: 1,
-                duration: ANIMATION_DURATION.SKELETON,
-                easing: Easing.linear,
-                useNativeDriver: true,
-            })
-        );
-        animation.start();
-        return () => animation.stop(); // Cleanup animation on unmount
-    }, [shimmerAnim]);
-
-    const translateX = shimmerAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [-200, 200], // Adjust range based on width
-    });
-
-    return (
-        <View style={[styles.skeletonBase, { width, height, borderRadius }]}>
-            <Animated.View
-                style={[
-                    styles.skeletonShimmer,
-                    { transform: [{ translateX }] }
-                ]}
-            />
-        </View>
+// Modern Skeleton Loader with shimmer
+const SkeletonLoader: React.FC<{ width: number | string; height: number; borderRadius?: number }> = ({ width, height, borderRadius = 12 }) => {
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 1,
+        duration: ANIMATION_DURATION.SKELETON,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
     );
+    animation.start();
+    return () => animation.stop();
+  }, [shimmerAnim]);
+  const translateX = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-width, width],
+  });
+  return (
+    <View style={[styles.skeletonBase, { width, height, borderRadius }]}>
+      <Animated.View
+        style={[
+          styles.skeletonShimmer,
+          {
+            transform: [{ translateX }],
+            borderRadius,
+          },
+        ]}
+      />
+    </View>
+  );
 };
 
+// Animated Gradient BG
+const AnimatedGradientBG: React.FC = () => {
+  const colorAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(colorAnim, { toValue: 1, duration: 4000, useNativeDriver: false }),
+        Animated.timing(colorAnim, { toValue: 0, duration: 4000, useNativeDriver: false }),
+      ])
+    ).start();
+  }, [colorAnim]);
+  const bgColor = colorAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      'rgba(99,102,241,0.10)',
+      'rgba(165,180,252,0.18)',
+    ],
+  });
+  return <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: bgColor, zIndex: -1 }]} />;
+};
+
+// Animated Gradient Border Avatar
+const AnimatedAvatar: React.FC<{ name: string }> = ({ name }) => {
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(spinAnim, {
+        toValue: 1,
+        duration: 7000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [spinAnim]);
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+  const initials = name
+    ? name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
+    : '👤';
+  return (
+    <Animated.View style={[styles.avatarBorder, { transform: [{ rotate: spin }] }]}>
+      <LinearGradient
+        colors={[
+          COLORS.gradient1,
+          COLORS.gradient2,
+          COLORS.gradient3,
+          COLORS.gradient4,
+          COLORS.gradient5,
+          COLORS.gradient1
+        ]}
+        start={[0, 0]}
+        end={[1, 1]}
+        style={styles.avatarGradient}
+      >
+        <View style={styles.avatarInner}>
+          <Text style={styles.avatarText}>{initials}</Text>
+        </View>
+      </LinearGradient>
+    </Animated.View>
+  );
+};
+
+// Floating Label Input
+const FloatingLabelInput: React.FC<{
+  value: string;
+  onChangeText: (text: string) => void;
+  onSubmitEditing: () => void;
+  editable: boolean;
+  error?: boolean;
+  inputRef: React.RefObject<TextInput>;
+  placeholder: string;
+  maxLength: number;
+}> = ({
+  value,
+  onChangeText,
+  onSubmitEditing,
+  editable,
+  error,
+  inputRef,
+  placeholder,
+  maxLength,
+}) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const labelAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(labelAnim, {
+      toValue: isFocused || value ? 1 : 0,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
+  }, [isFocused, value, labelAnim]);
+  const labelStyle = {
+    top: labelAnim.interpolate({ inputRange: [0, 1], outputRange: [16, -8] }),
+    left: 18,
+    fontSize: labelAnim.interpolate({ inputRange: [0, 1], outputRange: [17, 13] }),
+    color: error ? COLORS.error : COLORS.placeholder,
+    backgroundColor: 'transparent',
+    position: 'absolute' as const,
+    paddingHorizontal: 2,
+    zIndex: 2,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir Next Rounded' : 'sans-serif-medium',
+    letterSpacing: 0.1,
+  };
+  return (
+    <View style={{ position: 'relative', width: '100%' }}>
+      <Animated.Text style={labelStyle} pointerEvents="none">
+        {placeholder}
+      </Animated.Text>
+      <TextInput
+        ref={inputRef}
+        style={[
+          styles.input,
+          error ? styles.inputError : null,
+          { paddingTop: 20, paddingBottom: 8 },
+        ]}
+        value={value}
+        onChangeText={onChangeText}
+        maxLength={maxLength}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        onSubmitEditing={onSubmitEditing}
+        autoCapitalize="words"
+        returnKeyType="done"
+        editable={editable}
+        selectTextOnFocus
+        blurOnSubmit={false}
+        accessibilityLabel={placeholder}
+        accessibilityHint="Enter your name and press save"
+        testID="floating-label-input"
+      />
+    </View>
+  );
+};
+
+// Confetti Burst (emoji burst)
+const ConfettiBurst: React.FC<{ show: boolean }> = ({ show }) => {
+  const confettiAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (show) {
+      confettiAnim.setValue(0);
+      Animated.timing(confettiAnim, {
+        toValue: 1,
+        duration: ANIMATION_DURATION.CONFETTI,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.exp),
+      }).start();
+    }
+  }, [show]);
+  if (!show) return null;
+  const emojis = ['🎉', '✨', '🥳', '🎊', '💫', '🌈'];
+  return (
+    <View pointerEvents="none" style={styles.confettiContainer}>
+      {emojis.map((emoji, i) => {
+        const angle = (i / emojis.length) * 2 * Math.PI;
+        const radius = confettiAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, 60],
+        });
+        const x = radius.interpolate({
+          inputRange: [0, 60],
+          outputRange: [0, Math.cos(angle) * 60],
+        });
+        const y = radius.interpolate({
+          inputRange: [0, 60],
+          outputRange: [0, Math.sin(angle) * 60],
+        });
+        return (
+          <Animated.Text
+            key={emoji}
+            style={[
+              styles.confettiEmoji,
+              {
+                opacity: confettiAnim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0, 1, 0] }),
+                transform: [
+                  { translateX: x },
+                  { translateY: y },
+                  { scale: confettiAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 1.2, 0.7] }) },
+                ],
+              },
+            ]}
+          >
+            {emoji}
+          </Animated.Text>
+        );
+      })}
+    </View>
+  );
+};
 
 // --- Greeting Component ---
 const Greeting: React.FC = () => {
   // --- State ---
   const [displayName, setDisplayName] = useState<string>('');
-  const [currentGreeting, setCurrentGreeting] = useState<string>(''); // Start empty, show skeleton initially
+  const [currentGreeting, setCurrentGreeting] = useState<string>('');
   const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false); // For save operation
-  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true); // For initial name load
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // --- Refs ---
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const scaleAnim = useRef(new Animated.Value(0.96)).current;
+  const slideAnim = useRef(new Animated.Value(18)).current;
   const inputWidthAnim = useRef(new Animated.Value(0)).current;
   const textInputRef = useRef<TextInput>(null);
 
   // --- Callbacks ---
-
   const generateGreeting = useCallback((name: string): string => {
-    // ... (greeting generation logic remains the same)
-    if (!name || !name.trim()) return 'Hello there! 👋'; // Default if name is empty
-
-    const currentHour = new Date().getHours();
-    const morningEmojis = ['☀️', '☕', '✨'];
-    const afternoonEmojis = ['🌤️', '😊', '👍'];
-    const eveningEmojis = ['🌙', '🌃', '🌠'];
-    let emojis: string[];
-    let timeOfDayGreeting: string;
-
-    if (currentHour < 12) {
-      timeOfDayGreeting = 'Good Morning';
-      emojis = morningEmojis;
-    } else if (currentHour < 18) {
-      timeOfDayGreeting = 'Good Afternoon';
-      emojis = afternoonEmojis;
-    } else {
-      timeOfDayGreeting = 'Good Evening';
-      emojis = eveningEmojis;
-    }
-    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-    // Add non-breaking space before emoji for better wrapping
-    return `${timeOfDayGreeting}, ${name}! \u00A0${randomEmoji}`;
+    if (!name || !name.trim()) return 'Welcome! 👋';
+    const hour = new Date().getHours();
+    const greetings = [
+      { label: 'Good Morning', emojis: ['🌅', '☀️', '🌞'] },
+      { label: 'Good Afternoon', emojis: ['🌤️', '😃', '🌻'] },
+      { label: 'Good Evening', emojis: ['🌙', '🌌', '🌠'] },
+    ];
+    const idx = hour < 12 ? 0 : hour < 18 ? 1 : 2;
+    const { label, emojis } = greetings[idx];
+    const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+    return `${label}, ${name}! ${emoji}`;
   }, []);
 
   const getUserId = async (): Promise<string | null> => {
-    // ... (getUserId logic remains the same)
-     try {
+    try {
       const userId = await AsyncStorage.getItem(ASYNC_STORAGE_KEYS.USER_ID);
-      if (!userId) {
-        console.warn('User ID not found in AsyncStorage.');
-      }
       return userId;
-    } catch (err) {
-      console.error('Failed to retrieve User ID:', err);
+    } catch {
       return null;
     }
   };
 
   const loadInitialDisplayName = useCallback(async () => {
-    setIsInitialLoading(true); // Start loading state
+    setIsInitialLoading(true);
     try {
       const storedDisplayName = await AsyncStorage.getItem(ASYNC_STORAGE_KEYS.DISPLAY_NAME);
       if (storedDisplayName) {
         setDisplayName(storedDisplayName);
         setCurrentGreeting(generateGreeting(storedDisplayName));
       } else {
-        setCurrentGreeting(generateGreeting('')); // Use default greeting
+        setCurrentGreeting(generateGreeting(''));
       }
-    } catch (err) {
-      console.error('Failed to load display name from storage:', err);
+    } catch {
       setError('Could not load your name.');
-      setCurrentGreeting('Hello there! 👋'); // Fallback greeting on error
+      setCurrentGreeting('Welcome! 👋');
     } finally {
-       // Add a small delay before hiding skeleton for smoother transition
-       setTimeout(() => setIsInitialLoading(false), 300);
+      setTimeout(() => setIsInitialLoading(false), 250);
     }
   }, [generateGreeting]);
 
-  // ** Optimistic UI Save **
   const handleSaveChanges = useCallback(async () => {
     const trimmedName = displayName.trim();
-    const previousName = await AsyncStorage.getItem(ASYNC_STORAGE_KEYS.DISPLAY_NAME) || ''; // Get previous name for potential revert
-
-    // --- Validation ---
+    const previousName = (await AsyncStorage.getItem(ASYNC_STORAGE_KEYS.DISPLAY_NAME)) || '';
     if (!trimmedName) {
       setError('Name cannot be empty.');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); // Haptic feedback for error
-      return;
-    }
-    if (trimmedName.length > MAX_NAME_LENGTH) {
-      setError(`Name is too long (max ${MAX_NAME_LENGTH} chars).`);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
-
-    // --- Start Save Process ---
+    if (trimmedName.length > MAX_NAME_LENGTH) {
+      setError(`Name too long (max ${MAX_NAME_LENGTH})`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     Keyboard.dismiss();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); // Haptic feedback for action start
-
-    // --- Optimistic Update ---
-    // Update UI immediately, assuming success
-    const newGreeting = generateGreeting(trimmedName);
-    setCurrentGreeting(newGreeting);
-    setDisplayName(trimmedName); // Update local state
-    setIsEditing(false); // Exit edit mode optimistically
-
-    // --- Get User ID ---
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setCurrentGreeting(generateGreeting(trimmedName));
+    setDisplayName(trimmedName);
+    setIsEditing(false);
     const userId = await getUserId();
     if (!userId) {
-      setError('Could not identify user. Please log in again.');
-      // Revert UI changes
+      setError('Could not identify user.');
       setCurrentGreeting(generateGreeting(previousName));
       setDisplayName(previousName);
       setIsLoading(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
-
-    // --- API Call & Storage Update ---
     try {
-      // Update AsyncStorage first (faster feedback if API fails later)
       await AsyncStorage.setItem(ASYNC_STORAGE_KEYS.DISPLAY_NAME, trimmedName);
-
-      // API Call
       await axios.patch(`${API_BASE_URL}/users/${userId}`, {
         display_name: trimmedName,
       });
-
-      // Success! UI is already updated. Maybe add success haptic.
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    } catch (err: any) {
-      console.error('Error saving display name:', err);
-      // --- Revert UI on Error ---
-      setError('Failed to save name. Please try again.');
-      setCurrentGreeting(generateGreeting(previousName)); // Revert greeting
-      setDisplayName(previousName); // Revert name state
-      // Optionally remove from AsyncStorage if API failed? Or leave it for next load?
-      // await AsyncStorage.setItem(ASYNC_STORAGE_KEYS.DISPLAY_NAME, previousName);
-      setIsEditing(true); // Re-enter editing mode on failure
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), ANIMATION_DURATION.CONFETTI + 200);
+    } catch {
+      setError('Failed to save. Try again.');
+      setCurrentGreeting(generateGreeting(previousName));
+      setDisplayName(previousName);
+      setIsEditing(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-
     } finally {
-      setIsLoading(false); // Stop loading indicator regardless of outcome
+      setIsLoading(false);
     }
   }, [displayName, generateGreeting]);
 
   const handleToggleEdit = useCallback(() => {
     if (isEditing) {
-      handleSaveChanges(); // Attempt save
+      handleSaveChanges();
     } else {
       setIsEditing(true);
-      // Trigger light haptic feedback for opening edit mode
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setTimeout(() => textInputRef.current?.focus(), 100);
+      setTimeout(() => textInputRef.current?.focus(), 120);
     }
   }, [isEditing, handleSaveChanges]);
 
-  // --- Effects ---
+  const handleCancelEdit = useCallback(async () => {
+    setIsEditing(false);
+    setError(null);
+    const storedDisplayName = await AsyncStorage.getItem(ASYNC_STORAGE_KEYS.DISPLAY_NAME);
+    setDisplayName(storedDisplayName || '');
+  }, []);
 
+  // --- Effects ---
   useEffect(() => {
     loadInitialDisplayName();
   }, [loadInitialDisplayName]);
 
   useEffect(() => {
-    // Entry animations (remain the same)
-     Animated.parallel([
+    Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: ANIMATION_DURATION.MOUNT,
@@ -259,8 +431,8 @@ const Greeting: React.FC = () => {
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
-        friction: 6,
-        tension: 80,
+        friction: 7,
+        tension: 90,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
@@ -268,13 +440,12 @@ const Greeting: React.FC = () => {
         duration: ANIMATION_DURATION.MOUNT,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-      })
+      }),
     ]).start();
   }, [fadeAnim, scaleAnim, slideAnim]);
 
   useEffect(() => {
-    // Input width animation (remains the same)
-     Animated.timing(inputWidthAnim, {
+    Animated.timing(inputWidthAnim, {
       toValue: isEditing ? 1 : 0,
       duration: ANIMATION_DURATION.INPUT_TOGGLE,
       easing: Easing.out(Easing.cubic),
@@ -282,191 +453,340 @@ const Greeting: React.FC = () => {
     }).start();
   }, [isEditing, inputWidthAnim]);
 
+  // Greeting slide-in and fade
+  const greetingSlide = useRef(new Animated.Value(-30)).current;
+  const greetingFade = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!isInitialLoading) {
+      greetingSlide.setValue(-30);
+      greetingFade.setValue(0);
+      Animated.parallel([
+        Animated.timing(greetingSlide, {
+          toValue: 0,
+          duration: ANIMATION_DURATION.GREETING,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.exp),
+        }),
+        Animated.timing(greetingFade, {
+          toValue: 1,
+          duration: ANIMATION_DURATION.GREETING,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [isInitialLoading, currentGreeting]);
+
+  // Button scale animation
+  const buttonScale = useRef(new Animated.Value(1)).current;
+  const animateButton = () => {
+    Animated.sequence([
+      Animated.timing(buttonScale, { toValue: 0.92, duration: 80, useNativeDriver: true }),
+      Animated.timing(buttonScale, { toValue: 1, duration: 80, useNativeDriver: true }),
+    ]).start();
+  };
+
   // --- Dynamic Styles ---
   const animatedInputStyle = {
-    // (interpolation remains the same)
-     width: inputWidthAnim.interpolate({
+    width: inputWidthAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: ['0%', '70%'], // Animate width percentage or fixed value
+      outputRange: ['0%', '72%'],
     }),
-    opacity: inputWidthAnim.interpolate({ // Fade in/out input smoothly
-        inputRange: [0, 0.5, 1],
-        outputRange: [0, 0, 1],
+    opacity: inputWidthAnim.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [0, 0, 1],
     }),
-    marginRight: inputWidthAnim.interpolate({ // Add margin when input is visible
-        inputRange: [0, 1],
-        outputRange: [0, 8],
-    })
+    marginRight: inputWidthAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 10],
+    }),
   };
 
   // --- Render ---
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          opacity: fadeAnim,
-          transform: [ { scale: scaleAnim }, { translateY: slideAnim } ]
-        }
-      ]}
-    >
-      {/* Conditional Rendering: Skeleton or Greeting */}
-      {isInitialLoading ? (
-          <View style={styles.greetingContainer}>
-              <SkeletonLoader width="80%" height={30} borderRadius={8} />
+    <View style={{ alignItems: 'center' }}>
+      <BlurView intensity={60} tint="light" style={styles.blurCard}>
+        <LinearGradient
+          colors={['rgba(255,255,255,0.7)', 'rgba(236,233,254,0.8)', 'rgba(255,255,255,0.6)']}
+          style={StyleSheet.absoluteFill}
+          start={[0.1, 0.1]}
+          end={[0.9, 0.9]}
+        />
+        <AnimatedGradientBG />
+        <ConfettiBurst show={showConfetti} />
+        <View style={styles.headerRow}>
+          <AnimatedAvatar name={displayName} />
+          <View style={{ flex: 1 }}>
+            {isInitialLoading ? (
+              <SkeletonLoader width="90%" height={32} borderRadius={12} />
+            ) : (
+              <Animated.Text
+                style={[
+                  styles.greeting,
+                  {
+                    opacity: greetingFade,
+                    transform: [{ translateX: greetingSlide }],
+                    textShadowColor: 'rgba(124,58,237,0.10)',
+                    textShadowOffset: { width: 0, height: 2 },
+                    textShadowRadius: 8,
+                  },
+                ]}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+                accessibilityLiveRegion="polite"
+                testID="greeting-text"
+              >
+                {currentGreeting}
+              </Animated.Text>
+            )}
           </View>
-      ) : (
-          <Text style={styles.greeting} numberOfLines={2} ellipsizeMode="tail">
-              {currentGreeting}
-          </Text>
-      )}
-
-      {/* Edit Section */}
-      <View style={styles.editContainer}>
-        <Animated.View style={[styles.inputWrapper, animatedInputStyle]}>
-          {isEditing && (
-            <TextInput
-              ref={textInputRef}
-              style={[styles.input, error ? styles.inputError : null]} // Highlight input on error
-              value={displayName}
-              onChangeText={(text) => {
-                setDisplayName(text);
-                if (error) setError(null); // Clear error on typing
+        </View>
+        <View style={styles.editContainer}>
+          <Animated.View style={[styles.inputWrapper, animatedInputStyle]}>
+            {isEditing && (
+              <FloatingLabelInput
+                value={displayName}
+                onChangeText={(text) => {
+                  setDisplayName(text);
+                  if (error) setError(null);
+                }}
+                onSubmitEditing={handleSaveChanges}
+                editable={!isLoading}
+                error={!!error}
+                inputRef={textInputRef}
+                placeholder="Your Name"
+                maxLength={MAX_NAME_LENGTH}
+              />
+            )}
+          </Animated.View>
+          <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+            <Pressable
+              onPress={() => {
+                animateButton();
+                handleToggleEdit();
               }}
-              placeholder="Your Name"
-              placeholderTextColor={COLORS.placeholder}
-              maxLength={MAX_NAME_LENGTH}
-              onSubmitEditing={handleSaveChanges}
-              autoCapitalize="words"
-              returnKeyType="done"
-              editable={!isLoading}
-              selectTextOnFocus
-              blurOnSubmit={false} // Keep keyboard potentially open if save fails
-            />
+              android_ripple={{ color: COLORS.accent, borderless: true }}
+              style={({ pressed }) => [
+                styles.editButton,
+                isEditing && styles.editButtonActive,
+                pressed && { opacity: 0.7 },
+              ]}
+              disabled={isLoading || isInitialLoading}
+              accessibilityRole="button"
+              accessibilityLabel={isEditing ? 'Save display name' : 'Edit display name'}
+              accessibilityHint={isEditing ? 'Updates your greeting name' : 'Allows you to change your greeting name'}
+              testID="edit-button"
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              ) : (
+                <Ionicons
+                  name={isEditing ? 'checkmark-circle-outline' : 'create-outline'}
+                  size={26}
+                  color={isEditing ? COLORS.primary : COLORS.darkText}
+                />
+              )}
+            </Pressable>
+          </Animated.View>
+          {isEditing && (
+            <Pressable
+              onPress={handleCancelEdit}
+              android_ripple={{ color: COLORS.error, borderless: true }}
+              style={({ pressed }) => [
+                styles.cancelButton,
+                pressed && { opacity: 0.7 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel editing"
+              accessibilityHint="Discard changes and exit edit mode"
+              testID="cancel-edit-button"
+            >
+              <Ionicons name="close-outline" size={24} color={COLORS.error} />
+            </Pressable>
           )}
-        </Animated.View>
-
-        <TouchableOpacity
-          onPress={handleToggleEdit}
-          style={styles.editButton}
-          disabled={isLoading || isInitialLoading} // Disable during initial load too
-          activeOpacity={0.7}
-          // Accessibility Props
-          accessibilityRole="button"
-          accessibilityLabel={isEditing ? "Save display name" : "Edit display name"}
-          accessibilityHint={isEditing ? "Updates your greeting name" : "Allows you to change your greeting name"}
-        >
-          {isLoading ? (
-            <ActivityIndicator size="small" color={COLORS.primary} />
-          ) : (
-            <Ionicons
-              name={isEditing ? 'checkmark-circle-outline' : 'create-outline'}
-              size={24}
-              color={isEditing ? COLORS.primary : COLORS.text}
-            />
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Error Message Display */}
-      {error && !isInitialLoading && ( // Don't show save errors during initial load
-        <Text style={styles.errorText} accessibilityLiveRegion="assertive">
+        </View>
+        {error && !isInitialLoading && (
+          <Text style={styles.errorText} accessibilityLiveRegion="assertive" testID="error-text">
             {error}
-        </Text>
-      )}
-    </Animated.View>
+          </Text>
+        )}
+      </BlurView>
+    </View>
   );
 };
 
 // --- Styles ---
+const { width } = Dimensions.get('window');
 const styles = StyleSheet.create({
-  container: {
+  blurCard: {
+    width: width - 32,
+    alignSelf: 'center',
+    borderRadius: 28,
+    overflow: 'hidden',
+    marginVertical: 22,
+    padding: 0,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22,
+    shadowRadius: 32,
+    elevation: 16,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 16,
+    paddingHorizontal: 22,
+    paddingTop: 28,
+  },
+  avatarBorder: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  avatarGradient: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 3,
+  },
+  avatarInner: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: COLORS.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 15,
-    backgroundColor: COLORS.background,
-    borderRadius: 16,
-    marginHorizontal: 16,
-    marginVertical: 10,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.10,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  // Adjusted container for smaller height
-  greetingContainer: {
-      height: 36, // Reduced from 50
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 12, // Slightly reduced margin
-      width: '100%',
+  avatarText: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: COLORS.primary,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir Next Rounded' : 'sans-serif-black',
+    letterSpacing: 0.2,
   },
   greeting: {
-    fontSize: Platform.select({ ios: 20, android: 18 }), // Reduced font size
-    fontWeight: '600',
-    color: COLORS.text,
-    textAlign: 'center',
-    marginBottom: 12, // Reduced margin
-    paddingHorizontal: 10,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
-    minHeight: 36, // Reduced from 50
-    lineHeight: Platform.select({ ios: 24, android: 22 }), // Reduced line spacing
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.darkText,
+    textAlign: 'left',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir Next Rounded' : 'sans-serif-medium',
+    minHeight: 32,
+    lineHeight: 34,
+    letterSpacing: 0.13,
+    paddingRight: 8,
   },
   editContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    minHeight: 44,
+    marginTop: 10,
+    minHeight: 54,
+    gap: 10,
+    paddingHorizontal: 22,
+    paddingBottom: 22,
   },
   inputWrapper: {
     overflow: 'hidden',
+    justifyContent: 'center',
+    flex: 1,
   },
   input: {
     borderWidth: 1,
     borderColor: COLORS.borderColor,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
-    fontSize: 16,
-    color: COLORS.text,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    fontSize: 17,
+    color: COLORS.darkText,
     backgroundColor: COLORS.inputBackground,
-    height: 44,
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    height: 54,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir Next Rounded' : 'sans-serif',
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    marginTop: 0,
   },
   inputError: {
-      borderColor: COLORS.error, // Highlight border red on error
-      backgroundColor: '#FFF0F0', // Slight red background tint on error
+    borderColor: COLORS.error,
+    backgroundColor: '#FFF1F2',
   },
   editButton: {
     padding: 10,
     backgroundColor: COLORS.buttonBackground,
-    borderRadius: 22,
-    width: 44,
-    height: 44,
+    borderRadius: 24,
+    width: 48,
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: 2,
+    borderWidth: 1,
+    borderColor: COLORS.borderColor,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+  },
+  editButtonActive: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.primary,
+  },
+  cancelButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+    marginLeft: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 40,
+    height: 40,
   },
   errorText: {
     color: COLORS.error,
-    fontSize: 14,
-    fontWeight: '500', // Make error slightly bolder
-    marginTop: 12, // Increased margin
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 10,
     textAlign: 'center',
     paddingHorizontal: 10,
+    letterSpacing: 0.1,
   },
-  // Skeleton Styles
   skeletonBase: {
-      backgroundColor: COLORS.skeletonBackground,
-      overflow: 'hidden', // Important for shimmer effect
+    backgroundColor: COLORS.skeletonBackground,
+    overflow: 'hidden',
+    width: '100%',
+    height: '100%',
+    position: 'relative',
   },
   skeletonShimmer: {
-      width: '50%', // Width of the shimmer highlight
-      height: '100%',
-      backgroundColor: COLORS.skeletonHighlight,
-      opacity: 0.6, // Make shimmer slightly transparent
+    width: '60%',
+    height: '100%',
+    backgroundColor: COLORS.skeletonHighlight,
+    opacity: 0.7,
+    position: 'absolute',
+    left: 0,
+    top: 0,
+  },
+  confettiContainer: {
+    position: 'absolute',
+    left: '50%',
+    top: 36,
+    width: 0,
+    height: 0,
+    zIndex: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confettiEmoji: {
+    position: 'absolute',
+    fontSize: 28,
+    textShadowColor: 'rgba(0,0,0,0.08)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
 });
 

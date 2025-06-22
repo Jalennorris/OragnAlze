@@ -6,21 +6,26 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Animated,
   SafeAreaView,
-  Alert, // Import Alert
-  ActivityIndicator, // Import ActivityIndicator for loading state
-  Keyboard, // Import Keyboard
-  Modal, // Add Modal import
-  TouchableWithoutFeedback, // Add import
+  Alert,
+  ActivityIndicator,
+  Keyboard,
+  Modal,
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  Platform,
+
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import moment from 'moment'; // Consider date-fns for smaller bundle size if needed
+import { format } from 'date-fns'; // Use date-fns for date formatting
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withSequence, withTiming } from 'react-native-reanimated';
+import { runOnJS } from 'react-native-reanimated';
 
 // Import custom components (assuming they exist)
 import Header from '../components/header'; // Adjust path if needed
@@ -29,14 +34,30 @@ import Navbar from '../components/Navbar'; // Adjust path if needed
 // Add a simple color picker (array of color hex codes)
 const CATEGORY_COLORS = ['#6a11cb', '#ff9800', '#43a047', '#e91e63', '#00bcd4', '#f44336', '#9c27b0', '#607d8b', '#ffd600', '#795548'];
 
+// --- Enums for Priority and Status ---
+export enum Priority {
+  Low = 'low',
+  Medium = 'medium',
+  High = 'high',
+}
+export enum Status {
+  NotStarted = 'Not Started',
+  InProgress = 'In Progress',
+  Completed = 'Completed',
+}
+
 // --- Constants ---
 const BASE_API_URL = 'http://localhost:8080/api'; // Use a constant for the base URL
-const PRIORITY_COLORS = {
-  low: '#8BC34A',
-  medium: '#FFC107',
-  high: '#F44336',
+const PRIORITY_COLORS: Record<Priority, string> = {
+  [Priority.Low]: '#8BC34A',
+  [Priority.Medium]: '#FFC107',
+  [Priority.High]: '#F44336',
 };
-const STATUS_OPTIONS = ['Not Started', 'In Progress', 'Completed'];
+const STATUS_OPTIONS: Status[] = [
+  Status.NotStarted,
+  Status.InProgress,
+  Status.Completed,
+];
 
 // --- Interfaces ---
 interface Task {
@@ -44,9 +65,9 @@ interface Task {
   userId: number;
   taskName: string;
   taskDescription: string;
-  priority: 'low' | 'medium' | 'high'; // Use specific types
+  priority: Priority;
   estimatedDuration: string;
-  status: string;
+  status: Status;
   completed: boolean;
   category: string;
   createdAt: string;
@@ -57,15 +78,19 @@ interface Task {
 // --- Category type with color ---
 type Category = { name: string; color: string };
 
+// --- Prop types for extracted components (if needed) ---
+type HeaderProps = {};
+type NavbarProps = {};
+
 const AddTaskScreen: React.FC = () => {
   // --- State ---
   const [taskName, setTaskName] = useState<string>('');
   const [taskDescription, setTaskDescription] = useState<string>('');
-  const [dueDate, setDueDate] = useState<string>(moment().toISOString());
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('low'); // Enforce type
-  const [status, setStatus] = useState<string>('Not Started');
-  const [estimatedDays, setEstimatedDays] = useState<string>('0'); // Pre-fill with '0'
-  const [estimatedHours, setEstimatedHours] = useState<string>('0'); // Pre-fill with '0'
+  const [dueDate, setDueDate] = useState<string>(new Date().toISOString());
+  const [priority, setPriority] = useState<Priority>(Priority.Low);
+  const [status, setStatus] = useState<Status>(Status.NotStarted);
+  const [estimatedDays, setEstimatedDays] = useState<string>('0');
+  const [estimatedHours, setEstimatedHours] = useState<string>('0');
   const [categories, setCategories] = useState<Category[]>([
     { name: 'Work', color: '#6a11cb' },
     { name: 'Personal', color: '#ff9800' },
@@ -82,8 +107,14 @@ const AddTaskScreen: React.FC = () => {
   const [isAddCategoryModalVisible, setAddCategoryModalVisible] = useState(false);
   const [newCategory, setNewCategory] = useState<string>('');
 
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [showNewTaskButton, setShowNewTaskButton] = useState(false);
+
   const navigation = useNavigation();
-  const buttonScale = useRef(new Animated.Value(1)).current;
+  const buttonScale = useSharedValue(1);
+  const animatedButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: buttonScale.value }],
+  }));
 
   // Add ref for Task Name input
   const taskNameRef = useRef<TextInput>(null);
@@ -116,51 +147,24 @@ const AddTaskScreen: React.FC = () => {
     taskNameRef.current?.focus();
   }, [navigation]);
 
-  // --- Input Handlers ---
-  const handleNumericInput = (value: string, setter: React.Dispatch<React.SetStateAction<string>>) => {
-    // Allow only digits or empty string (for clearing)
-    if (/^\d*$/.test(value)) {
-      setter(value);
-    }
-  };
+  // --- Input Handlers (useCallback) ---
+  const handleNumericInput = React.useCallback(
+    (value: string, setter: React.Dispatch<React.SetStateAction<string>>) => {
+      if (/^\d*$/.test(value)) {
+        setter(value);
+      }
+    },
+    []
+  );
 
-  // --- Date Picker ---
-  const showDatePicker = () => setDatePickerVisibility(true);
-  const hideDatePicker = () => setDatePickerVisibility(false);
-  const handleConfirmDate = (date: Date) => {
-    setDueDate(moment(date).toISOString());
+  const showDatePicker = React.useCallback(() => setDatePickerVisibility(true), []);
+  const hideDatePicker = React.useCallback(() => setDatePickerVisibility(false), []);
+  const handleConfirmDate = React.useCallback((date: Date) => {
+    setDueDate(date.toISOString());
     hideDatePicker();
-  };
+  }, [hideDatePicker]);
 
-  // --- Validation ---
-  const validateInput = (): boolean => {
-    if (!taskName.trim()) {
-      Alert.alert('Validation Error', 'Task Name is required.');
-      return false;
-    }
-    if (!taskDescription.trim()) {
-      Alert.alert('Validation Error', 'Task Description is required.');
-      return false;
-    }
-    // Basic check for duration - ensure at least one is entered if needed, or specific format
-    // if (!estimatedDays && !estimatedHours) {
-    //   Alert.alert('Validation Error', 'Please enter an estimated duration.');
-    //   return false;
-    // }
-     if (!category) {
-       Alert.alert('Validation Error', 'Please select a category.');
-       return false;
-     }
-    if (!dueDate) {
-      Alert.alert('Validation Error', 'Please select a due date.');
-      return false;
-    }
-    // Add more specific validation if needed (e.g., date not in the past)
-    return true;
-  };
-
-  // --- Button Animation ---
-  const animateButtonPress = (callback?: () => void) => {
+  const animateButtonPress = React.useCallback((callback?: () => void) => {
     Animated.sequence([
       Animated.timing(buttonScale, {
         toValue: 0.95,
@@ -172,64 +176,18 @@ const AddTaskScreen: React.FC = () => {
         duration: 100,
         useNativeDriver: true,
       }),
-    ]).start(callback); // Execute callback after animation completes
-  };
+    ]).start(callback);
+  }, [buttonScale]);
 
-  // --- Save Task Logic ---
-  const handleSaveTask = async () => {
-    Keyboard.dismiss(); // Dismiss keyboard before potentially showing alerts
-    if (!validateInput() || !userId) {
-        if (!userId) Alert.alert('Error', 'User not identified. Cannot save task.');
-        return; // Stop if validation fails or userId is missing
-    }
-
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setIsLoading(true); // Start loading indicator
-
-    // Combine days and hours, defaulting to '0' if empty
-    const estimatedDuration = `${estimatedDays || '0'} days, ${estimatedHours || '0'} hours`;
-
-    const newTask: Omit<Task, 'taskId' | 'createdAt'> & { createdAt?: string } = { // Omit fields set by backend potentially
-      userId: userId, // Use state userId
-      taskName: taskName.trim(),
-      taskDescription: taskDescription.trim(),
-      priority, // Already typed correctly
-      estimatedDuration,
-      status,
-      completed: status === 'Completed',
-      category,
-      deadline: dueDate,
-      notes: notes.trim(),
-      // Let backend handle createdAt ideally, but keep if required by current API
-      // createdAt: moment().toISOString(),
-    };
-
-    try {
-      const response = await axios.post(`${BASE_API_URL}/tasks`, newTask);
-      console.log('Task saved successfully:', response.data);
-
-      Alert.alert('Success', 'Task added successfully!', [
-        { text: 'OK', onPress: () => navigation.goBack() }, // Navigate back on OK
-      ]);
-    } catch (error: any) {
-      console.error('Error saving task:', error);
-      // Provide more specific error feedback if possible
-      const errorMessage = error.response?.data?.message || error.message || 'An unknown error occurred.';
-      Alert.alert('Error Saving Task', `Failed to save the task. ${errorMessage}`);
-    } finally {
-      setIsLoading(false); // Stop loading indicator regardless of success/failure
-    }
-  };
-
-  // --- Custom Category Handlers ---
-  const openAddCategoryModal = () => {
+  const openAddCategoryModal = React.useCallback(() => {
     setNewCategory('');
     setCategoryColor(CATEGORY_COLORS[0]);
     setAddCategoryModalVisible(true);
-  };
-  const closeAddCategoryModal = () => setAddCategoryModalVisible(false);
+  }, []);
 
-  const handleAddCategory = () => {
+  const closeAddCategoryModal = React.useCallback(() => setAddCategoryModalVisible(false), []);
+
+  const handleAddCategory = React.useCallback(() => {
     const trimmed = newCategory.trim();
     if (!trimmed) {
       Alert.alert('Validation Error', 'Category name cannot be empty.');
@@ -242,317 +200,520 @@ const AddTaskScreen: React.FC = () => {
     setCategories([...categories, { name: trimmed, color: categoryColor }]);
     setCategory(trimmed);
     setAddCategoryModalVisible(false);
+  }, [newCategory, categories, categoryColor]);
+
+  // --- Validation ---
+  const validateInput = (): boolean => {
+    const newErrors: { [key: string]: string } = {};
+    if (!taskName.trim()) {
+      newErrors.taskName = 'Task Name is required.';
+    }
+    if (!taskDescription.trim()) {
+      newErrors.taskDescription = 'Task Description is required.';
+    }
+    if (!category) {
+      newErrors.category = 'Please select a category.';
+    }
+    if (!dueDate) {
+      newErrors.dueDate = 'Please select a due date.';
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
+
+  // --- Save Task Logic (useCallback) ---
+  const handleSaveTask = React.useCallback(async () => {
+    Keyboard.dismiss();
+    if (!validateInput() || !userId) {
+      if (!userId) Alert.alert('Error', 'User not identified. Cannot save task.');
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsLoading(true);
+    const estimatedDuration = `${estimatedDays || '0'} days, ${estimatedHours || '0'} hours`;
+    const newTask: Omit<Task, 'taskId' | 'createdAt'> & { createdAt?: string } = {
+      userId: userId,
+      taskName: taskName.trim(),
+      taskDescription: taskDescription.trim(),
+      priority,
+      estimatedDuration,
+      status,
+      completed: status === Status.Completed,
+      category,
+      deadline: dueDate,
+      notes: notes.trim(),
+    };
+    try {
+      const response = await axios.post(`${BASE_API_URL}/tasks`, newTask);
+      setShowNewTaskButton(true);
+      setTaskName('');
+      setTaskDescription('');
+      setEstimatedDays('0');
+      setEstimatedHours('0');
+      setCategory('');
+      setNotes('');
+      setDueDate(new Date().toISOString());
+      setPriority(Priority.Low);
+      setStatus(Status.NotStarted);
+      setErrors({});
+      taskNameRef.current?.focus();
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'An unknown error occurred.';
+      Alert.alert('Error Saving Task', `Failed to save the task. ${errorMessage}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    validateInput,
+    userId,
+    estimatedDays,
+    estimatedHours,
+    taskName,
+    taskDescription,
+    priority,
+    status,
+    category,
+    dueDate,
+    notes,
+  ]);
+
+  // --- Button Animation ---
+  // --- Save Button Disabled State ---
+  const isSaveDisabled = isLoading || !taskName.trim() || !taskDescription.trim() || !category || !dueDate;
 
   // --- Render ---
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header />
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <ScrollView
-          contentContainerStyle={styles.scrollViewContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false} // Hide scrollbar if preferred
-        >
-          <View style={styles.container}>
-            <Text style={styles.title}>Create New Task</Text>
-
-            {/* Task Name */}
-            <View style={styles.inputContainer}>
-              <Ionicons name="clipboard-outline" size={22} color="#555" style={styles.icon} />
-              <TextInput
-                ref={taskNameRef}
-                style={styles.input}
-                placeholder="Task Name *"
-                placeholderTextColor="#aaa"
-                value={taskName}
-                onChangeText={setTaskName}
-                accessibilityLabel="Task Name Input"
-                accessibilityHint="Enter the name of your task here"
-                maxLength={100} // Add max length
-                allowFontScaling={true}
-              />
-            </View>
-
-            {/* Task Description */}
-            <View style={styles.inputContainer}>
-              <Ionicons name="document-text-outline" size={22} color="#555" style={styles.icon} />
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Task Description *"
-                placeholderTextColor="#aaa"
-                value={taskDescription}
-                onChangeText={setTaskDescription}
-                multiline
-                numberOfLines={4} // Suggest initial height
-                accessibilityLabel="Task Description Input"
-                accessibilityHint="Describe the task in detail"
-                maxLength={500} // Add max length
-                allowFontScaling={true}
-              />
-            </View>
-
-            {/* Estimated Duration */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label} allowFontScaling={true}>Estimated Duration:</Text>
-              <Text style={styles.helpText} allowFontScaling={true}>How long do you expect this task to take? (e.g., 2 days, 3 hours)</Text>
-              <View style={styles.durationContainer}>
-                <Ionicons name="time-outline" size={22} color="#555" style={styles.icon} />
-                <View style={styles.durationInputWrapper}>
-                  <TextInput
-                    style={[styles.input, styles.durationInput]}
-                    placeholder="Days"
-                    placeholderTextColor="#aaa"
-                    keyboardType="numeric"
-                    value={estimatedDays}
-                    onChangeText={(value) => handleNumericInput(value, setEstimatedDays)}
-                    accessibilityLabel="Estimated duration in days"
-                    accessibilityHint="Enter the number of days estimated for this task"
-                    allowFontScaling={true}
-                  />
-                  <Text style={styles.durationLabel} allowFontScaling={true}>days</Text>
-                </View>
-                <View style={styles.durationInputWrapper}>
-                  <TextInput
-                    style={[styles.input, styles.durationInput]}
-                    placeholder="Hours"
-                    placeholderTextColor="#aaa"
-                    keyboardType="numeric"
-                    value={estimatedHours}
-                    onChangeText={(value) => handleNumericInput(value, setEstimatedHours)}
-                    accessibilityLabel="Estimated duration in hours"
-                    accessibilityHint="Enter the number of hours estimated for this task"
-                    allowFontScaling={true}
-                  />
-                  <Text style={styles.durationLabel} allowFontScaling={true}>hours</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Status Selector */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label} allowFontScaling={true}>Status:</Text>
-               <View style={styles.segmentedControl}>
-                 {STATUS_OPTIONS.map((option) => (
-                   <TouchableOpacity
-                     key={option}
-                     style={[
-                       styles.segmentButton,
-                       { backgroundColor: status === option ? '#6a11cb' : '#eee' },
-                     ]}
-                     onPress={() => setStatus(option)}
-                     accessibilityLabel={`Set status to ${option}`}
-                     accessibilityHint={`Mark this task as ${option}`}
-                     accessibilityState={{ selected: status === option }}
-                   >
-                     <Text style={[styles.segmentButtonText, { color: status === option ? '#fff' : '#555'}]} allowFontScaling={true}>{option}</Text>
-                   </TouchableOpacity>
-                 ))}
-               </View>
-            </View>
-
-            {/* Due Date Picker */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label} allowFontScaling={true}>Due Date *:</Text>
-              <TouchableOpacity onPress={showDatePicker} style={styles.dateInputContainer} accessibilityLabel="Select Due Date Button" accessibilityHint="Tap to select a due date for this task">
-                  <Ionicons name="calendar-outline" size={22} color="#555" style={styles.icon} />
-                  <Text style={styles.dateText} allowFontScaling={true}>
-                  {dueDate ? moment(dueDate).format('MMMM D, YYYY') : 'Select Date'}
-                  </Text>
-              </TouchableOpacity>
-            </View>
-            <DateTimePickerModal
-              isVisible={isDatePickerVisible}
-              mode="date"
-              date={dueDate ? new Date(dueDate) : new Date()} // Set initial date
-              minimumDate={new Date()} // Optional: Prevent selecting past dates
-              onConfirm={handleConfirmDate}
-              onCancel={hideDatePicker}
-              accessibilityLabel="Date Picker Modal"
-              accessibilityHint="Pick a date for the task deadline"
-            />
-
-            {/* Priority Selector */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label} allowFontScaling={true}>Priority:</Text>
-              <Text style={styles.helpText} allowFontScaling={true}>Set how important or urgent this task is.</Text>
-               <View style={styles.segmentedControl}>
-                 {(Object.keys(PRIORITY_COLORS) as Array<keyof typeof PRIORITY_COLORS>).map((key) => (
-                   <TouchableOpacity
-                     key={key}
-                     style={[
-                       styles.segmentButton,
-                       { backgroundColor: PRIORITY_COLORS[key], opacity: priority === key ? 1 : 0.5 }, // More distinct opacity
-                     ]}
-                     onPress={() => setPriority(key)}
-                     accessibilityLabel={`Set priority to ${key}`}
-                     accessibilityHint={`Set the priority of this task to ${key}`}
-                     accessibilityState={{ selected: priority === key }}
-                   >
-                     <Text
-                       style={[
-                         styles.segmentButtonText,
-                         // Ensure contrast: use black text for yellow background
-                         key === 'medium' ? { color: '#222' } : {}
-                       ]}
-                       allowFontScaling={true}
-                     >
-                       {key.toUpperCase()}
-                     </Text>
-                   </TouchableOpacity>
-                 ))}
-               </View>
-            </View>
-
-            {/* Category Selector */}
-            <View style={styles.inputGroup}>
-               <Text style={styles.label} allowFontScaling={true}>Category *:</Text>
-               <ScrollView
-                 horizontal
-                 showsHorizontalScrollIndicator={false}
-                 contentContainerStyle={styles.categoryScrollContainer}
-               >
-                 <View style={styles.segmentedControl}>
-                   {categories.map((cat) => (
-                     <TouchableOpacity
-                       key={cat.name}
-                       style={[
-                         styles.segmentButton, // Reuse segment style
-                         { backgroundColor: category === cat.name ? cat.color : '#eee' },
-                         styles.categoryButton, // Add specific category styles if needed
-                       ]}
-                       onPress={() => setCategory(cat.name)}
-                       accessibilityLabel={`Set category to ${cat.name}`}
-                       accessibilityHint={`Assign this task to the ${cat.name} category`}
-                       accessibilityState={{ selected: category === cat.name }}
-                     >
-                       <View style={[styles.categoryColorDot, { backgroundColor: cat.color }]} />
-                       <Text
-                         style={[
-                           styles.segmentButtonText,
-                           // Ensure contrast: use black text for yellow backgrounds
-                           (cat.color === '#ffd600' || cat.color === '#FFC107') && category === cat.name
-                             ? { color: '#222' }
-                             : { color: category === cat.name ? '#fff' : '#555' },
-                           { marginLeft: 6 }
-                         ]}
-                         allowFontScaling={true}
-                       >
-                         {cat.name}
-                       </Text>
-                     </TouchableOpacity>
-                   ))}
-                   {/* Add Category Button */}
-                   <TouchableOpacity
-                     style={[styles.segmentButton, styles.addCategoryButton]}
-                     onPress={openAddCategoryModal}
-                     accessibilityLabel="Add custom category"
-                     accessibilityHint="Tap to add a new custom category"
-                   >
-                     <Ionicons name="add-circle-outline" size={22} color="#6a11cb" />
-                   </TouchableOpacity>
-                 </View>
-               </ScrollView>
-             </View>
-
-             {/* Add Category Modal */}
-             <Modal
-               visible={isAddCategoryModalVisible}
-               animationType="slide"
-               transparent
-               onRequestClose={closeAddCategoryModal}
-               accessibilityLabel="Add Category Modal"
-               accessibilityHint="Modal dialog to add a new custom category"
-             >
-               <View style={styles.modalOverlay}>
-                 <View style={styles.modalContent}>
-                   <Text style={styles.modalTitle} allowFontScaling={true}>Add Custom Category</Text>
-                   <TextInput
-                     style={styles.modalInput}
-                     placeholder="Enter category name"
-                     value={newCategory}
-                     onChangeText={setNewCategory}
-                     maxLength={30}
-                     autoFocus
-                     accessibilityLabel="New Category Name Input"
-                     accessibilityHint="Enter the name for your new category"
-                     allowFontScaling={true}
-                   />
-                   <Text style={styles.modalLabel} allowFontScaling={true}>Pick a color:</Text>
-                   <View style={styles.colorPickerRow}>
-                     {CATEGORY_COLORS.map((color) => (
-                       <TouchableOpacity
-                         key={color}
-                         style={[
-                           styles.colorCircle,
-                           { backgroundColor: color, borderWidth: categoryColor === color ? 2 : 0 }
-                         ]}
-                         onPress={() => setCategoryColor(color)}
-                         accessibilityLabel={`Pick color ${color}`}
-                         accessibilityHint={`Select ${color} as the category color`}
-                       />
-                     ))}
-                   </View>
-                   <View style={styles.modalButtonRow}>
-                     <TouchableOpacity
-                       style={styles.modalButton}
-                       onPress={closeAddCategoryModal}
-                       accessibilityLabel="Cancel Add Category"
-                       accessibilityHint="Cancel adding a new category"
-                     >
-                       <Text style={styles.modalButtonText} allowFontScaling={true}>Cancel</Text>
-                     </TouchableOpacity>
-                     <TouchableOpacity
-                       style={[styles.modalButton, styles.modalButtonPrimary]}
-                       onPress={handleAddCategory}
-                       accessibilityLabel="Add Category"
-                       accessibilityHint="Add this new category"
-                     >
-                       <Text style={[styles.modalButtonText, styles.modalButtonPrimaryText]} allowFontScaling={true}>Add</Text>
-                     </TouchableOpacity>
-                   </View>
-                 </View>
-               </View>
-             </Modal>
-
-             {/* Notes Input */}
-            <View style={styles.inputContainer}>
-              <Ionicons name="reader-outline" size={22} color="#555" style={styles.icon} />
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Additional Notes (Optional)"
-                placeholderTextColor="#aaa"
-                value={notes}
-                onChangeText={setNotes}
-                multiline
-                numberOfLines={3}
-                accessibilityLabel="Additional Notes Input"
-                accessibilityHint="Add any extra notes for this task"
-                maxLength={1000}
-                allowFontScaling={true}
-              />
-            </View>
-
-            {/* Save Task Button */}
-            <TouchableOpacity
-              onPress={() => animateButtonPress(handleSaveTask)} // Pass handleSaveTask as callback
-              style={[styles.saveButton, isLoading && styles.saveButtonDisabled]} // Style changes when loading
-              disabled={isLoading} // Disable button when loading
-              accessibilityLabel="Save Task Button"
-              accessibilityHint="Save this task"
-            >
-              <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="#fff" accessibilityLabel="Loading indicator" /> // Show loader
-                ) : (
-                  <Text style={styles.saveButtonText} allowFontScaling={true}>Save Task</Text>
-                )}
+      <LinearGradient
+        colors={['#f8fafc', '#e0e7ff', '#f8fafc']}
+        style={StyleSheet.absoluteFill}
+        start={[0, 0]}
+        end={[1, 1]}
+      />
+  
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={80}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <ScrollView
+            contentContainerStyle={styles.scrollViewContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.container}>
+              <Animated.View entering={FadeIn.duration(600)}>
+                <Text style={styles.title}>Create a New Task</Text>
+                <Text style={styles.subtitle}>Organize your day with clarity and style</Text>
               </Animated.View>
-            </TouchableOpacity>
 
-          </View>
-        </ScrollView>
-      </TouchableWithoutFeedback>
+              {/* Divider */}
+              <View style={styles.divider} />
+
+              {/* Task Name */}
+              <Animated.View style={styles.card} entering={FadeIn.delay(100).duration(500)}>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="clipboard-outline" size={24} color="#7c3aed" style={styles.icon} />
+                  <TextInput
+                    ref={taskNameRef}
+                    style={styles.input}
+                    placeholder="Task Name *"
+                    placeholderTextColor="#a3a3a3"
+                    value={taskName}
+                    onChangeText={text => {
+                      setTaskName(text);
+                      if (errors.taskName) setErrors(prev => ({ ...prev, taskName: '' }));
+                    }}
+                    accessibilityLabel="Task Name Input"
+                    accessibilityHint="Enter the name of your task here"
+                    accessibilityRole="textbox"
+                    accessibilityState={{ invalid: !!errors.taskName }}
+                    maxLength={100}
+                    allowFontScaling={true}
+                    testID="input-task-name"
+                  />
+                </View>
+                {errors.taskName ? <Text style={styles.errorText} testID="error-task-name">{errors.taskName}</Text> : null}
+              </Animated.View>
+
+              {/* Task Description */}
+              <Animated.View style={styles.card} entering={FadeIn.delay(200).duration(500)}>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="document-text-outline" size={24} color="#7c3aed" style={styles.icon} />
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    placeholder="Task Description *"
+                    placeholderTextColor="#a3a3a3"
+                    value={taskDescription}
+                    onChangeText={text => {
+                      setTaskDescription(text);
+                      if (errors.taskDescription) setErrors(prev => ({ ...prev, taskDescription: '' }));
+                    }}
+                    multiline
+                    numberOfLines={4}
+                    accessibilityLabel="Task Description Input"
+                    accessibilityHint="Describe the task in detail"
+                    accessibilityRole="textbox"
+                    accessibilityState={{ invalid: !!errors.taskDescription }}
+                    maxLength={500}
+                    allowFontScaling={true}
+                    testID="input-task-desc"
+                  />
+                </View>
+                {errors.taskDescription ? <Text style={styles.errorText} testID="error-task-desc">{errors.taskDescription}</Text> : null}
+              </Animated.View>
+
+              {/* Divider */}
+              <View style={styles.divider} />
+
+              {/* Estimated Duration */}
+              <Animated.View style={styles.card} entering={FadeIn.delay(300).duration(500)}>
+                <Text style={styles.label}>Estimated Duration</Text>
+                <Text style={styles.helpText}>How long do you expect this task to take?</Text>
+                <View style={styles.durationContainer}>
+                  <Ionicons name="time-outline" size={22} color="#7c3aed" style={styles.icon} />
+                  <View style={styles.durationInputWrapper}>
+                    <TextInput
+                      style={[styles.input, styles.durationInput]}
+                      placeholder="Days"
+                      placeholderTextColor="#a3a3a3"
+                      keyboardType="numeric"
+                      value={estimatedDays}
+                      onChangeText={(value) => handleNumericInput(value, setEstimatedDays)}
+                      accessibilityLabel="Estimated duration in days"
+                      accessibilityHint="Enter the number of days estimated for this task"
+                      allowFontScaling={true}
+                    />
+                    <Text style={styles.durationLabel} allowFontScaling={true}>days</Text>
+                  </View>
+                  <View style={styles.durationInputWrapper}>
+                    <TextInput
+                      style={[styles.input, styles.durationInput]}
+                      placeholder="Hours"
+                      placeholderTextColor="#a3a3a3"
+                      keyboardType="numeric"
+                      value={estimatedHours}
+                      onChangeText={(value) => handleNumericInput(value, setEstimatedHours)}
+                      accessibilityLabel="Estimated duration in hours"
+                      accessibilityHint="Enter the number of hours estimated for this task"
+                      allowFontScaling={true}
+                    />
+                    <Text style={styles.durationLabel} allowFontScaling={true}>hours</Text>
+                  </View>
+                </View>
+              </Animated.View>
+
+              {/* Status Selector */}
+              <Animated.View style={styles.card} entering={FadeIn.delay(400).duration(500)}>
+                <Text style={styles.label}>Status</Text>
+                <View style={styles.pillGroup}>
+                  {STATUS_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.pill,
+                        status === option && styles.pillActive,
+                      ]}
+                      onPress={() => setStatus(option)}
+                      accessibilityLabel={`Set status to ${option}`}
+                      accessibilityHint={`Mark this task as ${option}`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: status === option }}
+                      testID={`status-${option.replace(/\s/g, '').toLowerCase()}`}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[
+                        styles.pillText,
+                        status === option && styles.pillTextActive
+                      ]}>{option}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </Animated.View>
+
+              {/* Divider */}
+              <View style={styles.divider} />
+
+              {/* Due Date Picker */}
+              <Animated.View style={styles.card} entering={FadeIn.delay(500).duration(500)}>
+                <Text style={styles.label}>Due Date *</Text>
+                <TouchableOpacity
+                  onPress={showDatePicker}
+                  style={styles.dateInputContainer}
+                  accessibilityLabel="Select Due Date Button"
+                  accessibilityHint="Tap to select a due date for this task"
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: isDatePickerVisible, invalid: !!errors.dueDate }}
+                  testID="button-due-date"
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="calendar-outline" size={22} color="#7c3aed" style={styles.icon} />
+                  <Text style={styles.dateText} allowFontScaling={true}>
+                    {dueDate ? format(new Date(dueDate), 'MMMM d, yyyy') : 'Select Date'}
+                  </Text>
+                </TouchableOpacity>
+                {errors.dueDate ? <Text style={styles.errorText} testID="error-due-date">{errors.dueDate}</Text> : null}
+                <DateTimePickerModal
+                  isVisible={isDatePickerVisible}
+                  mode="date"
+                  date={dueDate ? new Date(dueDate) : new Date()}
+                  minimumDate={new Date()}
+                  onConfirm={handleConfirmDate}
+                  onCancel={hideDatePicker}
+                  accessibilityLabel="Date Picker Modal"
+                  accessibilityHint="Pick a date for the task deadline"
+                  testID="modal-date-picker"
+                />
+              </Animated.View>
+
+              {/* Priority Selector */}
+              <Animated.View style={styles.card} entering={FadeIn.delay(600).duration(500)}>
+                <Text style={styles.label}>Priority</Text>
+                <Text style={styles.helpText}>Set how important or urgent this task is.</Text>
+                <View style={styles.pillGroup}>
+                  {(Object.values(Priority) as Priority[]).map((key) => (
+                    <TouchableOpacity
+                      key={key}
+                      style={[
+                        styles.pill,
+                        { backgroundColor: PRIORITY_COLORS[key] + 'cc' },
+                        priority === key && styles.pillActive,
+                      ]}
+                      onPress={() => setPriority(key)}
+                      accessibilityLabel={`Set priority to ${key}`}
+                      accessibilityHint={`Set the priority of this task to ${key}`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: priority === key }}
+                      testID={`priority-${key}`}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[
+                        styles.pillText,
+                        key === Priority.Medium ? { color: '#222' } : {},
+                        priority === key && styles.pillTextActive
+                      ]}>
+                        {key.toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </Animated.View>
+
+              {/* Divider */}
+              <View style={styles.divider} />
+
+              {/* Category Selector */}
+              <Animated.View style={styles.card} entering={FadeIn.delay(700).duration(500)}>
+                <Text style={styles.label}>Category *</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.categoryScrollContainer}
+                  testID="scroll-categories"
+                >
+                  <View style={styles.pillGroup}>
+                    {categories.map((cat) => (
+                      <TouchableOpacity
+                        key={cat.name}
+                        style={[
+                          styles.pill,
+                          { backgroundColor: cat.color + '22' },
+                          category === cat.name && [styles.pillActive, { backgroundColor: cat.color }],
+                        ]}
+                        onPress={() => {
+                          setCategory(cat.name);
+                          if (errors.category) setErrors(prev => ({ ...prev, category: '' }));
+                        }}
+                        accessibilityLabel={`Set category to ${cat.name}`}
+                        accessibilityHint={`Assign this task to the ${cat.name} category`}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: category === cat.name }}
+                        testID={`category-${cat.name.toLowerCase()}`}
+                        activeOpacity={0.85}
+                      >
+                        <View style={[styles.categoryColorDot, { backgroundColor: cat.color }]} />
+                        <Text style={[
+                          styles.pillText,
+                          (cat.color === '#ffd600' || cat.color === '#FFC107') && category === cat.name
+                            ? { color: '#222' }
+                            : { color: category === cat.name ? '#fff' : '#555' },
+                          { marginLeft: 6 }
+                        ]}>
+                          {cat.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    {/* Add Category Button */}
+                    <TouchableOpacity
+                      style={[styles.pill, styles.addCategoryButton]}
+                      onPress={openAddCategoryModal}
+                      accessibilityLabel="Add custom category"
+                      accessibilityHint="Tap to add a new custom category"
+                      accessibilityRole="button"
+                      testID="button-add-category"
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="add-circle-outline" size={24} color="#7c3aed" />
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+                {errors.category ? <Text style={styles.errorText} testID="error-category">{errors.category}</Text> : null}
+              </Animated.View>
+
+              {/* Add Category Modal */}
+              <Modal
+                visible={isAddCategoryModalVisible}
+                animationType="fade"
+                transparent
+                onRequestClose={closeAddCategoryModal}
+                accessibilityLabel="Add Category Modal"
+                accessibilityHint="Modal dialog to add a new custom category"
+                testID="modal-add-category"
+              >
+                <View style={styles.modalOverlay}>
+                  <View style={styles.modalBlur} />
+                  <View style={styles.modalContent}>
+                    <Text style={styles.modalTitle} allowFontScaling={true}>Add Custom Category</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Enter category name"
+                      value={newCategory}
+                      onChangeText={setNewCategory}
+                      maxLength={30}
+                      autoFocus
+                      accessibilityLabel="New Category Name Input"
+                      accessibilityHint="Enter the name for your new category"
+                      accessibilityRole="textbox"
+                      testID="input-new-category"
+                      allowFontScaling={true}
+                    />
+                    <Text style={styles.modalLabel} allowFontScaling={true}>Pick a color:</Text>
+                    <View style={styles.colorPickerRow}>
+                      {CATEGORY_COLORS.map((color) => (
+                        <TouchableOpacity
+                          key={color}
+                          style={[
+                            styles.colorCircle,
+                            { backgroundColor: color, borderWidth: categoryColor === color ? 3 : 0, borderColor: '#7c3aed' }
+                          ]}
+                          onPress={() => setCategoryColor(color)}
+                          accessibilityLabel={`Pick color ${color}`}
+                          accessibilityHint={`Select ${color} as the category color`}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: categoryColor === color }}
+                          testID={`color-${color.replace('#', '')}`}
+                          activeOpacity={0.85}
+                        />
+                      ))}
+                    </View>
+                    <View style={styles.modalButtonRow}>
+                      <TouchableOpacity
+                        style={styles.modalButton}
+                        onPress={closeAddCategoryModal}
+                        accessibilityLabel="Cancel Add Category"
+                        accessibilityHint="Cancel adding a new category"
+                        accessibilityRole="button"
+                        testID="button-cancel-category"
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.modalButtonText} allowFontScaling={true}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.modalButton, styles.modalButtonPrimary]}
+                        onPress={handleAddCategory}
+                        accessibilityLabel="Add Category"
+                        accessibilityHint="Add this new category"
+                        accessibilityRole="button"
+                        testID="button-confirm-category"
+                        activeOpacity={0.85}
+                      >
+                        <Text style={[styles.modalButtonText, styles.modalButtonPrimaryText]} allowFontScaling={true}>Add</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {isLoading && (
+                      <View style={styles.modalLoadingOverlay}>
+                        <ActivityIndicator size="large" color="#7c3aed" testID="modal-loading-indicator" />
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </Modal>
+
+              {/* Notes Input */}
+              <Animated.View style={styles.card} entering={FadeIn.delay(800).duration(500)}>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="reader-outline" size={24} color="#7c3aed" style={styles.icon} />
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    placeholder="Additional Notes (Optional)"
+                    placeholderTextColor="#a3a3a3"
+                    value={notes}
+                    onChangeText={setNotes}
+                    multiline
+                    numberOfLines={3}
+                    accessibilityLabel="Additional Notes Input"
+                    accessibilityHint="Add any extra notes for this task"
+                    accessibilityRole="textbox"
+                    testID="input-notes"
+                    maxLength={1000}
+                    allowFontScaling={true}
+                  />
+                </View>
+              </Animated.View>
+
+              {/* Save Task Button */}
+              <Animated.View
+                style={[
+                  styles.saveButton,
+                  (isSaveDisabled || isLoading) && styles.saveButtonDisabled,
+                  animatedButtonStyle
+                ]}
+                entering={FadeIn.delay(900).duration(500)}
+              >
+                <LinearGradient
+                  colors={isSaveDisabled ? ['#c7d2fe', '#c7d2fe'] : ['#7c3aed', '#6366f1']}
+                  start={[0, 0]}
+                  end={[1, 0]}
+                  style={{ width: '100%', borderRadius: 32, alignItems: 'center', padding: 22 }}
+                >
+                  <TouchableOpacity
+                    onPress={() => animateButtonPress(handleSaveTask)}
+                    disabled={isSaveDisabled}
+                    accessibilityLabel="Save Task Button"
+                    accessibilityHint="Save this task"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: isSaveDisabled }}
+                    testID="button-save-task"
+                    style={{ width: '100%', alignItems: 'center' }}
+                    activeOpacity={0.85}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator size="small" color="#fff" accessibilityLabel="Loading indicator" testID="button-loading-indicator" />
+                    ) : (
+                      <Text style={styles.saveButtonText} allowFontScaling={true}>Save Task</Text>
+                    )}
+                  </TouchableOpacity>
+                </LinearGradient>
+              </Animated.View>
+            </View>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+      {/* Floating New Task Button */}
+      {showNewTaskButton && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => setShowNewTaskButton(false)}
+          accessibilityLabel="Add Another Task"
+          accessibilityHint="Start adding a new task"
+          accessibilityRole="button"
+          testID="button-new-task"
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add" size={28} color="#fff" />
+        </TouchableOpacity>
+      )}
       <View style={styles.navbarContainer}>
         <Navbar />
       </View>
@@ -560,269 +721,394 @@ const AddTaskScreen: React.FC = () => {
   );
 };
 
-// --- Styles --- (Refined and organized)
+// --- Styles --- (Modernized)
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-    paddingBottom: 100, // Ensure space for absolute Navbar + save button
+    backgroundColor: 'transparent',
+    paddingBottom: 100,
   },
   scrollViewContent: {
     flexGrow: 1,
-    paddingBottom: 100, // Ensure enough space for the absolute Navbar + save button
+    paddingBottom: 120,
   },
   container: {
     flex: 1,
-    padding: 20,
+    padding: 22,
+    paddingTop: 16,
+    gap: 22,
   },
   title: {
-    fontSize: 26, // Slightly smaller
+    fontSize: 36,
     fontWeight: 'bold',
-    marginBottom: 25,
-    color: '#333',
+    marginBottom: 2,
+    color: '#181c2f',
     textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  subtitle: {
+    fontSize: 18,
+    color: '#6366f1',
+    textAlign: 'center',
+    marginBottom: 18,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e0e7ef',
+    marginVertical: 10,
+    borderRadius: 1,
+    opacity: 0.7,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 28,
+    padding: 26,
+    marginBottom: 0,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
+    borderWidth: 0,
+    marginHorizontal: 2,
   },
   inputGroup: {
-      marginBottom: 20, // Consistent spacing
+    marginBottom: 18,
+    gap: 2,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#444',
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#232946',
     marginBottom: 8,
-    marginLeft: 5, // Align with input fields visually
+    marginLeft: 5,
+    letterSpacing: 0.2,
   },
-  inputContainer: { // For single text inputs
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12, // Slightly rounder
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#ddd', // Subtle border
+    backgroundColor: '#f3f4f8',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    marginBottom: 0,
+    borderWidth: 0,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  durationContainer: { // Container specific for duration inputs
+  durationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    paddingVertical: 0, // Vertical padding handled by input itself
-    borderWidth: 1,
-    borderColor: '#ddd',
+    backgroundColor: '#f3f4f8',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderWidth: 0,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
   },
   icon: {
-    marginRight: 10,
-    color: '#666', // Softer icon color
+    marginRight: 14,
+    color: '#7c3aed',
   },
   input: {
     flex: 1,
-    color: '#333',
-    fontSize: 16,
-    paddingVertical: 8, // Add vertical padding inside input
+    color: '#232946',
+    fontSize: 17,
+    paddingVertical: 8,
+    backgroundColor: 'transparent',
   },
   textArea: {
-    height: 100, // Default height
-    textAlignVertical: 'top', // Align text to top
-    paddingTop: 12, // Adjust padding for multiline
+    height: 100,
+    textAlignVertical: 'top',
+    paddingTop: 12,
+    borderRadius: 12,
   },
   durationInput: {
-      flex: 1,
-      marginHorizontal: 5, // Space between day/hour inputs
+    flex: 1,
+    marginHorizontal: 6,
+    backgroundColor: '#e0e7ff',
+    borderRadius: 10,
+    paddingHorizontal: 10,
   },
-  dateInputContainer: { // Specific style for date touchable
+  dateInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    paddingVertical: 12, // Consistent padding
-    borderWidth: 1,
-    borderColor: '#ddd',
-    minHeight: 50, // Ensure consistent height
+    backgroundColor: '#f3f4f8',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderWidth: 0,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
+    minHeight: 54,
   },
   dateText: {
-    color: '#333',
-    fontSize: 16,
-    marginLeft: 5, // Space from icon
+    color: '#232946',
+    fontSize: 17,
+    marginLeft: 10,
+    fontWeight: '500',
   },
-  segmentedControl: {
+  pillGroup: {
     flexDirection: 'row',
-    justifyContent: 'space-around', // Distribute evenly
-    backgroundColor: '#eee', // Background for the container
-    borderRadius: 10,
-    overflow: 'hidden', // Clip children to rounded corners
-    marginTop: 5, // Space from label
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 2,
   },
-  segmentButton: {
-    flex: 1, // Make buttons fill space
-    paddingVertical: 12, // Consistent padding
-    paddingHorizontal: 5, // Horizontal padding for text
-    borderRadius: 8, // Slightly rounded inner buttons (visual only if needed, outer container handles clipping)
-    margin: 2, // Create separation with background visible
+  pill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: '#e0e7ef',
+    marginRight: 10,
+    marginBottom: 10,
+    minHeight: 40,
+    minWidth: 68,
+    borderWidth: 0,
+    elevation: 0,
+    transitionDuration: '150ms',
   },
-  segmentButtonText: {
+  pillActive: {
+    backgroundColor: '#7c3aed',
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  pillText: {
     fontWeight: 'bold',
-    fontSize: 13, // Slightly smaller text
-    textAlign: 'center',
-    color: '#fff', // Default text color for selected/priority
+    fontSize: 15,
+    color: '#232946',
+    letterSpacing: 0.2,
+  },
+  pillTextActive: {
+    color: '#fff',
   },
   categoryButton: {
-     // Add specific styles here if needed, e.g., minWidth
-     minWidth: 80, // Ensure categories aren't too squished
-     flexDirection: 'row',
-     alignItems: 'center',
+    minWidth: 90,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   addCategoryButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#6a11cb',
+    backgroundColor: '#f3f4f8',
+    borderWidth: 2,
+    borderColor: '#7c3aed',
     justifyContent: 'center',
     alignItems: 'center',
-    minWidth: 44,
-    minHeight: 44,
+    minWidth: 48,
+    minHeight: 48,
     margin: 2,
+    borderRadius: 24,
   },
-  // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(35,41,70,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  modalBlur: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    backdropFilter: 'blur(8px)',
+    zIndex: 1,
+  },
   modalContent: {
-    width: '85%',
+    width: '92%',
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
+    borderRadius: 26,
+    padding: 34,
     alignItems: 'center',
-    elevation: 8,
+    elevation: 12,
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    zIndex: 2,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 23,
     fontWeight: 'bold',
-    marginBottom: 18,
-    color: '#333',
+    marginBottom: 20,
+    color: '#232946',
+    letterSpacing: 0.2,
   },
   modalInput: {
     width: '100%',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 16,
+    borderWidth: 0,
+    borderRadius: 14,
+    padding: 16,
+    fontSize: 17,
     marginBottom: 20,
-    color: '#333',
-    backgroundColor: '#fafafa',
+    color: '#232946',
+    backgroundColor: '#f3f4f8',
   },
   modalButtonRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     width: '100%',
+    marginTop: 12,
   },
   modalButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 8,
-    marginLeft: 10,
-    backgroundColor: '#eee',
+    paddingVertical: 12,
+    paddingHorizontal: 26,
+    borderRadius: 12,
+    marginLeft: 12,
+    backgroundColor: '#e0e7ff',
   },
   modalButtonPrimary: {
-    backgroundColor: '#6a11cb',
+    backgroundColor: '#7c3aed',
   },
   modalButtonText: {
-    fontSize: 15,
-    color: '#333',
-    fontWeight: '500',
+    fontSize: 16,
+    color: '#232946',
+    fontWeight: '600',
   },
   modalButtonPrimaryText: {
     color: '#fff',
   },
   saveButton: {
-    backgroundColor: '#6a11cb', // Primary action color
-    padding: 16, // Slightly larger padding
-    borderRadius: 15,
+    borderRadius: 32,
     alignItems: 'center',
-    marginTop: 25, // More space before save button
-    shadowColor: '#6a11cb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
+    marginTop: 40,
+    overflow: 'hidden',
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.20,
+    shadowRadius: 24,
+    elevation: 10,
   },
-   saveButtonDisabled: {
-     backgroundColor: '#b39ddb', // Lighter shade when disabled
-     elevation: 2, // Reduced elevation
-     shadowOpacity: 0.1,
-   },
+  saveButtonDisabled: {
+    backgroundColor: '#c7d2fe',
+    elevation: 1,
+    shadowOpacity: 0.07,
+  },
   saveButtonText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 18,
+    fontSize: 22,
+    letterSpacing: 0.3,
   },
   navbarContainer: {
     position: 'absolute',
-    bottom: 30, // Move Navbar up by 100px from the bottom
+    bottom: 30,
     left: 0,
     right: 0,
-    // Ensure Navbar has its own background if needed
-    // backgroundColor: 'white', // Example
-    // borderTopWidth: 1, // Example
-    // borderTopColor: '#eee', // Example
   },
   categoryScrollContainer: {
     flexGrow: 1,
     paddingRight: 10,
+    gap: 6,
   },
   durationInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginHorizontal: 5,
+    marginHorizontal: 6,
+    backgroundColor: 'transparent',
   },
   durationLabel: {
-    fontSize: 15,
-    color: '#555',
-    marginRight: 6,
+    fontSize: 16,
+    color: '#7c3aed',
+    marginRight: 8,
+    fontWeight: '500',
   },
   helpText: {
-    fontSize: 13,
-    color: '#888',
+    fontSize: 14,
+    color: '#8a8fa3',
     marginBottom: 4,
     marginLeft: 5,
   },
   categoryColorDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    marginRight: 2,
-    borderWidth: 1,
-    borderColor: '#ccc',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 6,
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#232946',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.10,
+    shadowRadius: 2,
+    elevation: 1,
   },
   colorPickerRow: {
     flexDirection: 'row',
-    marginVertical: 10,
+    marginVertical: 12,
     flexWrap: 'wrap',
     justifyContent: 'center',
+    gap: 8,
   },
   colorCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    marginHorizontal: 6,
-    marginVertical: 4,
-    borderColor: '#333',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginHorizontal: 8,
+    marginVertical: 6,
+    borderColor: '#7c3aed',
   },
   modalLabel: {
-    fontSize: 15,
-    color: '#444',
-    marginBottom: 6,
-    marginTop: 8,
+    fontSize: 16,
+    color: '#232946',
+    marginBottom: 8,
+    marginTop: 10,
     alignSelf: 'flex-start',
+    fontWeight: '500',
+  },
+  errorText: {
+    color: '#F44336',
+    fontSize: 14,
+    marginBottom: 10,
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  modalLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 24,
+    zIndex: 10,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 100,
+    right: 28,
+    backgroundColor: '#43a047',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#43a047',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 100,
+  },
+  newTaskButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 18,
+    letterSpacing: 0.2,
   },
 });
 

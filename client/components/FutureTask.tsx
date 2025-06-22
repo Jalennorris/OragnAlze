@@ -63,14 +63,16 @@ const FutureTask: React.FC<FutureTaskProps> = ({
         accessibilityLabel={showFutureTasks ? 'Hide future tasks' : 'Show future tasks'}
         accessibilityHint="Toggles the visibility of future tasks"
       >
-        <Text style={[styles.futureHeader, { color: colors.text }]}>
-          Future Tasks{' '}
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15 }}>
           {showFutureTasks ? (
             <Icon name="chevron-up" size={18} color={colors.text} />
           ) : (
             <Icon name="chevron-down" size={18} color={colors.text} />
           )}
-        </Text>
+          <Text style={[styles.futureHeader, { color: colors.text, paddingHorizontal: 0 }]}>
+            {'  '}Future Tasks
+          </Text>
+        </View>
       </TouchableOpacity>
       <Animated.View style={{ overflow: 'hidden', height: animatedHeight }}>
         {showFutureTasks && (
@@ -103,14 +105,12 @@ const FutureTask: React.FC<FutureTaskProps> = ({
 const styles = StyleSheet.create({
   futureSection: {
     marginBottom: 20,
- 
-  
     padding: 15, // Add padding for better spacing
   },
   futureHeader: {
-    fontSize: 18,
+    fontSize: 25,
     fontWeight: 'bold',
-    textAlign: 'center',
+    textAlign: 'flex-start',
     marginBottom: 10,
     paddingHorizontal: 15, // Add padding for better alignment
   },

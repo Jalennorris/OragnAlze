@@ -1,13 +1,40 @@
 import React, { useRef, useCallback, useState, memo, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert, TextInput, Modal, Pressable, ActivityIndicator, useColorScheme } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert, TextInput, Modal, Pressable, ActivityIndicator, useColorScheme, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import * as Haptics from 'expo-haptics';
-import { Easing } from 'react-native'; // Add Easing
+import { Easing } from 'react-native';
 import axios from 'axios';
 import Toast from 'react-native-toast-message';
 import { format, parse } from 'date-fns';
+
+// --- Modern Color & Spacing Constants ---
+const COLORS = {
+  cardBgLight: '#F9FAFB',
+  cardBgDark: '#23272F',
+  borderLight: '#E5E7EB',
+  borderDark: '#2D333B',
+  textPrimary: '#222',
+  textSecondary: '#6B7280',
+  accent: '#6366F1',
+  accentDark: '#818CF8',
+  error: '#EF4444',
+  warning: '#F59E42',
+  success: '#22C55E',
+  shadow: '#000',
+  selection: '#E0E7FF',
+  selectionDark: '#3730A3',
+  overlay: 'rgba(0,0,0,0.18)',
+};
+const SPACING = {
+  card: 18,
+  inner: 14,
+  radius: 16,
+  icon: 22,
+  indicator: 7,
+  shadow: 8,
+};
 
 // Define types for the task structure
 interface Subtask {
@@ -138,20 +165,29 @@ const TaskItem: React.FC<TaskItemProps> = ({
       })
     : 'No due date';
 
-  console.log('Raw deadline:', task.deadline);
-  console.log('Parsed deadline:', new Date(task.deadline));
+  // --- Modern Card Animation ---
+  const [pressed, setPressed] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.spring(scaleAnim, {
+      toValue: pressed ? 0.97 : 1,
+      useNativeDriver: true,
+      speed: 30,
+      bounciness: 8,
+    }).start();
+  }, [pressed]);
 
   // Check if the task is overdue
   const isOverdue = task.deadline ? new Date(task.deadline) < new Date() : false;
   // Define gradient colors based on priority
   const gradientColors: { [key: string]: string[] } = {
-    low: ['#A0A0A0', '#B0B0B0'], // Neutral gray gradient
-    medium: ['#808080', '#909090'], // Darker gray gradient
-    high: ['#606060', '#707070'], // Even darker gray gradient
+    low: [COLORS.cardBgLight, '#E0F7FA'],
+    medium: [COLORS.cardBgLight, '#FEF9C3'],
+    high: [COLORS.cardBgLight, '#FEE2E2'],
   };
 
   // Ensure the gradient colors for the task priority exist
-  const taskGradientColors = gradientColors[task.priority] || ['#F0F0F0', '#F0F0F0']; // Default to neutral gradient
+  const taskGradientColors = gradientColors[task.priority] || [COLORS.cardBgLight, COLORS.cardBgLight];
 
   // Animate deletion
   const animateDelete = useCallback((callback: () => void) => {
@@ -518,8 +554,8 @@ const TaskItem: React.FC<TaskItemProps> = ({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const backgroundColors = isSelected
-    ? [isDark ? '#333' : '#E0E0E0', isDark ? '#333' : '#E0E0E0']
-    : [isDark ? '#222' : '#FFFFFF', isDark ? '#222' : '#FFFFFF'];
+    ? [isDark ? COLORS.selectionDark : COLORS.selection, isDark ? COLORS.selectionDark : COLORS.selection]
+    : [isDark ? COLORS.cardBgDark : COLORS.cardBgLight, isDark ? COLORS.cardBgDark : COLORS.cardBgLight];
 
   const handleNameBlur = async () => {
     if (editName.trim() && editName !== task.taskName) {
@@ -581,7 +617,14 @@ const TaskItem: React.FC<TaskItemProps> = ({
 
   return (
     <ErrorBoundary>
-      <Animated.View style={{ opacity: animatedOpacity, height: animatedHeight, overflow: 'hidden' }}>
+      <Animated.View
+        style={{
+          opacity: animatedOpacity,
+          height: animatedHeight,
+          overflow: 'hidden',
+          transform: [{ scale: scaleAnim }],
+        }}
+      >
         {/* More Menu Modal */}
         <Modal
           transparent
@@ -621,16 +664,25 @@ const TaskItem: React.FC<TaskItemProps> = ({
           enabled={!isSelectionModeActive && !isOffline} // Disable swipe actions when in selection mode or offline
         >
           <TouchableOpacity
-            style={[styles.container, isDark && styles.containerDark, isOffline && { opacity: 0.6 }]}
+            style={[
+              styles.card,
+              isDark && styles.cardDark,
+              isOffline && { opacity: 0.6 },
+              isSelected && (isDark ? styles.selectedDark : styles.selected),
+              pressed && styles.pressed,
+            ]}
             disabled={isOffline}
             onPress={onPress} // <-- Add this line
             onLongPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               onSelectToggle(task.taskId); // Initiate selection mode on long press
             }}
+            onPressIn={() => setPressed(true)}
+            onPressOut={() => setPressed(false)}
             accessibilityRole="button"
             accessibilityLabel={`Task: ${task.taskName}. Due: ${formattedDueDate}. Priority: ${task.priority}. ${isSelected ? 'Selected' : 'Not selected'}`}
             accessibilityHint={isSelectionModeActive ? "Toggles selection" : "Opens task details"}
+            activeOpacity={0.93}
           >
             <View style={styles.row}>
               {/* Priority Indicator Line */}
@@ -646,8 +698,8 @@ const TaskItem: React.FC<TaskItemProps> = ({
                   <View style={styles.selectionIndicator}>
                     <Ionicons
                       name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={24}
-                      color={isSelected ? '#4CAF50' : '#CCCCCC'}
+                      size={SPACING.icon}
+                      color={isSelected ? COLORS.accent : COLORS.borderLight}
                     />
                   </View>
                 )}
@@ -655,13 +707,13 @@ const TaskItem: React.FC<TaskItemProps> = ({
                 <View style={styles.taskInfo}>
                   {isLoading && (
                     <View style={{ alignItems: 'center', marginBottom: 8 }}>
-                      <ActivityIndicator size="small" color="#4CAF50" />
+                      <ActivityIndicator size="small" color={COLORS.accent} />
                     </View>
                   )}
                   {/* Always editable title and description */}
                   <View style={styles.header}>
                     <TextInput
-                      style={[styles.title, { color: '#000' }]} // removed borderBottomWidth and borderColor
+                      style={[styles.title, { color: isDark ? '#FFF' : COLORS.textPrimary }]} // removed borderBottomWidth and borderColor
                       value={
                         editName.length > TITLE_MAX_LENGTH
                           ? editName.slice(0, TITLE_MAX_LENGTH) + '...'
@@ -671,11 +723,13 @@ const TaskItem: React.FC<TaskItemProps> = ({
                       onBlur={handleNameBlur}
                       placeholder="Task Name"
                       editable={!isOffline}
+                      placeholderTextColor={COLORS.textSecondary}
                     />
                     <Ionicons
                       name={task.priority === 'high' ? 'alert-circle' : task.priority === 'medium' ? 'alert' : 'checkmark-circle'}
-                      size={16}
+                      size={18}
                       color={priorityColor}
+                      style={{ marginLeft: 2 }}
                     />
                     {/* More button (three dots) */}
                     {!isSelectionModeActive && (
@@ -684,12 +738,12 @@ const TaskItem: React.FC<TaskItemProps> = ({
                         style={{ marginLeft: 8, padding: 2 }}
                         accessibilityLabel="More Options"
                       >
-                        <Ionicons name="ellipsis-horizontal" size={20} color="#888" />
+                        <Ionicons name="ellipsis-horizontal" size={20} color={COLORS.textSecondary} />
                       </TouchableOpacity>
                     )}
                   </View>
                   <TextInput
-                    style={[styles.description, { color: '#000' }]} // removed borderBottomWidth and borderColor
+                    style={[styles.description, { color: isDark ? '#EEE' : COLORS.textSecondary }]} // removed borderBottomWidth and borderColor
                     value={
                       editDescription.length > DESCRIPTION_MAX_LENGTH
                         ? editDescription.slice(0, DESCRIPTION_MAX_LENGTH) + '...'
@@ -700,35 +754,40 @@ const TaskItem: React.FC<TaskItemProps> = ({
                     placeholder="Task Description"
                     multiline
                     editable={!isOffline}
+                    placeholderTextColor={COLORS.textSecondary}
                   />
                   <Text style={styles.category} numberOfLines={1} ellipsizeMode="tail">
-                    {`#${task.category}`}
+                    {task.category ? `#${task.category}` : ''}
                   </Text>
                   {/* Due date with gray shadow box */}
                   <View style={styles.dueDateShadowBox}>
                     <View style={styles.dueDateContainer}>
-                      <Ionicons name="time-outline" size={14} color={isOverdue ? '#000' : '#000'} />
+                      <Ionicons name="time-outline" size={14} color={isOverdue ? COLORS.error : COLORS.textPrimary} />
                       <TextInput
-                        style={[styles.dueDate, { color: isOverdue ? '#000' : '#000', minWidth: 160 }]}
+                        style={[
+                          styles.dueDate,
+                          { color: isOverdue ? COLORS.error : (isDark ? '#FFF' : COLORS.textPrimary), minWidth: 160 },
+                        ]}
                         value={displayDate}
                         onChangeText={setEditDeadline}
                         onBlur={handleDeadlineBlur}
                         placeholder="Apr 27, 2024 02:30 PM"
                         editable={!isOffline}
+                        placeholderTextColor={COLORS.textSecondary}
                       />
                     </View>
                   </View>
                   {/* Subtask count only, fetched from API, hidden if 0 */}
                   {subtaskCount > 0 && (
                     <View style={styles.subtasksContainer}>
-                      <Text style={{ fontWeight: 'bold', fontSize: 15 }}>
+                      <Text style={{ fontWeight: 'bold', fontSize: 15, color: isDark ? '#FFF' : COLORS.textPrimary }}>
                         {subtaskCount} subtask{subtaskCount === 1 ? '' : 's'}
                       </Text>
                     </View>
                   )}
                   {isOffline && (
-                    <View style={{ padding: 8, backgroundColor: '#ff9800', borderRadius: 6, marginBottom: 6 }}>
-                      <Text style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>
+                    <View style={styles.offlineBanner}>
+                      <Text style={styles.offlineBannerText}>
                         Offline: Actions disabled
                       </Text>
                     </View>
@@ -800,34 +859,48 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectTog
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginLeft: 10,
-    marginRight: 10, // Added marginRight for consistency
-    marginBottom: 28, // Even more spacing between tasks
-    borderRadius: 12,
+  card: {
+    marginHorizontal: SPACING.card,
+    marginBottom: SPACING.card + 2,
+    borderRadius: SPACING.radius,
     overflow: 'hidden',
-    shadowColor: '#808080', // Neutral shadow color
-    shadowOpacity: 0.3, // Reduced opacity for a softer shadow
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4, // Softer shadow radius
-    elevation: 2, // Reduced elevation for a subtle effect
-    width: '95%',
-    backgroundColor: '#FFFFFF', // Changed to white
-    boxShadow: '0 2px 4px rgba(128, 128, 128, 0.3)', // Neutral shadow
+    backgroundColor: COLORS.cardBgLight,
     borderWidth: 1,
-    borderColor: '#E0E0E0', // Light gray border
-     minHeight: 135, // Increased minimum height for more spacious layout
+    borderColor: COLORS.borderLight,
+    minHeight: 135,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: SPACING.shadow,
+    elevation: Platform.OS === 'android' ? 2 : 4,
+    transition: 'background-color 0.2s',
+  },
+  cardDark: {
+    backgroundColor: COLORS.cardBgDark,
+    borderColor: COLORS.borderDark,
+    shadowColor: COLORS.shadow,
+  },
+  selected: {
+    backgroundColor: COLORS.selection,
+    borderColor: COLORS.accent,
+  },
+  selectedDark: {
+    backgroundColor: COLORS.selectionDark,
+    borderColor: COLORS.accentDark,
+  },
+  pressed: {
+    opacity: 0.97,
   },
   gradientBackground: {
-    flex: 1, // Ensure gradient fills the row space after indicator
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15, // Keep vertical padding
-    paddingLeft: 15, // Standard padding left
-    paddingRight: 5, // Reduced padding right to make space for potential selection indicator
+    paddingVertical: SPACING.inner,
+    paddingLeft: SPACING.inner + 2,
+    paddingRight: 5,
   },
   selectionIndicator: {
-    paddingRight: 10, // Space between indicator and task info
+    paddingRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -837,82 +910,87 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 6,
   },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 19,
+    fontWeight: '700',
     marginRight: 8,
-    color: '#000',
+    flex: 1,
+    backgroundColor: 'transparent',
     allowFontScaling: true,
   },
   description: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#000',
+    fontSize: 15,
+    lineHeight: 21,
     marginBottom: 5,
-    opacity: 0.9,
+    opacity: 0.92,
+    backgroundColor: 'transparent',
     allowFontScaling: true,
   },
   category: {
-    fontSize: 14,
-    color: '#C0C0C0',
-    transform: [{ translateY: 20 }],
-    opacity: 0.8,
+    fontSize: 13,
+    color: COLORS.accent,
+    marginTop: 2,
     fontWeight: 'bold',
+    opacity: 0.85,
   },
   dueDateContainer: {
     flexDirection: 'row',
     alignSelf: 'flex-end',
+    alignItems: 'center',
   },
   dueDate: {
-    fontFamily: 'Helvetica',
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'Roboto',
     fontWeight: 'bold',
     fontSize: 14,
     marginLeft: 4,
-    opacity: 0.8,
+    opacity: 0.85,
+    backgroundColor: 'transparent',
   },
   dueDateShadowBox: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: COLORS.cardBgLight,
     borderRadius: 8,
     padding: 8,
     marginTop: 8,
     marginBottom: 4,
-    shadowColor: '#888',
-    shadowOpacity: 0.18,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.10,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
     elevation: 2,
     alignSelf: 'flex-end',
     minWidth: 180,
   },
-  actionsContainer: {
+  priorityIndicator: {
+    width: SPACING.indicator,
+    height: '100%',
+    borderTopLeftRadius: SPACING.radius,
+    borderBottomLeftRadius: SPACING.radius,
+  },
+  row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
+    backgroundColor: 'transparent',
+    borderRadius: SPACING.radius,
+    overflow: 'hidden',
   },
-  actionButton: {
-    padding: 10,
-    marginLeft: 5,
+  subtasksContainer: {
+    marginTop: 8,
+    marginBottom: 4,
   },
-  deleteButton: {
-    backgroundColor: '#FF4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 80,
-    // Removed borderRadius and marginVertical as Animated.View handles outer shape/spacing
-    // Ensure the height matches the item or is flexible
+  offlineBanner: {
+    padding: 8,
+    backgroundColor: COLORS.warning,
+    borderRadius: 6,
+    marginBottom: 6,
+    alignSelf: 'stretch',
   },
-  completeButton: {
-    // Remove hardcoded backgroundColor, set dynamically
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 100,
-    marginLeft: 10,
-  },
-  actionText: {
-    color: '#FFF',
-    fontSize: 12,
-    marginTop: 2,
+  offlineBannerText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    fontSize: 13,
   },
   noTasksContainer: {
     flex: 1,
@@ -925,45 +1003,6 @@ const styles = StyleSheet.create({
     color: '#888',
     fontStyle: 'italic',
     allowFontScaling: true,
-  },
-  priorityIndicator: {
-    width: 6, // Width of the priority line
-    height: '100%',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'stretch', // Make items stretch to fill height
-    backgroundColor: '#FFFFFF', // Ensure row has a background for the priority indicator height
-    borderRadius: 12, // Match container border radius
-    overflow: 'hidden', // Clip the priority indicator
-  },
-  subtasksContainer: {
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  subtaskRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  subtaskCheckbox: {
-    marginRight: 8,
-  },
-  subtaskText: {
-    flex: 1,
-    fontSize: 15,
-    color: '#333',
-    paddingVertical: 2,
-    backgroundColor: 'transparent',
-    allowFontScaling: true,
-  },
-  addSubtaskRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  addSubtaskButton: {
-    marginLeft: 6,
   },
   modalOverlay: {
     flex: 1,
@@ -991,11 +1030,6 @@ const styles = StyleSheet.create({
   moreMenuText: {
     fontSize: 16,
     color: '#333',
-  },
-  containerDark: {
-    backgroundColor: '#222',
-    borderColor: '#444',
-    shadowColor: '#000',
   },
 });
 

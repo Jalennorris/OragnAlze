@@ -22,6 +22,7 @@ import config from '@/src/config';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
 
 // --- Constants ---
 const MIN_DAYS = 1;
@@ -219,6 +220,41 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
   const suggestionAnim = useRef(new Animated.Value(1)).current;
   const inputRef = useRef<TextInput>(null);
 
+  // --- New: Glow Animation for Modern Button ---
+  const glowAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: false,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 1800,
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+  }, [glowAnim]);
+
+  // --- New: Icon Rotation Animation ---
+  const iconRotateAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = useCallback(() => {
+    setIsButtonPressed(true);
+    Animated.spring(scaleAnim, { toValue: 0.92, useNativeDriver: true }).start();
+    Animated.spring(iconRotateAnim, { toValue: 1, useNativeDriver: true }).start();
+  }, [scaleAnim, iconRotateAnim]);
+
+  const handlePressOut = useCallback(() => {
+    setIsButtonPressed(false);
+    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }).start();
+    Animated.spring(iconRotateAnim, { toValue: 0, useNativeDriver: true }).start();
+  }, [scaleAnim, iconRotateAnim]);
+
   // --- State ---
   // UI State
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -347,18 +383,6 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     sparkleLoop.start();
     return () => sparkleLoop.stop(); // Cleanup on unmount
   }, [sparkleAnim]);
-
-  // Floating button press animations
-  const handlePressIn = useCallback(() => {
-    // Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); // Optional haptics
-    setIsButtonPressed(true);
-    Animated.spring(scaleAnim, { toValue: 0.9, useNativeDriver: true }).start();
-  }, [scaleAnim]);
-
-  const handlePressOut = useCallback(() => {
-    setIsButtonPressed(false);
-    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }).start();
-  }, [scaleAnim]);
 
   // Suggestion Button Animation Handlers
   const handleSuggestionPressIn = () => {
@@ -718,36 +742,104 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
   // --- Render ---
   return (
     <>
-      {/* --- Floating AI Button --- */}
-      <Animated.View style={[styles.buttonContainer, { transform: [{ scale: scaleAnim }] }]}>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={openModal}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          accessibilityLabel="Ask AI for task suggestions"
-          accessibilityRole="button"
+      {/* --- Ultra-Modern Floating AI Button --- */}
+      <Animated.View
+        style={[
+          styles.buttonContainer,
+          { transform: [{ scale: scaleAnim }] },
+        ]}
+      >
+        <LinearGradient
+          colors={['#A6BFFF', '#D1B3FF', '#F3E8FF']}
+          start={{ x: 0.1, y: 0.2 }}
+          end={{ x: 0.9, y: 0.8 }}
+          style={styles.gradientRing}
         >
-          {/* Cute face design */}
-          <View style={styles.faceContainer}>
-             <View style={styles.eyes}>
-               <View style={styles.eye} />
-               <View style={[styles.eye, { marginLeft: 10 }]} />
-             </View>
-             {isButtonPressed ? (
-               <View style={styles.mouthOpen} />
-             ) : (
-               <View style={styles.mouthClosed} />
-             )}
-             {/* Sparkles */}
-             <Animated.View style={[ styles.sparkle, styles.sparkle1, { opacity: sparkleAnim, transform: [{ scale: sparkleAnim }] } ]}>
-               <Ionicons name="sparkles" size={16} color="#FFD700" />
-             </Animated.View>
-             <Animated.View style={[ styles.sparkle, styles.sparkle2, { opacity: sparkleAnim, transform: [{ scale: sparkleAnim }] } ]}>
-               <Ionicons name="sparkles" size={16} color="#FFD700" />
-             </Animated.View>
-           </View>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.modernButtonTouchable}
+            onPress={openModal}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            accessibilityLabel="Ask AI for task suggestions"
+            accessibilityRole="button"
+            activeOpacity={0.82}
+          >
+            {/* Glowing Animated Ring */}
+            <Animated.View
+              style={[
+                styles.glowRing,
+                {
+                  opacity: glowAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.38, 0.92],
+                  }),
+                  shadowRadius: glowAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [18, 32],
+                  }),
+                  borderColor: glowAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['#BB86FC', '#A6BFFF'],
+                  }),
+                },
+              ]}
+            />
+            {/* Glassmorphism Button */}
+            <BlurView intensity={90} tint="light" style={styles.glassButton}>
+              <LinearGradient
+                colors={[
+                  'rgba(166,191,255,0.92)',
+                  'rgba(211,179,255,0.90)',
+                  'rgba(243,232,255,0.88)',
+                ]}
+                start={{ x: 0.2, y: 0.1 }}
+                end={{ x: 0.8, y: 1 }}
+                style={styles.gradientOverlay}
+              >
+                <View style={styles.innerGlow} />
+                <Animated.View
+                  style={{
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: [
+                      {
+                        rotate: iconRotateAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ['0deg', '22deg'],
+                        }),
+                      },
+                    ],
+                  }}
+                >
+                  <Ionicons
+                    name="planet"
+                    size={34} // 38 * 0.9
+                    color="#6C47FF"
+                    style={{
+                      textShadowColor: '#fff',
+                      textShadowRadius: 8,
+                      opacity: 0.96,
+                      borderRadius: 10, // subtle rounding for modern look
+                    }}
+                  />
+                </Animated.View>
+                <Animated.View
+                  style={[
+                    styles.sparklePulse,
+                    {
+                      opacity: sparkleAnim,
+                      transform: [
+                        { scale: sparkleAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] }) },
+                      ],
+                    },
+                  ]}
+                >
+                  <Ionicons name="sparkles" size={18} color="#FFD700" />
+                </Animated.View>
+              </LinearGradient>
+            </BlurView>
+          </TouchableOpacity>
+        </LinearGradient>
       </Animated.View>
 
       {/* --- AI Modal --- */}
@@ -1127,74 +1219,102 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
 
 // --- Styles --- (Organized and refined)
 const styles = StyleSheet.create({
-  // --- Floating Button ---
+  // --- Ultra-Modern Floating Button ---
   buttonContainer: {
     position: 'absolute',
-    bottom: 30, // Adjusted position slightly
-    right: 20,
+    bottom: 38,
+    right: 22,
     zIndex: 10,
+    elevation: 20,
   },
-  button: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#6200EE', // Use a theme color
+  gradientRing: {
+    width: 83, // 92 * 0.9
+    height: 83,
+    borderRadius: 41.5,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#A6BFFF',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 13,
+    // Add subtle blur for extra modern depth
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  modernButtonTouchable: {
+    width: 74, // 82 * 0.9
+    height: 74,
+    borderRadius: 37,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    overflow: 'visible',
+    shadowColor: '#B7E0FF',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.13,
+    shadowRadius: 12,
     elevation: 8,
-    shadowColor: '#000',
+  },
+  glassButton: {
+    width: 65, // 72 * 0.9
+    height: 65,
+    borderRadius: 32.5,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(180,180,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    shadowColor: '#A6BFFF',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 7,
   },
-  faceContainer: { // Container for face elements
-      width: 40,
-      height: 40,
-      position: 'relative',
-      alignItems: 'center', // Center eyes and mouth
-      justifyContent: 'center',
+  gradientOverlay: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    borderRadius: 32.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
-  eyes: {
-      flexDirection: 'row',
-      position: 'absolute', // Position eyes absolutely within face container
-      top: 8,
-  },
-  eye: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: '#FFF', // White eyes
-  },
-  mouthClosed: {
-      width: 18,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: '#FFF', // White mouth
-      position: 'absolute', // Position mouth absolutely
-      bottom: 10,
-  },
-  mouthOpen: { // Example: simple open mouth
-      width: 18,
-      height: 8,
-      borderRadius: 3,
-      backgroundColor: '#FF6347', // Example tongue color
-      position: 'absolute',
-      bottom: 8,
-  },
-  sparkle: { // Common style for sparkles
+  innerGlow: {
     position: 'absolute',
+    width: 49, // 54 * 0.9
+    height: 49,
+    borderRadius: 24.5,
+    backgroundColor: 'rgba(166,191,255,0.14)',
+    top: 8,
+    left: 8,
+    zIndex: 1,
+    shadowColor: '#A6BFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 1,
   },
-  sparkle1: {
-    top: -5, // Adjust position
-    left: -8,
-    transform: [{ rotate: '-15deg' }],
+  sparklePulse: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    zIndex: 2,
   },
-  sparkle2: {
-    bottom: -5, // Adjust position
-    right: -8,
-    transform: [{ rotate: '15deg' }],
+  glowRing: {
+    position: 'absolute',
+    width: 88, // 98 * 0.9
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 2.5,
+    borderColor: '#BB86FC',
+    shadowColor: '#A6BFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    zIndex: -1,
+    alignSelf: 'center',
   },
-
   // --- Modal ---
   modalWrapper: {
     justifyContent: 'flex-end', // Aligns modal to bottom

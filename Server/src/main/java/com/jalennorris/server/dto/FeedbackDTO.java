@@ -11,8 +11,8 @@ public class FeedbackDTO {
 
     public FeedbackDTO() {}
 
-    public FeedbackDTO( Long userId, String feedbackText, Integer rating, LocalDateTime createdAt) {
-
+    public FeedbackDTO(Long id, Long userId, String feedbackText, Integer rating, LocalDateTime createdAt) {
+        this.id = id;
         this.userId = userId;
         this.feedbackText = feedbackText;
         this.rating = rating;

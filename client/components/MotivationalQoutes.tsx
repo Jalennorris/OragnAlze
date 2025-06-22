@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Share, Modal, TextInput, Platform, PanResponder, useColorScheme, FlatList
+  View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Share, Modal, TextInput, Platform, PanResponder, useColorScheme, FlatList, Pressable
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
@@ -283,232 +284,260 @@ const MotivationalQuotes: React.FC = () => {
   }, [showQuoteDropdown]);
 
   return (
-    <View style={[s.c, { backgroundColor: theme.bg }]}>
-      {/* Search toggle button */}
-      <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-        <TouchableOpacity
-          style={[s.favBtn, { marginRight: 0 }]}
-          onPress={() => setShowSearch(v => !v)}
-          accessibilityRole="button"
-          accessibilityLabel={showSearch ? "Hide search bar" : "Show search bar"}
-        >
-          <Icon name="search" size={22} color={theme.primary} />
-        </TouchableOpacity>
+    <LinearGradient
+      colors={colorScheme === 'dark'
+        ? ['#181c22', '#181c22']
+        : ['#fff', '#fff']}
+      style={s.gradient}
+    >
+      <View style={s.container}>
+        {/* Search bar and filter */}
+        <View style={s.topBar}>
+          <Pressable
+            style={({ pressed }) => [
+              s.iconBtn,
+              pressed && { backgroundColor: theme.filterBg, transform: [{ scale: 0.95 }] }
+            ]}
+            onPress={() => setShowSearch(v => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={showSearch ? "Hide search bar" : "Show search bar"}
+          >
+            <Icon name="search" size={24} color={theme.primary} />
+          </Pressable>
+          <Animated.View
+            style={{
+              flex: 1,
+              marginLeft: 8,
+              maxHeight: searchAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 48] }),
+              opacity: searchAnim,
+              overflow: 'hidden',
+            }}
+          >
+            {showSearch && (
+              <TextInput
+                style={[s.search, { backgroundColor: theme.inputBg, color: theme.text }]}
+                placeholder="Search quotes..."
+                placeholderTextColor={theme.placeholder}
+                value={search}
+                onChangeText={setSearch}
+                accessibilityLabel="Search quotes"
+                allowFontScaling
+                autoFocus
+              />
+            )}
+          </Animated.View>
+          <Pressable
+            style={({ pressed }) => [
+              s.iconBtn,
+              pressed && { backgroundColor: theme.filterBg, transform: [{ scale: 0.95 }] }
+            ]}
+            onPress={openModal}
+            accessibilityRole="button"
+            accessibilityLabel="Filter quotes"
+          >
+            <Icon name="filter-list" size={24} color={theme.primary} />
+          </Pressable>
+        </View>
+
+        {/* Quote Card */}
         <Animated.View
-          style={{
-            flex: 1,
-            marginLeft: 8,
-            maxHeight: searchAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 48] }),
-            opacity: searchAnim,
-            overflow: 'hidden',
-          }}
+          {...panResponder.panHandlers}
+          style={[
+            s.quoteCard,
+            {
+              opacity: fade,
+              transform: [{ translateY: slide }],
+              backgroundColor: theme.card,
+              shadowColor: theme.primary,
+            }
+          ]}
+          accessibilityRole="text"
+          accessibilityLabel={q ? `Quote: ${q.quote} by ${q.author}` : "No quote available"}
         >
-          {showSearch && (
-            <TextInput
-              style={[s.search, { backgroundColor: theme.inputBg, color: theme.text }]}
-              placeholder="Search quotes..."
-              placeholderTextColor={theme.placeholder}
-              value={search}
-              onChangeText={setSearch}
-              accessibilityLabel="Search quotes"
-              allowFontScaling
-              autoFocus
-            />
+          {q ? (
+            <>
+              <Text style={[s.quoteText, { color: theme.text }]} allowFontScaling>
+                "{q.quote}"
+              </Text>
+              <Text style={[s.authorText, { color: theme.primary }]} allowFontScaling>
+                — {q.author}
+              </Text>
+            </>
+          ) : (
+            <Text style={[s.quoteText, { color: theme.text }]} allowFontScaling>
+              No quote available.
+            </Text>
           )}
         </Animated.View>
-      </View>
-      <View style={{ alignSelf: 'stretch', marginBottom: 10 }}>
-        <TouchableOpacity
-          style={[s.fBtn, { backgroundColor: theme.filterBg, alignSelf: 'stretch', justifyContent: 'center' }]}
-          onPress={() => setShowQuoteDropdown(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Select a quote"
-        >
-          <Icon name="arrow-drop-down" size={22} color={theme.primary} />
-          <Text style={[s.fBtnT, { color: theme.primary }]} allowFontScaling>
-            {q ? `"${q.quote.slice(0, 32)}..."` : "Select a quote"}
-          </Text>
-        </TouchableOpacity>
-      </View>
-      {/* Animated Quote dropdown modal */}
-      <Modal visible={showQuoteDropdown} transparent animationType="fade" onRequestClose={() => setShowQuoteDropdown(false)}>
-        <TouchableOpacity style={s.mO} activeOpacity={1} onPressOut={() => setShowQuoteDropdown(false)}>
-          <Animated.View
-            style={[
-              s.mC,
-              {
-                maxHeight: quoteDropdownAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 400] }),
-                width: 320,
-                backgroundColor: theme.card,
-                opacity: quoteDropdownAnim,
-                overflow: 'hidden',
-              }
+
+        {/* Actions */}
+        <View style={s.actionsRow}>
+          <Pressable
+            style={({ pressed }) => [
+              s.actionBtn,
+              isLiked && { backgroundColor: theme.primary },
+              pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }
             ]}
+            onPress={toggleLike}
+            accessibilityRole="button"
+            accessibilityLabel={isLiked ? "Unlike quote" : "Like quote"}
           >
-            <Text style={[s.mT, { color: theme.primary }]} allowFontScaling>Select a Quote</Text>
-            <FlatList
-              data={filtered}
-              keyExtractor={item => String(item.id ?? item.quote)}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#eee' }}
-                  onPress={() => {
-                    setQ(item);
-                    setShowQuoteDropdown(false);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Select quote by ${item.author}`}
-                >
-                  <Text style={{ color: theme.text }} numberOfLines={2} allowFontScaling>
-                    "{item.quote.length > 60 ? item.quote.slice(0, 60) + '...' : item.quote}"
-                  </Text>
-                  <Text style={{ color: theme.primary, fontSize: 13 }} allowFontScaling>
-                    — {item.author}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              style={{ maxHeight: 320 }}
-            />
-            <TouchableOpacity
-              style={[s.closeBtn, { alignSelf: 'flex-end', marginTop: 10 }]}
-              onPress={() => setShowQuoteDropdown(false)}
-              accessibilityRole="button"
-              accessibilityLabel="Close quote dropdown"
-            >
-              <Icon name="close" size={22} color={theme.primary} />
-            </TouchableOpacity>
-          </Animated.View>
-        </TouchableOpacity>
-      </Modal>
-      <Modal visible={showActions} transparent animationType="fade" onRequestClose={() => setShowActions(false)}>
-        <TouchableOpacity style={s.actionsOverlay} activeOpacity={1} onPressOut={() => setShowActions(false)}>
-          <View style={s.actionsModal}>
-            <TouchableOpacity
-              style={[s.fBtn, { backgroundColor: theme.filterBg }]}
-              onPress={() => { setShowActions(false); openModal(); }}
-              accessibilityRole="button"
-              accessibilityLabel="Open filter modal"
-            >
-              <Icon name="filter-list" size={22} color={theme.primary} />
-              <Text style={[s.fBtnT, { color: theme.primary }]} allowFontScaling>
-                {OPTIONS.find(o => o.value === type)?.label || 'All'}
-              </Text>
-              <Icon name="arrow-drop-down" size={22} color={theme.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.favBtn, isLiked && { backgroundColor: theme.primary }]}
-              onPress={() => { setShowActions(false); toggleLike(); }}
-              accessibilityRole="button"
-              accessibilityLabel={isLiked ? "Unlike quote" : "Like quote"}
-            >
-              <Icon name={isLiked ? "favorite" : "favorite-border"} size={22} color={isLiked ? "#fff" : theme.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.favBtn, isFavorited && { backgroundColor: theme.primary }]}
-              onPress={() => { setShowActions(false); toggleFavorite(); }}
-              accessibilityRole="button"
-              accessibilityLabel={isFavorited ? "Unfavorite quote" : "Favorite quote"}
-            >
-              <Icon name={isFavorited ? "star" : "star-border"} size={22} color={isFavorited ? "#fff" : theme.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={s.closeBtn}
-              onPress={() => setShowActions(false)}
-              accessibilityRole="button"
-              accessibilityLabel="Hide quote actions"
-            >
-              <Icon name="close" size={22} color={theme.primary} />
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-      <Modal visible={modal} transparent animationType="none" onRequestClose={closeModal}>
-        <Animated.View style={[s.mO, { opacity: modalAnim }]}>
-          <TouchableOpacity style={s.mO} activeOpacity={1} onPressOut={closeModal} accessibilityRole="button" accessibilityLabel="Close filter modal">
-            <Animated.View style={[s.mC, { backgroundColor: theme.card }]}>
-              <Text style={[s.mT, { color: theme.primary }]} allowFontScaling>Select Quote Type</Text>
-              {OPTIONS.map(o => (
-                <TouchableOpacity
-                  key={o.value}
-                  style={[
-                    s.mOpt,
-                    type === o.value && [s.mOptA, { borderColor: theme.primary, borderWidth: 2 }]
-                  ]}
-                  onPress={() => { closeModal(); debouncedSetType(o.value as QuoteType); }}
-                  accessibilityRole="button"
-                  accessibilityLabel={filterLabel(o.label)}
-                >
-                  <Text style={[
-                    s.mOptT,
-                    type === o.value && [s.mOptTA, { color: theme.primary }]
-                  ]} allowFontScaling>
-                    {o.label}
-                  </Text>
-                  {type === o.value && <Icon name="check" size={20} color={theme.primary} style={{ marginLeft: 8 }} />}
-                </TouchableOpacity>
-              ))}
-            </Animated.View>
-          </TouchableOpacity>
-        </Animated.View>
-      </Modal>
-      <Animated.View
-        {...panResponder.panHandlers}
-        style={[s.qC, { opacity: fade, transform: [{ translateY: slide }] }]}
-        accessibilityRole="text"
-        accessibilityLabel={q ? `Quote: ${q.quote} by ${q.author}` : "No quote available"}
-      >
-        {q ? (
-          <>
-            <Text style={[s.qT, { color: theme.text }]} allowFontScaling>"{q.quote}"</Text>
-            <Text style={[s.aT, { color: theme.primary }]} allowFontScaling>— {q.author}</Text>
-          </>
-        ) : (
-          <Text style={[s.qT, { color: theme.text }]} allowFontScaling>No quote available.</Text>
-        )}
-      </Animated.View>
-      <View style={s.bC}>
-        <TouchableOpacity
-          style={s.b}
+            <Icon name={isLiked ? "favorite" : "favorite-border"} size={26} color={isLiked ? "#fff" : theme.primary} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              s.actionBtn,
+              isFavorited && { backgroundColor: theme.primary },
+              pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }
+            ]}
+            onPress={toggleFavorite}
+            accessibilityRole="button"
+            accessibilityLabel={isFavorited ? "Unfavorite quote" : "Favorite quote"}
+          >
+            <Icon name={isFavorited ? "star" : "star-border"} size={26} color={isFavorited ? "#fff" : theme.primary} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              s.actionBtn,
+              pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }
+            ]}
+            onPress={share}
+            accessibilityRole="button"
+            accessibilityLabel="Share this quote"
+          >
+            <Icon name="share" size={26} color={theme.primary} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              s.actionBtn,
+              pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }
+            ]}
+            onPress={() => setShowQuoteDropdown(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Select a quote"
+          >
+            <Icon name="menu-book" size={26} color={theme.primary} />
+          </Pressable>
+        </View>
+
+        {/* Floating Next Button */}
+        <Pressable
+          style={({ pressed }) => [
+            s.fab,
+            pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }
+          ]}
           onPress={animate}
           accessibilityRole="button"
           accessibilityLabel="Show another quote"
         >
-          <Icon name="refresh" size={24} color={theme.primary} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={s.b}
-          onPress={share}
-          accessibilityRole="button"
-          accessibilityLabel="Share this quote"
-        >
-          <Icon name="share" size={24} color={theme.primary} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={s.b}
-          onPress={() => setShowActions(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Show more quote actions"
-        >
-          <Icon name="more-horiz" size={24} color={theme.primary} />
-        </TouchableOpacity>
+          <Icon name="refresh" size={28} color="#fff" />
+        </Pressable>
+
+        {/* Quote Dropdown Modal */}
+        <Modal visible={showQuoteDropdown} transparent animationType="fade" onRequestClose={() => setShowQuoteDropdown(false)}>
+          <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPressOut={() => setShowQuoteDropdown(false)}>
+            <Animated.View
+              style={[
+                s.dropdownModal,
+                {
+                  maxHeight: quoteDropdownAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 400] }),
+                  backgroundColor: theme.card,
+                  opacity: quoteDropdownAnim,
+                  overflow: 'hidden',
+                }
+              ]}
+            >
+              <Text style={[s.dropdownTitle, { color: theme.primary }]} allowFontScaling>
+                Select a Quote
+              </Text>
+              <FlatList
+                data={filtered}
+                keyExtractor={item => String(item.id ?? item.quote)}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={s.dropdownItem}
+                    onPress={() => {
+                      setQ(item);
+                      setShowQuoteDropdown(false);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select quote by ${item.author}`}
+                  >
+                    <Text style={{ color: theme.text }} numberOfLines={2} allowFontScaling>
+                      "{item.quote.length > 60 ? item.quote.slice(0, 60) + '...' : item.quote}"
+                    </Text>
+                    <Text style={{ color: theme.primary, fontSize: 13 }} allowFontScaling>
+                      — {item.author}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                style={{ maxHeight: 320 }}
+              />
+              <TouchableOpacity
+                style={s.closeBtn}
+                onPress={() => setShowQuoteDropdown(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close quote dropdown"
+              >
+                <Icon name="close" size={22} color={theme.primary} />
+              </TouchableOpacity>
+            </Animated.View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Filter Modal */}
+        <Modal visible={modal} transparent animationType="none" onRequestClose={closeModal}>
+          <Animated.View style={[s.modalOverlay, { opacity: modalAnim }]}>
+            <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPressOut={closeModal} accessibilityRole="button" accessibilityLabel="Close filter modal">
+              <Animated.View style={[s.filterModal, { backgroundColor: theme.card }]}>
+                <Text style={[s.dropdownTitle, { color: theme.primary }]} allowFontScaling>
+                  Select Quote Type
+                </Text>
+                {OPTIONS.map(o => (
+                  <TouchableOpacity
+                    key={o.value}
+                    style={[
+                      s.filterOption,
+                      type === o.value && [s.filterOptionActive, { borderColor: theme.primary }]
+                    ]}
+                    onPress={() => { closeModal(); debouncedSetType(o.value as QuoteType); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Filter quotes by ${o.label}`}
+                  >
+                    <Text style={[
+                      s.filterOptionText,
+                      type === o.value && [s.filterOptionTextActive, { color: theme.primary }]
+                    ]} allowFontScaling>
+                      {o.label}
+                    </Text>
+                    {type === o.value && <Icon name="check" size={20} color={theme.primary} style={{ marginLeft: 8 }} />}
+                  </TouchableOpacity>
+                ))}
+              </Animated.View>
+            </TouchableOpacity>
+          </Animated.View>
+        </Modal>
+
+        {/* Toast */}
+        {toast ? (
+          <View style={s.toast}>
+            <Text style={s.toastText} allowFontScaling>{toast}</Text>
+          </View>
+        ) : null}
       </View>
-      {toast ? (
-        <View style={s.toast}>
-          <Text style={s.toastT} allowFontScaling>{toast}</Text>
-        </View>
-      ) : null}
-    </View>
+    </LinearGradient>
   );
 };
 
+// Modern color palette
 const lightTheme = {
-  bg: '#fff',
+  bg: '#f7faff',
   card: '#fff',
-  text: '#222',
+  text: '#23272f',
   primary: '#4a6ea9',
   filterBg: '#eaf0fa',
   inputBg: '#f0f4ff',
-  placeholder: '#888'
+  placeholder: '#a0a8b8'
 };
 const darkTheme = {
   bg: '#181c22',
@@ -521,62 +550,218 @@ const darkTheme = {
 };
 
 const s = StyleSheet.create({
-  c: { alignItems: 'center', justifyContent: 'center', marginVertical: 20, paddingHorizontal: 20, flex: 1 },
-  topRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginBottom: 10, 
-    alignSelf: 'stretch',
-    gap: 20,
-    paddingVertical: 6,
-  },
-  fBtn: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, paddingVertical: 8, paddingHorizontal: 18, alignSelf: 'flex-start', marginRight: 8, marginBottom: 0, shadowColor: '#4a6ea9', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
-  fBtnT: { fontWeight: 'bold', fontSize: 15, marginHorizontal: 6 },
-  favBtn: { padding: 8, borderRadius: 24, marginRight: 8, backgroundColor: 'transparent' },
-  search: { borderRadius: 16, paddingVertical: 8, paddingHorizontal: 16, fontSize: 15, marginBottom: 12, alignSelf: 'stretch' },
-  mO: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'center', alignItems: 'center' },
-  mC: { borderRadius: 18, padding: 24, width: 260, alignItems: 'stretch', elevation: 8 },
-  mT: { fontSize: 17, fontWeight: 'bold', marginBottom: 18, textAlign: 'center' },
-  mOpt: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 8, marginBottom: 4 },
-  mOptA: { backgroundColor: '#eaf0fa' },
-  mOptT: { fontSize: 15, fontWeight: '500' },
-  mOptTA: { fontWeight: 'bold' },
-  qC: { alignItems: 'center', marginBottom: 15, minHeight: 90, paddingHorizontal: 10 },
-  qT: { fontSize: 16, fontStyle: 'italic', textAlign: 'center', marginBottom: 6, lineHeight: 22 },
-  aT: { fontSize: 14, textAlign: 'center', fontWeight: '500' },
-  bC: { flexDirection: 'row', justifyContent: 'center', gap: 15 },
-  b: { padding: 8, borderRadius: 40, backgroundColor: '#f0f4ff', marginHorizontal: 5 },
-  toast: { position: 'absolute', bottom: 40, left: 0, right: 0, alignItems: 'center', zIndex: 10 },
-  toastT: { backgroundColor: '#222c', color: '#fff', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, fontSize: 15, overflow: 'hidden' },
-  moreBtn: {
-    padding: 10,
-    borderRadius: 24,
-    backgroundColor: '#f0f4ff',
+  gradient: { flex: 1 },
+  container: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingTop: 10,
   },
-  closeBtn: {
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    marginBottom: 8,
+    gap: 8,
+  },
+  iconBtn: {
     padding: 8,
     borderRadius: 24,
-    marginLeft: 8,
-    backgroundColor: '#f0f4ff',
+    backgroundColor: 'rgba(74,110,169,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: 2,
+    // scale on press handled in component
   },
-  actionsOverlay: {
+  search: {
+    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    marginBottom: 0,
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    fontWeight: '500',
+    shadowColor: '#4a6ea9',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  quoteCard: {
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 14,
+    alignItems: 'center',
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(74,110,169,0.10)',
+    shadowColor: '#4a6ea9',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.13,
+    shadowRadius: 18,
+    elevation: 8,
+    minHeight: 70,
+    backdropFilter: 'blur(12px)', // for web, ignored on native
+  },
+  quoteText: {
+    fontSize: 16,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: 8,
+    lineHeight: 22,
+    fontWeight: '600',
+    letterSpacing: 0.12,
+    color: '#23272f',
+  },
+  authorText: {
+    fontSize: 13,
+    textAlign: 'center',
+    fontWeight: '700',
+    opacity: 0.85,
+    letterSpacing: 0.18,
+    color: '#4a6ea9',
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 14,
+    marginBottom: 0,
+    marginTop: 0,
+  },
+  actionBtn: {
+    padding: 10,
+    borderRadius: 24,
+    backgroundColor: 'rgba(74,110,169,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(74,110,169,0.10)',
+    // scale on press handled in component
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 18,
+    right: 14,
+    backgroundColor: '#4a6ea9',
+    borderRadius: 24,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
+    shadowColor: '#4a6ea9',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+  },
+  modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  actionsModal: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
+  dropdownModal: {
     borderRadius: 18,
-    padding: 16,
-    alignItems: 'center',
+    padding: 14,
+    width: 250,
+    alignItems: 'stretch',
     elevation: 8,
-    gap: 12,
+    maxHeight: 260,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(74,110,169,0.13)',
+    shadowColor: '#4a6ea9',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+  },
+  dropdownTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+    letterSpacing: 0.13,
+    color: '#4a6ea9',
+  },
+  dropdownItem: {
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eaf0fa',
+  },
+  closeBtn: {
+    padding: 8,
+    borderRadius: 18,
+    alignSelf: 'flex-end',
+    marginTop: 8,
+    backgroundColor: 'rgba(74,110,169,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterModal: {
+    borderRadius: 18,
+    padding: 14,
+    width: 170,
+    alignItems: 'stretch',
+    elevation: 8,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(74,110,169,0.13)',
+    shadowColor: '#4a6ea9',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+  },
+  filterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 3,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  filterOptionActive: {
+    backgroundColor: 'rgba(74,110,169,0.10)',
+    borderWidth: 2,
+    borderColor: '#4a6ea9',
+  },
+  filterOptionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#23272f',
+  },
+  filterOptionTextActive: {
+    fontWeight: 'bold',
+    color: '#4a6ea9',
+  },
+  toast: {
+    position: 'absolute',
+    bottom: 50,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  toastText: {
+    backgroundColor: 'rgba(74,110,169,0.92)',
+    color: '#fff',
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 18,
+    fontSize: 13,
+    overflow: 'hidden',
+    fontWeight: 'bold',
+    letterSpacing: 0.13,
+    shadowColor: '#4a6ea9',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.13,
+    shadowRadius: 8,
+    elevation: 2,
   },
 });
 
