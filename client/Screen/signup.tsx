@@ -8,6 +8,17 @@ import * as Google from 'expo-auth-session/providers/google';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SecureStore from 'expo-secure-store';
 
+const COLORS = {
+  primary: '#6a11cb',
+  secondary: '#2575fc',
+  accent: '#ffb347',
+  white: '#fff',
+  glass: 'rgba(255,255,255,0.18)',
+  border: 'rgba(255,255,255,0.25)',
+  error: '#ff6b6b',
+  textDark: '#22223b',
+};
+
 type SignupCredentials = {
   firstname: string;
   lastname: string;
@@ -32,6 +43,8 @@ const Signup: React.FC = () => {
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: 'YOUR_GOOGLE_CLIENT_ID', // Replace with your actual Google Client ID
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(300)).current;
@@ -133,23 +146,22 @@ const Signup: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={60}
       >
-        <LinearGradient colors={['#6a11cb', '#2575fc']} style={styles.container}>
-          <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.container}>
+          <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
             <Ionicons
               name="arrow-back"
-              size={30}
-              color="white"
+              size={28}
+              color={COLORS.primary}
               onPress={() => navigation.navigate('welcome')}
               style={styles.backButton}
               accessibilityRole="button"
               accessibilityHint="Go back to welcome screen"
             />
-            <Text style={styles.title}>Create{"\n"}Your{"\n"}Account.</Text>
-
+            <Text style={styles.title}>Create Your Account</Text>
             <View style={styles.inputContainer}>
               <TextInput
                 placeholder="First Name"
-                placeholderTextColor="#999"
+                placeholderTextColor="#b0b0b0"
                 style={styles.input}
                 value={credentials.firstname}
                 onChangeText={(text) => handleChange('firstname', text)}
@@ -159,7 +171,7 @@ const Signup: React.FC = () => {
               />
               <TextInput
                 placeholder="Last Name"
-                placeholderTextColor="#999"
+                placeholderTextColor="#b0b0b0"
                 style={styles.input}
                 value={credentials.lastname}
                 onChangeText={(text) => handleChange('lastname', text)}
@@ -169,17 +181,18 @@ const Signup: React.FC = () => {
               />
               <TextInput
                 placeholder="Username"
-                placeholderTextColor="#999"
+                placeholderTextColor="#b0b0b0"
                 style={styles.input}
                 value={credentials.username}
                 onChangeText={(text) => handleChange('username', text)}
                 accessibilityLabel="Username input"
                 accessibilityHint="Choose a username"
                 returnKeyType="next"
+                autoCapitalize="none"
               />
               <TextInput
                 placeholder="Email"
-                placeholderTextColor="#999"
+                placeholderTextColor="#b0b0b0"
                 style={styles.input}
                 value={credentials.email}
                 onChangeText={(text) => handleChange('email', text)}
@@ -187,58 +200,87 @@ const Signup: React.FC = () => {
                 accessibilityLabel="Email input"
                 accessibilityHint="Enter your email address"
                 returnKeyType="next"
+                autoCapitalize="none"
               />
-              <TextInput
-                placeholder="Password"
-                placeholderTextColor="#999"
-                secureTextEntry
-                style={styles.input}
-                value={credentials.password}
-                onChangeText={(text) => handleChange('password', text)}
-                accessibilityLabel="Password input"
-                accessibilityHint="Enter your password"
-                returnKeyType="next"
-              />
-              <TextInput
-                placeholder="Confirm Password"
-                placeholderTextColor="#999"
-                secureTextEntry
-                style={styles.input}
-                value={credentials.confirmPassword}
-                onChangeText={(text) => handleChange('confirmPassword', text)}
-                accessibilityLabel="Confirm Password input"
-                accessibilityHint="Re-enter your password"
-                returnKeyType="done"
-              />
-              {loading ? (
-                <ActivityIndicator size="large" color="#fff" />
-              ) : (
+              <View style={styles.passwordRow}>
+                <TextInput
+                  placeholder="Password"
+                  placeholderTextColor="#b0b0b0"
+                  secureTextEntry={!showPassword}
+                  style={[styles.input, { flex: 1 }]}
+                  value={credentials.password}
+                  onChangeText={(text) => handleChange('password', text)}
+                  accessibilityLabel="Password input"
+                  accessibilityHint="Enter your password"
+                  returnKeyType="next"
+                  autoCapitalize="none"
+                />
                 <TouchableOpacity
-                  style={styles.button}
-                  onPress={handleSignup}
-                  accessibilityRole="button"
-                  accessibilityHint="Sign up for a new account"
-                  disabled={loading}
+                  onPress={() => setShowPassword((prev) => !prev)}
+                  style={styles.eyeIcon}
+                  accessibilityLabel={showPassword ? "Hide password" : "Show password"}
                 >
-                  <Text style={styles.buttonText}>Sign Up</Text>
+                  <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} color={COLORS.primary} />
                 </TouchableOpacity>
+              </View>
+              <View style={styles.passwordRow}>
+                <TextInput
+                  placeholder="Confirm Password"
+                  placeholderTextColor="#b0b0b0"
+                  secureTextEntry={!showConfirmPassword}
+                  style={[styles.input, { flex: 1 }]}
+                  value={credentials.confirmPassword}
+                  onChangeText={(text) => handleChange('confirmPassword', text)}
+                  accessibilityLabel="Confirm Password input"
+                  accessibilityHint="Re-enter your password"
+                  returnKeyType="done"
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword((prev) => !prev)}
+                  style={styles.eyeIcon}
+                  accessibilityLabel={showConfirmPassword ? "Hide password" : "Show password"}
+                >
+                  <Ionicons name={showConfirmPassword ? "eye-off" : "eye"} size={22} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+              {error && (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle" size={18} color={COLORS.error} style={{ marginRight: 6 }} />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
               )}
+              <TouchableOpacity
+                style={[styles.button, loading && styles.buttonDisabled]}
+                onPress={handleSignup}
+                accessibilityRole="button"
+                accessibilityHint="Sign up for a new account"
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <Text style={styles.buttonText}>Sign Up</Text>
+                )}
+              </TouchableOpacity>
             </View>
-
-            {error && <Text style={styles.errorText}>{error}</Text>}
-
-            <Text style={styles.text}>or continue with</Text>
+            <View style={styles.dividerRow}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>or continue with</Text>
+              <View style={styles.divider} />
+            </View>
             <TouchableOpacity
               style={styles.googleButton}
               onPress={() => promptAsync()}
               disabled={!request}
               accessibilityRole="button"
               accessibilityHint="Sign up with your Google account"
+              activeOpacity={0.85}
             >
-              <Ionicons name="logo-google" size={24} color="#fff" />
+              <Ionicons name="logo-google" size={22} color={COLORS.white} style={{ marginRight: 8 }} />
               <Text style={styles.googleButtonText}>Sign Up with Google</Text>
             </TouchableOpacity>
-
             <Text style={styles.text}>
               Already have an account?{' '}
               <Text
@@ -260,83 +302,167 @@ const Signup: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#6a11cb', // Match the gradient's starting color
+    backgroundColor: COLORS.primary,
   },
   container: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
   },
-  content: {
-    width: '90%',
+  card: {
+    width: '92%',
+    backgroundColor: COLORS.white,
+    borderRadius: 28,
+    paddingVertical: 28,
+    paddingHorizontal: 22,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.13,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+    marginBottom: 18,
   },
   backButton: {
     position: 'absolute',
-    top: -100, // Adjusted position
-    left: 15, // Adjusted position
+    top: 18,
+    left: 18,
+    zIndex: 2,
+    backgroundColor: '#f2f2f2',
+    borderRadius: 16,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
   },
   title: {
-    fontSize: 28, // Reduced font size
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'left',
-    alignSelf: 'flex-start',
-    marginBottom: 20, // Reduced margin
+    fontSize: 26,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textAlign: 'center',
+    marginTop: 18,
+    marginBottom: 18,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
+    letterSpacing: 0.2,
   },
   inputContainer: {
     width: '100%',
-    marginBottom: 15, // Reduced margin
+    marginBottom: 10,
   },
   input: {
-    height: 40, // Reduced height
-    borderColor: '#fff',
+    height: 48,
+    borderColor: '#e0e0e0',
     borderWidth: 1,
-    marginBottom: 10, // Reduced margin
-    paddingHorizontal: 10, // Reduced padding
-    borderRadius: 20, // Reduced border radius
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    color: '#fff',
+    marginBottom: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#f7f8fa',
+    color: COLORS.textDark,
+    fontSize: 16,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
+  },
+  passwordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  eyeIcon: {
+    padding: 8,
+    marginLeft: 2,
   },
   button: {
-    backgroundColor: '#fff',
-    paddingVertical: 10, // Reduced padding
-    borderRadius: 20, // Reduced border radius
-    width: '90%', // Adjusted width
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    borderRadius: 16,
+    width: '100%',
     alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 4,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+    transitionDuration: '200ms',
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
-    color: '#6a11cb',
-    fontSize: 16, // Reduced font size
-    fontWeight: 'bold',
+    color: COLORS.white,
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
   },
-  text: {
-    color: '#fff',
-    marginTop: 15, // Reduced margin
-    fontSize: 14, // Reduced font size
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginVertical: 18,
   },
-  linkText: {
-    color: '#fff',
-    fontWeight: 'bold',
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    color: '#b0b0b0',
+    fontSize: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
   },
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 8, // Reduced padding
-    paddingHorizontal: 15, // Reduced padding
-    borderRadius: 20, // Reduced border radius
-    marginTop: 8, // Reduced margin
+    backgroundColor: '#4285F4',
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    marginBottom: 18,
+    width: '100%',
+    justifyContent: 'center',
+    shadowColor: '#4285F4',
+    shadowOpacity: 0.13,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   googleButtonText: {
-    color: '#fff',
-    fontSize: 14, // Reduced font size
-    marginLeft: 8, // Reduced margin
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
+  },
+  text: {
+    color: COLORS.primary,
+    marginTop: 2,
+    fontSize: 15,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
+    textAlign: 'center',
+  },
+  linkText: {
+    color: COLORS.secondary,
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffeaea',
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    marginTop: -4,
   },
   errorText: {
-    color: '#ff6b6b',
-    marginTop: 8, // Reduced margin
-    fontSize: 14, // Reduced font size
+    color: COLORS.error,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
   },
 });
 

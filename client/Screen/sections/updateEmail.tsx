@@ -19,6 +19,7 @@ import * as Yup from 'yup';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // Validation schema
 const emailSchema = Yup.object().shape({
@@ -32,6 +33,26 @@ const emailSchema = Yup.object().shape({
     .oneOf([Yup.ref('newEmail'), null], 'Emails must match')
     .required('Confirm email is required'),
 });
+
+const COLORS = {
+  primary: '#7F56D9',
+  secondary: '#38BDF8',
+  background: '#F3F4F6',
+  error: '#EF4444',
+  text: '#0F172A',
+  placeholder: '#94A3B8',
+  card: 'rgba(255,255,255,0.85)',
+  border: '#E5E7EB',
+  shadow: '#7F56D933',
+  gradientStart: '#7F56D9',
+  gradientEnd: '#38BDF8',
+};
+
+const SIZES = {
+  padding: 28,
+  borderRadius: 28,
+  iconSize: 32,
+};
 
 // Reusable EmailInput component with React.memo and error highlight
 const EmailInput: React.FC<{
@@ -147,7 +168,7 @@ const UpdateEmail: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: COLORS.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
@@ -156,80 +177,111 @@ const UpdateEmail: React.FC = () => {
           contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Memoized Back Button */}
-          <BackButton onPress={() => navigation.goBack()} colors={colors} />
-
-          <Text style={[styles.title, { color: colors.text }]}>{t('update_email')}</Text>
-
-          {/* Form */}
-          <Formik
-            initialValues={{ currentEmail: '', newEmail: '', confirmEmail: '' }}
-            validationSchema={emailSchema}
-            onSubmit={handleSave}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+            accessibilityLabel="Back button"
+            accessibilityHint="Navigates to the previous screen"
+            accessibilityRole="button"
           >
-            {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
-              <View style={styles.formContainer}>
-                <EmailInput
-                  placeholder={t('current_email')}
-                  value={values.currentEmail}
-                  onChangeText={handleChange('currentEmail')}
-                  onBlur={handleBlur('currentEmail')}
-                  error={touched.currentEmail && errors.currentEmail ? t(errors.currentEmail) : undefined}
-                  editable={!isLoading}
-                  accessibilityLabel={t('current_email')}
-                  accessibilityHint={t('enter_current_email')}
-                  colors={colors}
-                />
-                <EmailInput
-                  placeholder={t('new_email')}
-                  value={values.newEmail}
-                  onChangeText={handleChange('newEmail')}
-                  onBlur={handleBlur('newEmail')}
-                  error={touched.newEmail && errors.newEmail ? t(errors.newEmail) : undefined}
-                  editable={!isLoading}
-                  accessibilityLabel={t('new_email')}
-                  accessibilityHint={t('enter_new_email')}
-                  colors={colors}
-                />
-                <EmailInput
-                  placeholder={t('confirm_new_email')}
-                  value={values.confirmEmail}
-                  onChangeText={handleChange('confirmEmail')}
-                  onBlur={handleBlur('confirmEmail')}
-                  error={touched.confirmEmail && errors.confirmEmail ? t(errors.confirmEmail) : undefined}
-                  editable={!isLoading}
-                  accessibilityLabel={t('confirm_new_email')}
-                  accessibilityHint={t('reenter_new_email')}
-                  colors={colors}
-                />
+            <Icon name="arrow-back" size={SIZES.iconSize} color={COLORS.primary} />
+            <Text style={[styles.backButtonText, { color: COLORS.primary }]}>Back</Text>
+          </TouchableOpacity>
 
-                {/* Save Button */}
-                <TouchableOpacity
-                  style={[
-                    styles.saveButton,
-                    { backgroundColor: isLoading ? colors.border : colors.primary },
-                  ]}
-                  onPress={() => handleSubmit()}
-                  disabled={isLoading}
-                  accessibilityLabel={t('save_email_changes')}
-                  accessibilityHint={t('saves_new_email')}
-                  accessibilityRole="button"
-                >
-                  {isLoading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.saveButtonText}>{t('save_changes')}</Text>
+          <Text style={[styles.title, { color: COLORS.text }]}>{t('update_email')}</Text>
+
+          <View style={styles.card}>
+            <Formik
+              initialValues={{ currentEmail: '', newEmail: '', confirmEmail: '' }}
+              validationSchema={emailSchema}
+              onSubmit={handleSave}
+            >
+              {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
+                <View style={styles.formContainer}>
+                  <View style={styles.inputContainer}>
+                    <Icon name="email" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder={t('current_email')}
+                      placeholderTextColor={COLORS.placeholder}
+                      value={values.currentEmail}
+                      onChangeText={handleChange('currentEmail')}
+                      onBlur={handleBlur('currentEmail')}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      editable={!isLoading}
+                      accessibilityLabel={t('current_email')}
+                      accessibilityHint={t('enter_current_email')}
+                    />
+                  </View>
+                  {touched.currentEmail && errors.currentEmail && (
+                    <Text style={styles.errorText}>{t(errors.currentEmail)}</Text>
                   )}
-                </TouchableOpacity>
-              </View>
-            )}
-          </Formik>
-          {/* Example placeholder for empty profile picture */}
-          {/* {!profileImage && !profileColor && (
-            <View style={styles.placeholderContainer}>
-              <Text style={{ color: colors.text }}>No profile picture selected.</Text>
-            </View>
-          )} */}
+                  <View style={styles.inputContainer}>
+                    <Icon name="email" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder={t('new_email')}
+                      placeholderTextColor={COLORS.placeholder}
+                      value={values.newEmail}
+                      onChangeText={handleChange('newEmail')}
+                      onBlur={handleBlur('newEmail')}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      editable={!isLoading}
+                      accessibilityLabel={t('new_email')}
+                      accessibilityHint={t('enter_new_email')}
+                    />
+                  </View>
+                  {touched.newEmail && errors.newEmail && (
+                    <Text style={styles.errorText}>{t(errors.newEmail)}</Text>
+                  )}
+                  <View style={styles.inputContainer}>
+                    <Icon name="email" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder={t('confirm_new_email')}
+                      placeholderTextColor={COLORS.placeholder}
+                      value={values.confirmEmail}
+                      onChangeText={handleChange('confirmEmail')}
+                      onBlur={handleBlur('confirmEmail')}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      editable={!isLoading}
+                      accessibilityLabel={t('confirm_new_email')}
+                      accessibilityHint={t('reenter_new_email')}
+                    />
+                  </View>
+                  {touched.confirmEmail && errors.confirmEmail && (
+                    <Text style={styles.errorText}>{t(errors.confirmEmail)}</Text>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
+                    onPress={() => handleSubmit()}
+                    disabled={isLoading}
+                    activeOpacity={0.7}
+                    accessibilityLabel={t('save_email_changes')}
+                    accessibilityHint={t('saves_new_email')}
+                    accessibilityRole="button"
+                  >
+                    <LinearGradient
+                      colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                      style={StyleSheet.absoluteFill}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    />
+                    {isLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.saveButtonText}>{t('save_changes')}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </Formik>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -239,31 +291,54 @@ const UpdateEmail: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.background,
   },
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.background,
   },
   scrollContainer: {
     flexGrow: 1,
-    padding: 20,
+    padding: SIZES.padding,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 22,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(127,86,217,0.08)',
   },
   backButtonText: {
-    marginLeft: 5,
-    fontSize: 18,
-    color: '#6200ee',
+    marginLeft: 10,
+    fontSize: 19,
+    color: COLORS.primary,
+    fontWeight: '700',
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 30,
+    fontSize: 34,
+    fontWeight: '900',
+    marginBottom: 28,
     textAlign: 'center',
+    color: COLORS.text,
+    letterSpacing: 0.7,
+  },
+  card: {
+    backgroundColor: COLORS.card,
+    borderRadius: SIZES.borderRadius * 1.2,
+    padding: 32,
+    marginBottom: 32,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.13,
+    shadowRadius: 24,
+    elevation: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backdropFilter: 'blur(12px)',
   },
   formContainer: {
     width: '100%',
@@ -271,34 +346,65 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
+    marginBottom: 18,
+    borderWidth: 0,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderRadius: SIZES.borderRadius * 1.1,
+    paddingHorizontal: 18,
+    paddingVertical: 4,
+    marginTop: 10,
+    elevation: 2,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   icon: {
-    marginRight: 10,
+    marginRight: 16,
   },
   input: {
     flex: 1,
-    fontSize: 18,
-    paddingVertical: 10,
+    fontSize: 19,
+    paddingVertical: 18,
+    color: COLORS.text,
+    backgroundColor: 'transparent',
+    fontWeight: '600',
+    borderRadius: SIZES.borderRadius,
   },
   errorText: {
-    color: 'red',
-    fontSize: 14,
-    marginBottom: 10,
+    color: COLORS.error,
+    fontSize: 15,
+    marginTop: -8,
+    marginBottom: 12,
+    marginLeft: SIZES.iconSize + 10,
+    fontWeight: '600',
   },
   saveButton: {
-    backgroundColor: '#6200ee',
-    padding: 15,
-    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    borderRadius: 999,
     alignItems: 'center',
-    marginTop: 20,
+    justifyContent: 'center',
+    marginTop: 24,
+    minHeight: 60,
+    width: '100%',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.13,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  saveButtonDisabled: {
+    opacity: 0.5,
   },
   saveButtonText: {
-    color: '#fff',
-    fontSize: 18,
+    color: COLORS.background,
+    fontSize: 21,
     fontWeight: 'bold',
+    letterSpacing: 0.7,
+    zIndex: 2,
   },
 });
 

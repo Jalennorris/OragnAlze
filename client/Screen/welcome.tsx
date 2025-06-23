@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextStyle, ViewStyle, Animated, Easing, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextStyle, ViewStyle, Animated, Easing, Dimensions, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
@@ -8,12 +8,16 @@ import { useNavigation } from 'expo-router';
 const COLORS = {
   primary: '#6a11cb',
   secondary: '#2575fc',
+  accent: '#ffb347',
   white: '#fff',
+  glass: 'rgba(255,255,255,0.15)',
+  border: 'rgba(255,255,255,0.25)',
+  textDark: '#22223b',
 };
 
-// Reusable Typography Component
+// Typography Component
 interface TypographyProps {
-  variant?: 'title' | 'subtitle' | 'body' | 'link';
+  variant?: 'hero' | 'title' | 'subtitle' | 'body' | 'link';
   style?: TextStyle;
   children: React.ReactNode;
 }
@@ -21,6 +25,8 @@ interface TypographyProps {
 const Typography: React.FC<TypographyProps> = ({ variant = 'body', style, children }) => {
   const getStyle = () => {
     switch (variant) {
+      case 'hero':
+        return styles.hero;
       case 'title':
         return styles.title;
       case 'subtitle':
@@ -31,17 +37,17 @@ const Typography: React.FC<TypographyProps> = ({ variant = 'body', style, childr
         return styles.body;
     }
   };
-
   return <Text style={[getStyle(), style]}>{children}</Text>;
 };
 
-// Reusable Button Component
+// Button Component
 interface CustomButtonProps {
   title: string;
   onPress: () => void;
   style?: ViewStyle;
   textStyle?: TextStyle;
   variant?: 'primary' | 'secondary' | 'link';
+  icon?: React.ReactNode;
 }
 
 const CustomButton: React.FC<CustomButtonProps> = ({
@@ -50,43 +56,20 @@ const CustomButton: React.FC<CustomButtonProps> = ({
   style,
   textStyle,
   variant = 'primary',
-}) => {
-  const pulseValue = useRef(new Animated.Value(1)).current;
-
-  const pulseAnimation = () => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseValue, {
-          toValue: 1.1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseValue, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  };
-
-  useEffect(() => {
-    pulseAnimation();
-  }, []);
-
-  return (
-    <Animated.View style={{ transform: [{ scale: pulseValue }] }}>
-      <TouchableOpacity
-        style={[getButtonStyle(variant), style]}
-        onPress={onPress}
-      >
-        <Typography variant={variant === 'link' ? 'link' : 'body'} style={textStyle}>
-          {title}
-        </Typography>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-};
+  icon,
+}) => (
+  <TouchableOpacity
+    style={[getButtonStyle(variant), style]}
+    onPress={onPress}
+    activeOpacity={0.85}
+    accessibilityRole="button"
+  >
+    {icon && <View style={{ marginRight: 8 }}>{icon}</View>}
+    <Typography variant={variant === 'link' ? 'link' : 'body'} style={textStyle}>
+      {title}
+    </Typography>
+  </TouchableOpacity>
+);
 
 const getButtonStyle = (variant: string): ViewStyle => {
   switch (variant) {
@@ -106,143 +89,180 @@ const Welcome: React.FC = () => {
   const navigation = useNavigation();
   const [typedText, setTypedText] = useState('');
   const [showCursor, setShowCursor] = useState(true);
-  const [isTalking, setIsTalking] = useState(false);
-  const logo = 'OrganAIze';
-  const typingSpeed = 150; // Faster typing speed
+  const logo = 'OrganAIze'; // Ensure correct casing
+  const typingSpeed = 200;
 
-  // Animation for tasks
-  const slideAnim = useRef(new Animated.Value(-Dimensions.get('window').width)).current;
-  const gradientColors = useRef(new Animated.Value(0)).current;
+  // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const heroAnim = useRef(new Animated.Value(0)).current;
+  const cardAnim = useRef(new Animated.Value(0)).current;
+  const cursorAnim = useRef(new Animated.Value(1)).current;
 
   const tasks = [
-    { id: '1', title: 'Task 1', description: 'Complete the project documentation' },
-    { id: '2', title: 'Task 2', description: 'Review the pull requests' },
-    { id: '3', title: 'Task 3', description: 'Plan the next sprint' },
+    { id: '1', title: 'Smart Scheduling', description: 'Let AI optimize your daily agenda.' },
+    { id: '2', title: 'Team Collaboration', description: 'Share and track tasks with your team.' },
+    { id: '3', title: 'Progress Insights', description: 'Visualize your productivity trends.' },
   ];
 
+  // Typewriter effect for logo
   useEffect(() => {
-    const slideTasks = () => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(slideAnim, {
-            toValue: Dimensions.get('window').width,
-            duration: 5000,
-            easing: Easing.linear,
-            useNativeDriver: true,
-          }),
-          Animated.timing(slideAnim, {
-            toValue: -Dimensions.get('window').width,
-            duration: 0,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    };
-
-    slideTasks();
-  }, [slideAnim]);
-
-  // Gradient transition animation
-  useEffect(() => {
-    Animated.timing(gradientColors, {
-      toValue: 1,
-      duration: 5000,
-      easing: Easing.linear,
-      useNativeDriver: false,
-    }).start();
-  }, []);
-
-  const gradientInterpolation = gradientColors.interpolate({
-    inputRange: [0, 1],
-    outputRange: [COLORS.primary, COLORS.secondary],
-  });
-
-  // Typewriter effect for logo text
-  useEffect(() => {
-    if (!logo) return;
-  
     let index = 0;
-    setTypedText(""); // Reset text when logo changes
-    setShowCursor(true); // Ensure cursor shows initially
-  
+    setTypedText('');
+    setShowCursor(true);
+
     const interval = setInterval(() => {
-      if (index < logo.length) {
+      if (index < logo.length - 1) {
         setTypedText((prev) => prev + logo[index]);
         index++;
-
       } else {
         clearInterval(interval);
-        setShowCursor(false);
-        setIsTalking(true);
-        
-        // Ensure fadeAnim is properly animated
+        setTimeout(() => setShowCursor(false), 600);
+        Animated.timing(heroAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }).start();
+        Animated.timing(cardAnim, {
+          toValue: 1,
+          duration: 800,
+          delay: 200,
+          useNativeDriver: true,
+        }).start();
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 1000,
+          duration: 800,
+          delay: 400,
           useNativeDriver: true,
         }).start();
       }
     }, typingSpeed);
-  
+
     return () => {
-      clearInterval(interval); // Cleanup interval
-      setShowCursor(false); // Hide cursor on unmount
+      clearInterval(interval);
+      setShowCursor(false);
     };
-  }, [logo, typingSpeed, fadeAnim]); ;
+  }, [logo, typingSpeed, heroAnim, cardAnim, fadeAnim]);
+
+  // Blinking cursor animation
+  useEffect(() => {
+    if (!showCursor) return;
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(cursorAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
+        Animated.timing(cursorAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      ])
+    ).start();
+    return () => cursorAnim.stopAnimation();
+  }, [showCursor, cursorAnim]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Animated.View style={[styles.container, { backgroundColor: gradientInterpolation }]}>
-        <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.gradient}>
-          <View style={styles.content}>
-            <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
-              {tasks.map((task, index) => (
-                <View 
-                  key={task.id} 
-                  style={[
-                    styles.task, 
-                    { 
-                      transform: [
-                        { translateY: index % 2 === 0 ? 100 : -100 } // Parallax effect
-                      ] 
-                    }
-                  ]}
+      <LinearGradient
+        colors={[COLORS.primary, COLORS.secondary]}
+        style={styles.gradient}
+        start={{ x: 0.1, y: 0.1 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.centeredContent}>
+          {/* Hero Logo */}
+          <Animated.View
+            style={[
+              styles.heroContainer,
+              {
+                opacity: heroAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.7, 1],
+                }),
+                transform: [
+                  {
+                    translateY: heroAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [40, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Typography variant="hero" style={styles.logoText}>
+              {typedText}
+              {showCursor ? (
+                <Animated.Text
+                  style={{
+                    opacity: cursorAnim,
+                    color: COLORS.accent,
+                    fontWeight: 'bold',
+                  }}
                 >
-                  <Typography variant="title" style={styles.taskTitle}>
-                    {task.title}
-                  </Typography>
-                  <Typography variant="body" style={styles.taskDescription}>
-                    {task.description}
-                  </Typography>
-                </View>
-              ))}
-            </Animated.View>
-            <Animated.View style={{ opacity: fadeAnim }}>
-              <Typography variant="title" style={styles.logoText}>
-                {typedText}
-                {showCursor && <Text style={{ opacity: 0.5 }}>|</Text>}
-              </Typography>
-            </Animated.View>
-            <Typography variant="subtitle" style={styles.subtitle}>
-              Join us and explore the exciting features we offer.
+                  |
+                </Animated.Text>
+              ) : null}
             </Typography>
+            <Typography variant="subtitle" style={styles.heroSubtitle}>
+              AI-powered productivity, reimagined.
+            </Typography>
+          </Animated.View>
 
+          {/* Glassmorphism Task Cards */}
+          <Animated.View
+            style={[
+              styles.tasksRow,
+              {
+                opacity: cardAnim,
+                transform: [
+                  {
+                    translateY: cardAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [40, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            {tasks.map((task) => (
+              <View key={task.id} style={styles.taskCard}>
+                <Typography variant="title" style={styles.taskTitle}>
+                  {task.title}
+                </Typography>
+                <Typography variant="body" style={styles.taskDescription}>
+                  {task.description}
+                </Typography>
+              </View>
+            ))}
+          </Animated.View>
+
+          {/* CTA Buttons */}
+          <Animated.View
+            style={{
+              opacity: fadeAnim,
+              width: '100%',
+              alignItems: 'center',
+              marginTop: 40,
+            }}
+          >
             <CustomButton
               title="Get Started"
               onPress={() => navigation.navigate('signup')}
               variant="primary"
-              textStyle={{ color: COLORS.primary }}
+              textStyle={{ color: COLORS.primary, fontWeight: 'bold', fontSize: 18 }}
+              style={{
+                marginBottom: 16,
+                shadowColor: COLORS.primary,
+                shadowOpacity: 0.18,
+                shadowRadius: 12,
+                elevation: 3,
+              }}
             />
-
             <CustomButton
               title="Already have an account? Log In"
               onPress={() => navigation.navigate('login')}
               variant="link"
+              textStyle={{ color: COLORS.white, fontSize: 16 }}
             />
-          </View>
-        </LinearGradient>
-      </Animated.View>
+          </Animated.View>
+        </View>
+      </LinearGradient>
     </SafeAreaView>
   );
 };
@@ -251,12 +271,7 @@ const Welcome: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.primary, // Match the gradient's starting color
-  },
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: COLORS.primary,
   },
   gradient: {
     flex: 1,
@@ -264,74 +279,130 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  content: {
-    width: '90%',
+  centeredContent: {
+    flex: 1,
+    width: '100%',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 32,
   },
-  task: {
-    backgroundColor: COLORS.white,
-    padding: 8, // Reduced padding
-    borderRadius: 8, // Reduced border radius
-    marginBottom: 8, // Reduced margin
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+  heroContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
   },
-  taskTitle: {
-    fontSize: 16, // Reduced font size
+  hero: {
+    fontSize: 54,
     fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  taskDescription: {
-    fontSize: 14, // Reduced font size
-    color: COLORS.primary,
+    color: COLORS.white,
+    letterSpacing: 2.5,
+    textShadowColor: COLORS.secondary,
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 16,
   },
   logoText: {
-    fontSize: 32, // Reduced font size
+    fontSize: 54,
     fontWeight: 'bold',
     color: COLORS.white,
-    marginBottom: 8, // Reduced margin
+    letterSpacing: 2.5,
+    marginBottom: 10,
+    textShadowColor: COLORS.secondary,
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 16,
   },
-  subtitle: {
-    fontSize: 14, // Reduced font size
-    color: COLORS.white,
-    marginBottom: 20, // Reduced margin
+  heroSubtitle: {
+    fontSize: 20,
+    color: COLORS.accent,
+    fontWeight: '600',
+    marginBottom: 12,
     textAlign: 'center',
+    letterSpacing: 0.7,
+    textShadowColor: COLORS.primary,
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
+  },
+  tasksRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginBottom: 24,
+    width: '100%',
+  },
+  taskCard: {
+    flex: 1,
+    minWidth: 110,
+    maxWidth: 150,
+    marginHorizontal: 8,
+    padding: 20,
+    borderRadius: 22,
+    backgroundColor: COLORS.glass,
+    borderColor: COLORS.border,
+    borderWidth: 1,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.10,
+    shadowRadius: 18,
+    elevation: 4,
+    backdropFilter: Platform.OS === 'web' ? 'blur(18px)' : undefined,
+  },
+  taskTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.textDark,
+    marginBottom: 6,
+    letterSpacing: 0.7,
+  },
+  taskDescription: {
+    fontSize: 14,
+    color: COLORS.textDark,
+    opacity: 0.85,
   },
   primaryButton: {
     backgroundColor: COLORS.white,
-    padding: 10, // Reduced padding
-    borderRadius: 20, // Reduced border radius
-    width: '90%', // Adjusted width
+    paddingVertical: 16,
+    borderRadius: 32,
+    width: '90%',
     alignItems: 'center',
-    marginBottom: 8, // Reduced margin
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   secondaryButton: {
     backgroundColor: COLORS.secondary,
-    padding: 10, // Reduced padding
-    borderRadius: 20, // Reduced border radius
-    width: '90%', // Adjusted width
+    paddingVertical: 16,
+    borderRadius: 32,
+    width: '90%',
     alignItems: 'center',
-    marginBottom: 8, // Reduced margin
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   linkButton: {
-    marginTop: 8, // Reduced margin
+    marginTop: 0,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
   },
   title: {
-    fontSize: 20, // Reduced font size
+    fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.white,
   },
+  subtitle: {
+    fontSize: 16,
+    color: COLORS.white,
+    marginBottom: 12,
+    textAlign: 'center',
+    opacity: 0.88,
+  },
   body: {
-    fontSize: 14, // Reduced font size
+    fontSize: 16,
     color: COLORS.white,
   },
   link: {
-    fontSize: 14, // Reduced font size
+    fontSize: 16,
     color: COLORS.white,
     textDecorationLine: 'underline',
+    fontWeight: '500',
   },
 });
 

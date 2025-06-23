@@ -29,6 +29,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import axios from 'axios';
 
 const AVATAR_PLACEHOLDER = 'https://ui-avatars.com/api/?name=User&background=bbb&color=fff&size=128';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -104,6 +105,7 @@ const Settings: React.FC = () => {
   const { colors } = useTheme();
   const router = useRouter();
   const navigation = useNavigation();
+  const [expoPushToken, setExpoPushToken] = React.useState<string | undefined>();
 
   // Parallax for profile header
   const scrollY = React.useRef(new Animated.Value(0)).current;
@@ -204,7 +206,64 @@ const Settings: React.FC = () => {
       }
     };
     loadDarkModePreference();
+
+    // Register for push notifications and get token
+    const registerForPushNotifications = async () => {
+      // Always request permissions
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        Alert.alert(
+          'Notifications Disabled',
+          'You must enable notifications in your dievice settings to receive push notifications.'
+        );
+        setExpoPushToken(undefined);
+        return;
+      }
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      setExpoPushToken(tokenData.data);
+      console.log('Expo Push Token:', tokenData.data);
+
+      // Send token to backend using axios
+      try {
+        await axios.post('http://localhost:8080/api/send-notification', {
+          expoPushToken: tokenData.data,
+          title: 'Welcome!',
+          body: 'You are now registered for notifications.',
+        });
+      } catch (e) {
+        // Handle error if needed
+      }
+    };
+    registerForPushNotifications();
+
+    // Listen for notifications when app is foregrounded
+    const subscription = Notifications.addNotificationReceivedListener(notification => {
+      Alert.alert(
+        notification.request.content.title || 'Notification',
+        notification.request.content.body || ''
+      );
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
+
+  // Demo: Send a local notification
+  const sendTestNotification = async () => {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Test Notification',
+        body: 'This is a test notification!',
+      },
+      trigger: null,
+    });
+  };
 
   return (
     <LinearGradient
@@ -232,6 +291,15 @@ const Settings: React.FC = () => {
           )}
         >
           <View style={modernStyles.container}>
+            {/* Show Expo Push Token for debugging */}
+            <View style={{ marginBottom: 12, backgroundColor: '#f1f5f9', borderRadius: 8, padding: 8 }}>
+              <Text selectable style={{ fontSize: 12, color: '#6366f1' }}>
+                Expo Push Token:
+              </Text>
+              <Text selectable style={{ fontSize: 12, color: '#18181b' }}>
+                {expoPushToken || 'No token yet'}
+              </Text>
+            </View>
             {/* Title */}
             <Text style={modernStyles.screenTitle}>Settings</Text>
             {/* Search Bar */}
@@ -301,6 +369,17 @@ const Settings: React.FC = () => {
 
             {/* Account Section */}
             <Section title="Account" delay={100}>
+              {/* Show Expo Push Token for debugging */}
+              {expoPushToken && (
+                <View style={{ marginBottom: 12, backgroundColor: '#f1f5f9', borderRadius: 8, padding: 8 }}>
+                  <Text selectable style={{ fontSize: 12, color: '#6366f1' }}>
+                    Expo Push Token:
+                  </Text>
+                  <Text selectable style={{ fontSize: 12, color: '#18181b' }}>
+                    {expoPushToken}
+                  </Text>
+                </View>
+              )}
               <SettingRow
                 icon="person"
                 label="Edit Profile"
@@ -363,6 +442,12 @@ const Settings: React.FC = () => {
                 label="Secure Settings"
                 onPress={handleSecureSettings}
                 right={<Icon name="chevron-right" size={22} color="#bdbdbd" />}
+                color={isDarkModeEnabled ? '#a5b4fc' : '#6366f1'}
+              />
+              <SettingRow
+                icon="notifications-active"
+                label="Send Test Notification"
+                onPress={sendTestNotification}
                 color={isDarkModeEnabled ? '#a5b4fc' : '#6366f1'}
               />
             </Section>

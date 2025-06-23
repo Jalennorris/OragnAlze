@@ -6,12 +6,22 @@ import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
-// Use AsyncStorage for sensitive data
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Credentials = {
   username: string;
   password: string;
+};
+
+const COLORS = {
+  primary: '#6a11cb',
+  secondary: '#2575fc',
+  accent: '#ffb347',
+  white: '#fff',
+  glass: 'rgba(255,255,255,0.18)',
+  border: 'rgba(255,255,255,0.25)',
+  error: '#ff6b6b',
+  textDark: '#22223b',
 };
 
 const Login: React.FC = () => {
@@ -21,13 +31,13 @@ const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [passwordVisible, setPasswordVisible] = useState(false);
 
-  // Replace with your actual Google OAuth client ID
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: '964543696153-o2t3m0bedk6o1aqe5puscq51f33fq89t.apps.googleusercontent.com',
   });
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(300)).current;
+  // Animations
+  const cardAnim = useRef(new Animated.Value(60)).current;
+  const cardOpacity = useRef(new Animated.Value(0)).current;
 
   // Store sensitive data securely
   const storeUserData = async (data: any) => {
@@ -43,13 +53,10 @@ const Login: React.FC = () => {
     const handleGoogleLogin = async () => {
       if (response?.type === 'success' && response.authentication?.accessToken) {
         try {
-          // Send token to backend for verification and login/signup
           const backendResponse = await axios.post('http://localhost:8080/api/auth/google', {
             token: response.authentication.accessToken,
           });
-
           await storeUserData(backendResponse.data);
-
           navigation.navigate('index');
         } catch (err: any) {
           setError(
@@ -64,34 +71,30 @@ const Login: React.FC = () => {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.ease,
+      Animated.timing(cardAnim, {
+        toValue: 0,
+        duration: 700,
+        easing: Easing.out(Easing.exp),
         useNativeDriver: true,
       }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 1000,
-        easing: Easing.ease,
+      Animated.timing(cardOpacity, {
+        toValue: 1,
+        duration: 700,
+        easing: Easing.out(Easing.exp),
         useNativeDriver: true,
       }),
     ]).start();
-  }, [fadeAnim, slideAnim]);
+  }, [cardAnim, cardOpacity]);
 
   const handleLogin = useCallback(async () => {
     if (!credentials.username || !credentials.password) {
       setError('Please fill in all fields');
       return;
     }
-
     setLoading(true);
-
     try {
       const response = await axios.post('http://localhost:8080/api/auth/login', credentials);
-
       await storeUserData(response.data);
-
       setLoading(false);
       navigation.navigate('index');
     } catch (error: any) {
@@ -110,33 +113,43 @@ const Login: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={60}
-      >
-        <LinearGradient colors={['#6a11cb', '#2575fc']} style={styles.container}>
-          <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-            <Ionicons
-              name="arrow-back"
-              size={30}
-              color="white"
-              onPress={() => navigation.navigate('welcome')}
-              style={styles.backButton}
-              accessibilityLabel="Go back"
-              accessibilityHint="Navigates to the welcome screen"
-            />
-            <Text style={styles.title}>Hey,{"\n"}Welcome{"\n"}Back.</Text>
-
+      <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.gradient}>
+        <KeyboardAvoidingView
+          style={{ flex: 1, width: '100%' }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={60}
+        >
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.navigate('welcome')}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            accessibilityHint="Navigates to the welcome screen"
+          >
+            <Ionicons name="arrow-back" size={28} color={COLORS.white} />
+          </TouchableOpacity>
+          <View style={styles.logoContainer}>
+            <Ionicons name="rocket-outline" size={40} color={COLORS.white} style={{ marginBottom: 8 }} />
+            <Text style={styles.brandTitle}>OrganAIze</Text>
+          </View>
+          <Animated.View
+            style={[
+              styles.card,
+              {
+                opacity: cardOpacity,
+                transform: [{ translateY: cardAnim }],
+              },
+            ]}
+          >
+            <Text style={styles.title}>Welcome Back</Text>
             <View style={styles.inputContainer}>
               <TextInput
                 placeholder="Username"
-                placeholderTextColor="#999"
+                placeholderTextColor="#bbb"
                 style={styles.input}
                 value={credentials.username}
                 onChangeText={(text) => handleChange('username', text)}
                 accessibilityLabel="Username"
-                accessibilityHint="Enter your username"
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
@@ -146,13 +159,12 @@ const Login: React.FC = () => {
               <View style={{ position: 'relative' }}>
                 <TextInput
                   placeholder="Password"
-                  placeholderTextColor="#999"
+                  placeholderTextColor="#bbb"
                   secureTextEntry={!passwordVisible}
                   style={styles.input}
                   value={credentials.password}
                   onChangeText={(text) => handleChange('password', text)}
                   accessibilityLabel="Password"
-                  accessibilityHint="Enter your password"
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="go"
@@ -171,15 +183,16 @@ const Login: React.FC = () => {
                   <Ionicons
                     name={passwordVisible ? 'eye-off' : 'eye'}
                     size={22}
-                    color="#fff"
+                    color={COLORS.primary}
                   />
                 </TouchableOpacity>
               </View>
+              {error && <Text style={styles.errorText} accessibilityLiveRegion="polite">{error}</Text>}
               {loading ? (
-                <ActivityIndicator size="large" color="#fff" accessibilityLabel="Loading" />
+                <ActivityIndicator size="large" color={COLORS.primary} accessibilityLabel="Loading" style={{ marginTop: 10 }} />
               ) : (
                 <TouchableOpacity
-                  style={[styles.button, loading && { opacity: 0.6 }]}
+                  style={styles.button}
                   onPress={handleLogin}
                   accessibilityRole="button"
                   accessibilityLabel="Log In"
@@ -190,10 +203,7 @@ const Login: React.FC = () => {
                 </TouchableOpacity>
               )}
             </View>
-
-            {error && <Text style={styles.errorText} accessibilityLiveRegion="polite">{error}</Text>}
-
-            <Text style={styles.text}>or continue with</Text>
+            <Text style={styles.orText}>or continue with</Text>
             <TouchableOpacity
               style={styles.googleButton}
               onPress={() => promptAsync()}
@@ -202,11 +212,10 @@ const Login: React.FC = () => {
               accessibilityLabel="Login with Google"
               accessibilityHint="Authenticate using your Google account"
             >
-              <Ionicons name="logo-google" size={24} color="#fff" />
+              <Ionicons name="logo-google" size={22} color={COLORS.primary} />
               <Text style={styles.googleButtonText}>Login with Google</Text>
             </TouchableOpacity>
-
-            <Text style={styles.text}>
+            <Text style={styles.signupText}>
               Don't have an account?{' '}
               <Text
                 style={styles.linkText}
@@ -219,8 +228,8 @@ const Login: React.FC = () => {
               </Text>
             </Text>
           </Animated.View>
-        </LinearGradient>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
     </SafeAreaView>
   );
 };
@@ -228,88 +237,139 @@ const Login: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#6a11cb', // Match the gradient's starting color
+    backgroundColor: COLORS.primary,
   },
-  container: {
+  gradient: {
     flex: 1,
+    width: '100%',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    width: '90%',
     alignItems: 'center',
   },
   backButton: {
     position: 'absolute',
-    top: -100, // Adjusted position
-    left: 15, // Adjusted position
+    top: 50,
+    left: 24,
+    zIndex: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 20,
+    padding: 6,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginTop: 90,
+    marginBottom: 18,
+  },
+  brandTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: COLORS.white,
+    letterSpacing: 2,
+  },
+  card: {
+    width: '92%',
+    alignSelf: 'center',
+    backgroundColor: COLORS.glass,
+    borderRadius: 24,
+    padding: 28,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.13,
+    shadowRadius: 24,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 24,
   },
   title: {
-    fontSize: 28, // Reduced font size
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'left',
-    alignSelf: 'flex-start',
-    marginBottom: 20, // Reduced margin
+    color: COLORS.primary,
+    marginBottom: 18,
+    textAlign: 'center',
+    letterSpacing: 1,
   },
   inputContainer: {
     width: '100%',
-    marginBottom: 15, // Reduced margin
+    marginBottom: 12,
   },
   input: {
-    height: 40, // Reduced height
-    borderColor: '#fff',
+    height: 44,
+    borderColor: COLORS.primary,
     borderWidth: 1,
-    marginBottom: 10, // Reduced margin
-    paddingHorizontal: 10, // Reduced padding
-    borderRadius: 20, // Reduced border radius
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    color: '#fff',
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    color: COLORS.textDark,
+    fontSize: 16,
   },
   button: {
-    backgroundColor: '#fff',
-    paddingVertical: 10, // Reduced padding
-    borderRadius: 20, // Reduced border radius
-    width: '90%', // Adjusted width
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    borderRadius: 18,
+    width: '100%',
     alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 2,
   },
   buttonText: {
-    color: '#6a11cb',
-    fontSize: 16, // Reduced font size
+    color: COLORS.white,
+    fontSize: 16,
     fontWeight: 'bold',
   },
-  text: {
-    color: '#fff',
-    marginTop: 15, // Reduced margin
-    fontSize: 14, // Reduced font size
-  },
-  linkText: {
-    color: '#fff',
-    fontWeight: 'bold',
+  orText: {
+    color: COLORS.textDark,
+    marginTop: 16,
+    marginBottom: 10,
+    fontSize: 14,
+    textAlign: 'center',
+    opacity: 0.8,
   },
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 8, // Reduced padding
-    paddingHorizontal: 15, // Reduced padding
-    borderRadius: 20, // Reduced border radius
-    marginTop: 8, // Reduced margin
+    backgroundColor: COLORS.white,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 18,
+    marginTop: 2,
+    marginBottom: 18,
+    alignSelf: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   googleButtonText: {
-    color: '#fff',
-    fontSize: 14, // Reduced font size
-    marginLeft: 8, // Reduced margin
+    color: COLORS.primary,
+    fontSize: 15,
+    marginLeft: 10,
+    fontWeight: 'bold',
+  },
+  signupText: {
+    color: COLORS.textDark,
+    marginTop: 8,
+    fontSize: 14,
+    textAlign: 'center',
+    opacity: 0.9,
+  },
+  linkText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
   },
   errorText: {
-    color: '#ff6b6b',
-    marginTop: 8, // Reduced margin
-    fontSize: 14, // Reduced font size
+    color: COLORS.error,
+    marginTop: 2,
+    marginBottom: 6,
+    fontSize: 14,
+    textAlign: 'center',
   },
   eyeIcon: {
     position: 'absolute',
-    right: 15,
-    top: 10,
+    right: 16,
+    top: 12,
     zIndex: 1,
   },
 });

@@ -23,6 +23,8 @@ import * as Yup from 'yup';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Animated } from 'react-native';
 
 // Define the structure for user credentials
 interface Credentials {
@@ -35,21 +37,28 @@ interface Credentials {
 
 // --- Constants ---
 const COLORS = {
-  primary: '#6200ee', // Primary theme color
-  secondary: '#03dac6', // Secondary theme color
-  background: '#fff', // Background color
-  error: 'red', // Error message color
-  text: '#000', // Default text color
-  placeholder: '#ccc', // Placeholder text color
-  modalBackground: 'rgba(0, 0, 0, 0.5)', // Semi-transparent modal overlay
+  primary: '#7F56D9', // Modern purple
+  secondary: '#38BDF8', // Modern blue
+  background: '#F9FAFB', // Light background
+  error: '#EF4444', // Red-500
+  text: '#1E293B', // Slate-800
+  placeholder: '#94A3B8', // Slate-400
+  modalBackground: 'rgba(30, 41, 59, 0.5)', // Slate-800, semi-transparent
+  card: '#FFFFFF', // Pure white card
+  border: '#E5E7EB', // Slate-200
+  shadow: '#00000022',
+  accent: '#F472B6', // Pink-400
+  success: '#22C55E', // Green-500
+  gradientStart: '#7F56D9',
+  gradientEnd: '#38BDF8',
 };
 
 const SIZES = {
-  padding: 20, // Default padding
-  borderRadius: 10, // Default border radius
-  iconSize: 24, // Size for icons
-  profileImageSize: 120, // Size for the main profile image/color block
-  colorBlockSize: 80, // Size for the color selection blocks in the modal
+  padding: 24,
+  borderRadius: 18,
+  iconSize: 28,
+  profileImageSize: 128,
+  colorBlockSize: 64,
 };
 
 // Predefined colors for profile picture selection
@@ -71,14 +80,51 @@ const BackButton = ({ onPress }: { onPress: () => void }) => (
 );
 
 const ProfileImage = ({ uri, color, onPress }: { uri?: string; color?: string; onPress: () => void }) => (
-  <TouchableOpacity onPress={onPress} style={styles.profileImageContainer}>
+  <TouchableOpacity
+    onPress={onPress}
+    style={[
+      styles.profileImageContainer,
+      {
+        shadowColor: COLORS.primary,
+        shadowOpacity: 0.35,
+        shadowRadius: 32,
+        elevation: 16,
+        backgroundColor: 'rgba(255,255,255,0.6)',
+        borderWidth: 2,
+        borderColor: COLORS.border,
+      }
+    ]}
+    activeOpacity={0.75}
+  >
     {uri ? (
-      <Image source={{ uri: uri }} style={styles.profileImage} onError={(e) => console.log("Failed to load image:", e.nativeEvent.error)} />
+      <>
+        <Image
+          source={{ uri: uri }}
+          style={styles.profileImage}
+          onError={(e) => console.log("Failed to load image:", e.nativeEvent.error)}
+        />
+        <LinearGradient
+          colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+          style={styles.profileImageOverlay}
+        >
+          <Icon name="photo-camera" size={36} color="#fff" />
+        </LinearGradient>
+      </>
     ) : color ? (
-      <View style={[styles.colorBlockDisplay, { backgroundColor: color }]} />
+      <>
+        <View style={[styles.colorBlockDisplay, { backgroundColor: color }]}>
+          <Icon name="person" size={62} color="#fff" />
+        </View>
+        <LinearGradient
+          colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+          style={styles.profileImageOverlay}
+        >
+          <Icon name="photo-camera" size={36} color="#fff" />
+        </LinearGradient>
+      </>
     ) : (
       <View style={styles.profileImagePlaceholder}>
-        <Icon name="add-a-photo" size={50} color={COLORS.primary} />
+        <Icon name="add-a-photo" size={62} color={COLORS.primary} />
       </View>
     )}
   </TouchableOpacity>
@@ -459,9 +505,24 @@ const EditProfile: React.FC = () => {
   // --- Render Functions ---
   const renderColorBlock = ({ item }: { item: string }) => (
     <TouchableOpacity
-      style={[styles.colorBlockSelect, { backgroundColor: item }]}
+      style={[
+        styles.colorBlockSelect,
+        { backgroundColor: item },
+        selectedColor === item && styles.colorBlockSelected,
+      ]}
       onPress={() => handleColorSelect(item)}
-    />
+      activeOpacity={0.7}
+    >
+      <Animated.View style={[
+        styles.colorBlockInner,
+        selectedColor === item && styles.colorBlockInnerSelected
+      ]} />
+      {selectedColor === item && (
+        <View style={styles.colorBlockCheckWrapper}>
+          <Icon name="check" size={30} color="#fff" style={styles.colorBlockCheck} />
+        </View>
+      )}
+    </TouchableOpacity>
   );
 
   // --- Main JSX Return ---
@@ -471,81 +532,53 @@ const EditProfile: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
       >
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
           <BackButton onPress={() => navigation.goBack()} />
           <Text style={styles.title}>Edit Profile</Text>
 
-          {/* Profile Image Display - uses profileImage state (local URI or public URL) or selectedColor */}
-          <ProfileImage
-            uri={profileImage ?? undefined}
-            color={!profileImage ? selectedColor ?? undefined : undefined} // Show color only if profileImage is null
-            onPress={() => setIsModalVisible(true)}
-          />
+          <View style={styles.card}>
+            <ProfileImage
+              uri={profileImage ?? undefined}
+              color={!profileImage ? selectedColor ?? undefined : undefined}
+              onPress={() => setIsModalVisible(true)}
+            />
+            {credentials.displayName && (
+              <Text style={styles.displayName}>@{credentials.displayName}</Text>
+            )}
+            <TouchableOpacity
+              style={[styles.saveButton, styles.savePictureButton]}
+              onPress={handleSaveProfilePicture}
+              disabled={isLoading || (!isLocalFileUri(profileImage) && !selectedColor)}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              />
+              {isLoading ? (
+                <ActivityIndicator color={COLORS.background} />
+              ) : (
+                <Text style={styles.saveButtonText}>Save Profile Picture</Text>
+              )}
+            </TouchableOpacity>
+          </View>
 
-          {credentials.displayName && (
-             <Text style={styles.displayName}>@{credentials.displayName}</Text>
-          )}
+          <View style={styles.divider} />
 
-          {/* Save Profile Picture Button */}
-          <TouchableOpacity
-             style={[styles.saveButton, styles.savePictureButton]}
-             onPress={handleSaveProfilePicture}
-             // Disable if loading OR if there's no local image/color selected *and* the current state matches the DB state
-             disabled={isLoading || (!isLocalFileUri(profileImage) && !selectedColor)}
-           >
-             {isLoading ? (
-               <ActivityIndicator color={COLORS.background} />
-             ) : (
-               <Text style={styles.saveButtonText}>Save Profile Picture</Text>
-             )}
-           </TouchableOpacity>
-
-          {/* Profile Picture Selection Modal */}
-          <Modal
-            visible={isModalVisible}
-            animationType="slide"
-            transparent
-            onRequestClose={() => setIsModalVisible(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContainer}>
-                <Text style={styles.modalTitle}>Choose Profile Picture</Text>
-                <Text style={styles.modalSubtitle}>Select a color, upload an image, or take a photo</Text>
-                <FlatList
-                  data={colorBlocks}
-                  renderItem={renderColorBlock}
-                  keyExtractor={(item) => item}
-                  numColumns={3}
-                  contentContainerStyle={styles.colorListContainer}
-                />
-                <TouchableOpacity style={styles.modalButton} onPress={handleImageUpload}>
-                  <Icon name="photo-library" size={SIZES.iconSize} color={COLORS.background} style={styles.buttonIcon} />
-                  <Text style={styles.modalButtonText}>Upload from Library</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalButton} onPress={handleTakePhoto}>
-                  <Icon name="photo-camera" size={SIZES.iconSize} color={COLORS.background} style={styles.buttonIcon} />
-                  <Text style={styles.modalButtonText}>Take Photo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.closeButton} onPress={() => setIsModalVisible(false)}>
-                  <Text style={styles.closeButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Modal>
-
-          {/* Formik Form for Profile Details */}
           <Formik
             initialValues={{
-                firstName: credentials.firstName,
-                lastName: credentials.lastName,
-                email: credentials.email
+              firstName: credentials.firstName,
+              lastName: credentials.lastName,
+              email: credentials.email
             }}
             validationSchema={profileSchema}
-            enableReinitialize // Update form when credentials change
+            enableReinitialize
             onSubmit={handleSaveChanges}
           >
             {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
-              <View style={styles.formContainer}>
+              <View style={[styles.formContainer, styles.card]}>
                 <View style={styles.inputContainer}>
                   <Icon name="person-outline" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
                   <TextInput
@@ -556,6 +589,7 @@ const EditProfile: React.FC = () => {
                     onChangeText={handleChange('firstName')}
                     onBlur={handleBlur('firstName')}
                     autoCapitalize="words"
+                    selectionColor={COLORS.primary}
                   />
                 </View>
                 {touched.firstName && errors.firstName && <Text style={styles.errorText}>{errors.firstName}</Text>}
@@ -570,6 +604,7 @@ const EditProfile: React.FC = () => {
                     onChangeText={handleChange('lastName')}
                     onBlur={handleBlur('lastName')}
                     autoCapitalize="words"
+                    selectionColor={COLORS.primary}
                   />
                 </View>
                 {touched.lastName && errors.lastName && <Text style={styles.errorText}>{errors.lastName}</Text>}
@@ -585,15 +620,23 @@ const EditProfile: React.FC = () => {
                     onBlur={handleBlur('email')}
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    selectionColor={COLORS.primary}
                   />
                 </View>
                 {touched.email && errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
 
                 <TouchableOpacity
-                   style={styles.saveButton}
-                   onPress={() => handleSubmit()}
-                   disabled={isLoading}
-                 >
+                  style={styles.saveButton}
+                  onPress={() => handleSubmit()}
+                  disabled={isLoading}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  />
                   {isLoading ? (
                     <ActivityIndicator color={COLORS.background} />
                   ) : (
@@ -603,6 +646,54 @@ const EditProfile: React.FC = () => {
               </View>
             )}
           </Formik>
+
+          {/* Profile Picture Selection Modal */}
+          <Modal
+            visible={isModalVisible}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setIsModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContainer}>
+                <View style={styles.dragIndicatorOuter}>
+                  <View style={styles.dragIndicator} />
+                </View>
+                <Text style={styles.modalTitle}>Choose Profile Picture</Text>
+                <Text style={styles.modalSubtitle}>Select a color, upload an image, or take a photo</Text>
+                <FlatList
+                  data={colorBlocks}
+                  renderItem={renderColorBlock}
+                  keyExtractor={(item) => item}
+                  numColumns={3}
+                  contentContainerStyle={styles.colorListContainer}
+                />
+                <TouchableOpacity style={styles.modalButton} onPress={handleImageUpload} activeOpacity={0.7}>
+                  <LinearGradient
+                    colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  />
+                  <Icon name="photo-library" size={SIZES.iconSize} color={COLORS.background} style={styles.buttonIcon} />
+                  <Text style={styles.modalButtonText}>Upload from Library</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalButton} onPress={handleTakePhoto} activeOpacity={0.7}>
+                  <LinearGradient
+                    colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  />
+                  <Icon name="photo-camera" size={SIZES.iconSize} color={COLORS.background} style={styles.buttonIcon} />
+                  <Text style={styles.modalButtonText}>Take Photo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.closeButton} onPress={() => setIsModalVisible(false)} activeOpacity={0.7}>
+                  <Text style={styles.closeButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -618,110 +709,181 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     padding: SIZES.padding,
-    paddingBottom: 50,
+    paddingBottom: 80,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 22,
     alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(127,86,217,0.08)',
   },
   backButtonText: {
-    marginLeft: 5,
-    fontSize: 16,
+    marginLeft: 10,
+    fontSize: 19,
     color: COLORS.primary,
-    fontWeight: '500',
+    fontWeight: '700',
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 20,
+    fontSize: 38,
+    fontWeight: '900',
+    marginBottom: 24,
     textAlign: 'center',
     color: COLORS.text,
+    letterSpacing: 0.7,
+  },
+  card: {
+    backgroundColor: COLORS.card,
+    borderRadius: SIZES.borderRadius * 1.4,
+    padding: 32,
+    marginBottom: 32,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.13,
+    shadowRadius: 24,
+    elevation: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backdropFilter: 'blur(12px)',
+  },
+  divider: {
+    height: 1.5,
+    backgroundColor: COLORS.border,
+    marginVertical: 18,
+    width: '100%',
+    alignSelf: 'center',
+    borderRadius: 2,
   },
   profileImageContainer: {
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 18,
     position: 'relative',
+    justifyContent: 'center',
+    borderRadius: SIZES.profileImageSize / 2,
+    overflow: 'hidden',
   },
   profileImage: {
     width: SIZES.profileImageSize,
     height: SIZES.profileImageSize,
     borderRadius: SIZES.profileImageSize / 2,
     backgroundColor: COLORS.placeholder,
+    borderWidth: 4,
+    borderColor: COLORS.background,
+  },
+  profileImageOverlay: {
+    position: 'absolute',
+    bottom: 14,
+    right: 14,
+    borderRadius: 24,
+    padding: 8,
+    elevation: 3,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    zIndex: 2,
   },
   colorBlockDisplay: {
-      width: SIZES.profileImageSize,
-      height: SIZES.profileImageSize,
-      borderRadius: SIZES.profileImageSize / 2,
-      alignItems: 'center',
-      justifyContent: 'center',
+    width: SIZES.profileImageSize,
+    height: SIZES.profileImageSize,
+    borderRadius: SIZES.profileImageSize / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: COLORS.background,
   },
   profileImagePlaceholder: {
-      width: SIZES.profileImageSize,
-      height: SIZES.profileImageSize,
-      borderRadius: SIZES.profileImageSize / 2,
-      backgroundColor: '#e0e0e0',
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: COLORS.placeholder,
+    width: SIZES.profileImageSize,
+    height: SIZES.profileImageSize,
+    borderRadius: SIZES.profileImageSize / 2,
+    backgroundColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.placeholder,
   },
   displayName: {
-    fontSize: 16,
+    fontSize: 22,
     color: COLORS.text,
     textAlign: 'center',
-    marginBottom: 15,
-    fontWeight: '500',
+    marginBottom: 22,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   formContainer: {
     width: '100%',
-    marginTop: 20,
+    marginTop: 10,
+    paddingVertical: 10,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 5,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.placeholder,
+    marginBottom: 14,
+    borderWidth: 0,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderRadius: SIZES.borderRadius * 1.1,
+    paddingHorizontal: 18,
+    paddingVertical: 4,
+    marginTop: 16,
+    elevation: 2,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   icon: {
-    marginRight: 10,
+    marginRight: 16,
   },
   input: {
     flex: 1,
-    fontSize: 16,
-    paddingVertical: 12,
+    fontSize: 19,
+    paddingVertical: 18,
     color: COLORS.text,
+    backgroundColor: 'transparent',
+    fontWeight: '600',
+    borderRadius: SIZES.borderRadius,
   },
   errorText: {
     color: COLORS.error,
-    fontSize: 12,
-    marginTop: -10,
-    marginBottom: 10,
+    fontSize: 15,
+    marginTop: -8,
+    marginBottom: 12,
     marginLeft: SIZES.iconSize + 10,
+    fontWeight: '600',
   },
   saveButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 15,
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+    paddingVertical: 18,
     paddingHorizontal: 20,
-    borderRadius: SIZES.borderRadius,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 25,
-    minHeight: 50,
+    marginTop: 32,
+    minHeight: 60,
+    width: '100%',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.13,
+    shadowRadius: 8,
+    elevation: 3,
   },
   savePictureButton: {
     marginTop: 0,
-    marginBottom: 30,
-    backgroundColor: COLORS.secondary,
-    width: '80%',
+    marginBottom: 22,
+    width: '92%',
     alignSelf: 'center',
   },
   saveButtonText: {
     color: COLORS.background,
-    fontSize: 18,
+    fontSize: 21,
     fontWeight: 'bold',
+    letterSpacing: 0.7,
+    zIndex: 2,
   },
   modalOverlay: {
     flex: 1,
@@ -732,71 +894,134 @@ const styles = StyleSheet.create({
   modalContainer: {
     width: '100%',
     padding: SIZES.padding,
-    paddingBottom: 30,
-    backgroundColor: COLORS.background,
+    paddingBottom: 44,
+    backgroundColor: COLORS.card,
     borderTopLeftRadius: SIZES.borderRadius * 2,
     borderTopRightRadius: SIZES.borderRadius * 2,
     alignItems: 'center',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backdropFilter: 'blur(16px)',
+  },
+  dragIndicatorOuter: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  dragIndicator: {
+    width: 60,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: COLORS.border,
+    alignSelf: 'center',
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: 'bold',
     marginBottom: 10,
     textAlign: 'center',
     color: COLORS.text,
+    letterSpacing: 0.3,
   },
   modalSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 20,
+    fontSize: 17,
+    color: COLORS.placeholder,
+    marginBottom: 22,
     textAlign: 'center',
   },
   colorListContainer: {
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 22,
   },
   colorBlockSelect: {
     width: SIZES.colorBlockSize,
     height: SIZES.colorBlockSize,
     borderRadius: SIZES.colorBlockSize / 2,
-    margin: 10,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    margin: 12,
+    borderWidth: 3,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.13,
+    shadowRadius: 8,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  colorBlockInner: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: SIZES.colorBlockSize / 2,
+    opacity: 0.15,
+    backgroundColor: '#fff',
+    zIndex: 0,
+  },
+  colorBlockInnerSelected: {
+    opacity: 0.25,
+  },
+  colorBlockSelected: {
+    borderColor: COLORS.primary,
+    borderWidth: 4,
+    elevation: 6,
+    shadowOpacity: 0.22,
+  },
+  colorBlockCheckWrapper: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: COLORS.success,
+    borderRadius: 16,
+    padding: 3,
+    zIndex: 2,
+  },
+  colorBlockCheck: {
+    alignSelf: 'center',
   },
   modalButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 15,
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+    paddingVertical: 18,
     paddingHorizontal: 20,
-    borderRadius: SIZES.borderRadius,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     width: '100%',
-    minHeight: 50,
-    marginBottom: 10,
+    minHeight: 60,
+    marginBottom: 12,
+    elevation: 2,
   },
   modalButtonText: {
     color: COLORS.background,
-    fontSize: 16,
+    fontSize: 19,
     fontWeight: 'bold',
+    letterSpacing: 0.3,
+    zIndex: 2,
   },
   buttonIcon: {
-      marginRight: 10,
+    marginRight: 14,
+    zIndex: 2,
   },
   closeButton: {
-    backgroundColor: '#e0e0e0',
-    paddingVertical: 15,
+    backgroundColor: COLORS.border,
+    paddingVertical: 18,
     paddingHorizontal: 20,
-    borderRadius: SIZES.borderRadius,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    minHeight: 50,
-    marginTop: 10,
+    minHeight: 60,
+    marginTop: 12,
   },
   closeButtonText: {
-    color: '#333',
-    fontSize: 16,
+    color: COLORS.text,
+    fontSize: 19,
     fontWeight: 'bold',
   },
 });
