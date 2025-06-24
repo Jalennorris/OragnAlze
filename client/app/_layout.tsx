@@ -9,7 +9,7 @@ export default function RootLayout() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 1000); // Simulate a 1-second loading time
+    }, 4000); // Show loading for 4 seconds instead of 1
 
     return () => clearTimeout(timer);
   }, []);

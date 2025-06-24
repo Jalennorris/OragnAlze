@@ -11,6 +11,9 @@ import EditProfile from '@/Screen/sections/editProfile';
 import ChangePassword from '@/Screen/sections/changePassword';
 import UpdateEmail from '@/Screen/sections/updateEmail';
 import PrivacyPolicy from '@/Screen/sections/PrivacyPolicy';
+import SecureSettings from '@/Screen/sections/SecureSettings';
+import SendFeedback from '@/Screen/sendFeedback';
+import HelpSupport from '@/Screen/helpSupport';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 // Define your stack param list for type safety
@@ -49,6 +52,9 @@ const AuthStack = () => (
     <Stack.Screen name="sections/changePassword" component={ChangePassword} />
     <Stack.Screen name="sections/updateEmail" component={UpdateEmail} />
     <Stack.Screen name="sections/privacyPolicy" component={PrivacyPolicy} />
+    <Stack.Screen name="secureSettings" component={SecureSettings} />
+    <Stack.Screen name="sendFeedback" component={SendFeedback} />
+    <Stack.Screen name="helpSupport" component={HelpSupport} />
   </Stack.Navigator>
 );
 

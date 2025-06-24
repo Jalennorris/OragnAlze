@@ -6,42 +6,43 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
-  useColorScheme, // Import useColorScheme
-  Appearance, // Can be used if you need to subscribe to changes manually
-  // Linking, // Remove this import
+  useColorScheme,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons'; // Ensure this is installed
-import Header from '@/components/header'; // Assuming this component exists and is themed
-import NavBar from '@/components/Navbar'; // Assuming this component exists and is themed
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import * as Linking from 'expo-linking';
+import Header from '@/components/header';
+import NavBar from '@/components/Navbar';
 
-// Define theme color interfaces
 interface ThemeColors {
   background: string;
   text: string;
-  primary: string; // For interactive elements like buttons or links
+  primary: string;
   border: string;
-  cardBackground: string; // If you had distinct sections with backgrounds
+  cardBackground: string;
+  blurTint: 'light' | 'dark';
 }
 
-// Define light and dark theme colors
 const lightTheme: ThemeColors = {
-  background: '#FFFFFF',
-  text: '#1C1C1E', // Slightly off-black
-  primary: '#007AFF', // iOS Blue
-  border: '#D1D1D6',
-  cardBackground: '#F2F2F7',
+  background: '#F2F2F7',
+  text: '#1C1C1E',
+  primary: '#a78bfa', // purple-400
+  border: '#E5E7EB',
+  cardBackground: 'rgba(255,255,255,0.85)',
+  blurTint: 'light',
 };
 
 const darkTheme: ThemeColors = {
-  background: '#000000', // Pure black for OLED
-  text: '#E5E5E7', // Slightly off-white
-  primary: '#0A84FF', // iOS Blue (Dark Mode)
-  border: '#38383A',
-  cardBackground: '#1C1C1E',
+  background: '#18181b',
+  text: '#E5E5E7',
+  primary: '#a78bfa', // purple-400
+  border: '#232536',
+  cardBackground: 'rgba(36,37,46,0.85)',
+  blurTint: 'dark',
 };
 
-// Define structure for privacy policy content
 interface PolicySection {
   id: string;
   title?: string;
@@ -110,19 +111,17 @@ const privacyPolicySections: PolicySection[] = [
   },
 ];
 
-// SectionItem component for rendering each policy section
 const SectionItem: React.FC<{ section: PolicySection; colors: ThemeColors }> = React.memo(({ section, colors }) => (
-  <View style={styles.sectionContainer}>
+  <View style={[styles.sectionContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
     {section.title && (
       <Text
-        style={[styles.sectionTitle, { color: colors.text }]}
+        style={[styles.sectionTitle, { color: colors.primary }]}
         accessibilityRole="header"
       >
         {section.title}
       </Text>
     )}
     {section.paragraphs.map((paragraph, index) => {
-      // If the paragraph contains [Insert Contact Information], replace it with a clickable link
       if (paragraph.includes('[Insert Contact Information]')) {
         const parts = paragraph.split('[Insert Contact Information]');
         return (
@@ -130,12 +129,23 @@ const SectionItem: React.FC<{ section: PolicySection; colors: ThemeColors }> = R
             {parts[0]}
             <Text
               style={{ color: colors.primary, textDecorationLine: 'underline' }}
-              // onPress removed
+              onPress={() => Linking.openURL('mailto:contact@example.com')}
+              accessibilityRole="link"
+              accessibilityLabel="Contact us by email"
             >
               contact@example.com
             </Text>
             {parts[1]}
           </Text>
+        );
+      }
+      // Render bullet points as list items
+      if (paragraph.trim().startsWith('- ')) {
+        return (
+          <View key={index} style={styles.bulletRow}>
+            <Text style={[styles.bullet, { color: colors.primary }]}>•</Text>
+            <Text style={[styles.bulletText, { color: colors.text }]}>{paragraph.replace('- ', '')}</Text>
+          </View>
         );
       }
       return (
@@ -149,42 +159,48 @@ const SectionItem: React.FC<{ section: PolicySection; colors: ThemeColors }> = R
 
 const PrivacyPolicy: React.FC = () => {
   const navigation = useNavigation();
-  const colorScheme = useColorScheme(); // 'light', 'dark', or null
-  const theme = colorScheme === 'dark' ? darkTheme : lightTheme; // Default to light theme if null
-
-  // Assuming Header and NavBar can accept a theme prop or consume a theme context
-  // e.g., <Header theme={theme} />
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <Header /> {/* Pass theme if Header supports it */}
-      <View style={styles.headerBar}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-          accessibilityLabel="Go back to previous screen"
-          accessibilityRole="button"
+    <View style={{ flex: 1 }}>
+      <BlurView
+        intensity={60}
+        tint={theme.blurTint}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+        <View style={[styles.headerBar, { borderBottomColor: theme.border, backgroundColor: theme.cardBackground }]}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+            accessibilityLabel="Go back to previous screen"
+            accessibilityRole="button"
+          >
+            <Ionicons name="arrow-back" size={28} color={theme.primary} />
+          </TouchableOpacity>
+          <Text style={[styles.pageTitle, { color: theme.primary }]}>Privacy Policy</Text>
+          <View style={{ width: 28 }} />
+        </View>
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
         >
-          <Ionicons name="arrow-back" size={28} color={theme.primary} />
-        </TouchableOpacity>
-        <Text style={[styles.pageTitle, { color: theme.text }]}>Privacy Policy</Text>
-        <View style={{ width: 28 }} /> {/* Spacer to balance the title */}
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {privacyPolicySections.map((section) => (
-          <SectionItem key={section.id} section={section} colors={theme} />
-        ))}
-      </ScrollView>
-      <NavBar /> {/* Pass theme if NavBar supports it */}
-    </SafeAreaView>
+          {privacyPolicySections.map((section, idx) => (
+            <React.Fragment key={section.id}>
+              <SectionItem section={section} colors={theme} />
+              {idx < privacyPolicySections.length - 1 && (
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
+              )}
+            </React.Fragment>
+          ))}
+        </ScrollView>
+        <NavBar />
+      </SafeAreaView>
+    </View>
   );
 };
 
-// Styles are defined once outside the component
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -193,37 +209,80 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderBottomWidth: 1, // Optional: Add a border to the header bar
-    // borderBottomColor will be set by theme if needed, or remove if Header handles it
+    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
+    borderBottomWidth: 1,
+    zIndex: 10,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    marginHorizontal: 10,
+    marginTop: 10,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   backButton: {
-    padding: 8, // Increase touch target
+    padding: 8,
     marginRight: 10,
   },
   pageTitle: {
-    flex: 1, // Allow title to take available space
-    fontSize: 20,
-    fontWeight: 'bold',
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '900',
     textAlign: 'center',
+    letterSpacing: -0.5,
+    fontFamily: Platform.select({ ios: 'SF Pro Display', android: 'Roboto', default: undefined }),
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
   },
   sectionContainer: {
     marginBottom: 24,
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 19,
+    fontWeight: '700',
     marginBottom: 10,
+    letterSpacing: 0.1,
   },
   paragraph: {
     fontSize: 16,
     lineHeight: 24,
-    marginBottom: 12, // Space between paragraphs within a section
+    marginBottom: 12,
+    fontWeight: '400',
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    marginLeft: 8,
+  },
+  bullet: {
+    fontSize: 18,
+    marginRight: 8,
+    marginTop: 2,
+  },
+  bulletText: {
+    fontSize: 16,
+    lineHeight: 24,
+    flex: 1,
+  },
+  divider: {
+    height: 1.5,
+    borderRadius: 1,
+    marginVertical: 8,
+    opacity: 0.18,
   },
 });
 
