@@ -27,6 +27,12 @@ public class GoalsController {
         return goal.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<UserGoalDTO>> getGoalsByUserId(@PathVariable Long userId) {
+        List<UserGoalDTO> goals = goalService.getGoalsByUserId(userId);
+        return ResponseEntity.ok(goals);
+    }
+
     @PostMapping
     public ResponseEntity<UserGoalDTO> createGoal(@RequestBody UserGoalDTO goalDTO) {
         UserGoalDTO created = goalService.createGoal(goalDTO);

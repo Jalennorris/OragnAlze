@@ -22,6 +22,10 @@ public class FeedbackService {
         return feedbackRepository.save(feedback);
     }
 
+    public List<UserFeedback> createFeedbackBatch(List<UserFeedback> feedbackList) {
+        return feedbackRepository.saveAll(feedbackList);
+    }
+
     public Optional<UserFeedback> getFeedbackById(Long id) {
         return feedbackRepository.findById(id);
     }
@@ -42,6 +46,7 @@ public class FeedbackService {
             feedback.setFeedbackText(updatedFeedback.getFeedbackText());
             feedback.setRating(updatedFeedback.getRating());
             feedback.setCreatedAt(updatedFeedback.getCreatedAt());
+            feedback.setAcceptedAITaskId(updatedFeedback.getAcceptedAITaskId());
             return feedbackRepository.save(feedback);
         });
     }
@@ -52,6 +57,7 @@ public class FeedbackService {
             if (patch.getFeedbackText() != null) feedback.setFeedbackText(patch.getFeedbackText());
             if (patch.getRating() != null) feedback.setRating(patch.getRating());
             if (patch.getCreatedAt() != null) feedback.setCreatedAt(patch.getCreatedAt());
+            if (patch.getAcceptedAITaskId() != null) feedback.setAcceptedAITaskId(patch.getAcceptedAITaskId());
             return feedbackRepository.save(feedback);
         });
     }

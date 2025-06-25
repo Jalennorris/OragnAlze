@@ -41,6 +41,8 @@ public class AcceptedService {
         dto.setTaskDescription(entity.getTaskDescription());
         dto.setDeadline(entity.getDeadline());
         dto.setAcceptedAt(entity.getAcceptedAt());
+
+
         return dto;
     }
 
@@ -50,6 +52,19 @@ public class AcceptedService {
         }
         AcceptedTask saved = acceptedRepository.save(toEntity(acceptedDTO));
         return toDTO(saved);
+    }
+
+    public List<AcceptedDTO> createAcceptedBatch(List<AcceptedDTO> acceptedDTOs) {
+        List<AcceptedTask> entities = acceptedDTOs.stream()
+                .map(dto -> {
+                    if (dto.getTaskTitle() == null) {
+                        throw new IllegalArgumentException("taskTitle must not be null");
+                    }
+                    return toEntity(dto);
+                })
+                .collect(Collectors.toList());
+        List<AcceptedTask> saved = acceptedRepository.saveAll(entities);
+        return saved.stream().map(this::toDTO).collect(Collectors.toList());
     }
 
     public Optional<AcceptedDTO> getAcceptedById(Long id) {

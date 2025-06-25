@@ -33,9 +33,15 @@ public class FeedbackController {
         return ResponseEntity.status(201).body(feedbackService.createFeedback(feedback));
     }
 
+    @PostMapping("/batch")
+    public ResponseEntity<List<UserFeedback>> createFeedbackBatch(@RequestBody List<UserFeedback> feedbackList) {
+        List<UserFeedback> createdFeedbacks = feedbackService.createFeedbackBatch(feedbackList);
+        return ResponseEntity.status(201).body(createdFeedbacks);
+    }
+
     @PatchMapping("/{id}")
     public ResponseEntity<UserFeedback> updateFeedback(@PathVariable Long id, @RequestBody UserFeedback feedback) {
-        Optional<UserFeedback> updated = feedbackService.updateFeedback(id, feedback);
+        Optional<UserFeedback> updated = feedbackService.patchFeedback(id, feedback);
         return updated.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 

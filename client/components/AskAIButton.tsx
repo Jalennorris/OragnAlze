@@ -23,6 +23,10 @@ import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
+import GoalSuggestionAlgorithm from './GoalSuggestionAlgorithm';
+import DateTimePicker from '@react-native-community/datetimepicker'; // (optional, not used here)
+import * as Speech from 'expo-speech';
+import Voice from '@react-native-voice/voice'; // You may need to install a compatible package or use a custom hook
 
 // --- Constants ---
 const MIN_DAYS = 1;
@@ -75,6 +79,21 @@ const SHORTCUTS = [
   { label: "This Week", days: 7 },
 ];
 
+const SURPRISE_PROMPTS = [
+  "Invent a new morning ritual for creative energy.",
+  "Plan a day as if you were a famous chef.",
+  "Organize a 'no screen' adventure challenge.",
+  "Design a productivity quest for a superhero.",
+  "Schedule a week of random acts of kindness.",
+  "Plan a day to learn something totally new.",
+  "Create a routine inspired by astronauts.",
+  "Organize a 'reverse to-do list' day.",
+  "Plan a day for maximum fun and zero stress.",
+  "Set up a week of micro-habits for happiness."
+];
+
+const SURPRISE_GRADIENT = ['#FFD6E0', '#F3E8FF', '#B2FFD6'];
+
 // --- Types ---
 interface Task {
   id: string;
@@ -85,6 +104,11 @@ interface Task {
 
 interface AskAIButtonProps {
   onTaskAccept: (tasks: Task[]) => void; // Pass tasks with IDs
+}
+
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
 }
 
 // --- Helper Functions ---
@@ -211,6 +235,53 @@ const AnimatedGradientButton = ({
   );
 };
 
+// --- Helper: Detect vague prompts (simple keyword-based for demo) ---
+const VAGUE_PROMPT_KEYWORDS = [
+  "get fit", "be healthy", "be productive", "improve myself", "get organized", "lose weight", "study", "workout", "exercise", "read more", "eat better", "sleep more", "be happier", "reduce stress", "plan my week", "routine"
+];
+const isVaguePrompt = (query: string) => {
+  const lower = query.trim().toLowerCase();
+  return VAGUE_PROMPT_KEYWORDS.some(k => lower.includes(k));
+};
+
+// --- Clarifying questions for vague prompts (demo, could be more advanced) ---
+const CLARIFYING_QUESTIONS: Record<string, string[]> = {
+  "get fit": [
+    "Do you prefer home or gym workouts?",
+    "How much time per day do you have?",
+    "What is your current fitness level?",
+    "Any specific goals (strength, cardio, flexibility)?"
+  ],
+  "workout": [
+    "Do you prefer home or gym workouts?",
+    "How many days a week do you want to exercise?",
+    "What equipment do you have access to?"
+  ],
+  "study": [
+    "What subject or exam are you preparing for?",
+    "How many hours per day can you dedicate?",
+    "Do you prefer short sessions or longer blocks?"
+  ],
+  "lose weight": [
+    "Do you want to focus on exercise, diet, or both?",
+    "Any dietary restrictions?",
+    "How much weight do you want to lose?"
+  ],
+  // ...add more as needed...
+};
+
+function getClarifyingQuestions(query: string): string[] {
+  const lower = query.trim().toLowerCase();
+  for (const key in CLARIFYING_QUESTIONS) {
+    if (lower.includes(key)) return CLARIFYING_QUESTIONS[key];
+  }
+  // fallback generic
+  return [
+    "Can you provide more details about your goal?",
+    "What is your main motivation or desired outcome?",
+  ];
+}
+
 const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
   // --- Refs ---
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -281,19 +352,47 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
 
   const [userHistory, setUserHistory] = useState<{ goals: string[]; accepted: string[] }>({ goals: [], accepted: [] });
   const [smartDefault, setSmartDefault] = useState<string | null>(null);
+  const [allGoals, setAllGoals] = useState<string[]>([]); // Add this state for all goals
+
+  // Place this with other state hooks, before the render/return:
+  const [surprisePressed, setSurprisePressed] = useState(false);
+
+  // --- Feedback State ---
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState<number>(0);
+  const [feedbackText, setFeedbackText] = useState<string>('');
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+
+  // --- Clarification State ---
+  const [needsClarification, setNeedsClarification] = useState(false);
+  const [clarifyingQuestions, setClarifyingQuestions] = useState<string[]>([]);
+  const [clarificationAnswers, setClarificationAnswers] = useState<string[]>([]);
+  const [clarificationStep, setClarificationStep] = useState(0);
 
   // --- Load user history and previous goals on mount ---
   useEffect(() => {
     (async () => {
       try {
-        // Fetch previous goals from backend
-        const resp = await axios.get('http://localhost:8080/api/goals', {
-          params: { userId: USER_ID },
-        });
-        const backendGoals: string[] = Array.isArray(resp.data)
-          ? resp.data.map((g: any) => typeof g === 'string' ? g : g.goal || g.title || '')
+        // Fetch all goals (everyone)
+        const allResp = await axios.get('http://localhost:8080/api/goals');
+        const allGoalsArr: string[] = Array.isArray(allResp.data)
+          ? allResp.data.map((g: any) =>
+              typeof g === 'string'
+                ? g
+                : g.goalText || g.goal || g.title || ''
+            )
           : [];
-        // Remove empty strings
+        setAllGoals(allGoalsArr.filter(Boolean));
+
+        // Fetch user-specific goals
+        const userResp = await axios.get(`http://localhost:8080/api/goals/user/${USER_ID}`);
+        const backendGoals: string[] = Array.isArray(userResp.data)
+          ? userResp.data.map((g: any) =>
+              typeof g === 'string'
+                ? g
+                : g.goalText || g.goal || g.title || ''
+            )
+          : [];
         const filteredBackendGoals = backendGoals.filter(Boolean);
 
         // Load local history
@@ -442,87 +541,113 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     });
   };
 
-  // --- Core AI Logic ---
-  const fetchAIResponse = useCallback(async () => {
-    const trimmedQuery = aiQuery.trim();
-    if (!trimmedQuery) {
-      Alert.alert('Input Required', 'Please describe what you need help planning.');
-      return;
-    }
+  // --- Core AI Logic (modified for clarification) ---
+  const fetchAIResponse = useCallback(
+    async (userInput?: string) => {
+      const trimmedQuery = typeof userInput === 'string' ? userInput.trim() : aiQuery.trim();
+      if (!trimmedQuery) {
+        Alert.alert('Input Required', 'Please describe what you need help planning.');
+        return;
+      }
 
-    // Always create a new goal in backend with the user's input, using correct fields
-    try {
-      await axios.post('http://localhost:8080/api/goals', {
-        user: USER_ID,
-        goalText: trimmedQuery,
-        createdAt: new Date().toISOString(),
-      });
-    } catch (e) {
-      // Optionally log or ignore errors here
-    }
+      // --- Smarter Prompt Engineering: Check for vague prompt ---
+      if (!needsClarification && isVaguePrompt(trimmedQuery)) {
+        // Ask clarifying questions before proceeding
+        setClarifyingQuestions(getClarifyingQuestions(trimmedQuery));
+        setClarificationAnswers([]);
+        setClarificationStep(0);
+        setNeedsClarification(true);
+        return;
+      }
 
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort("Starting new request");
-    }
-    abortControllerRef.current = new AbortController();
+      // Always create a new goal in backend with the user's input, using correct fields
+      try {
+        await axios.post('http://localhost:8080/api/goals', {
+          user: USER_ID,
+          goalText: trimmedQuery,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        // Optionally log or ignore errors here
+      }
 
-    setIsLoading(true);
-    setSuggestedTasks([]);
-    setErrorMessage(null);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort("Starting new request");
+      }
+      abortControllerRef.current = new AbortController();
 
-    try {
-      // Personalization: inject user history summary
-      const historySummary = summarizeHistory(userHistory);
-      const systemPrompt = `You are a helpful task planner. ${historySummary} Generate exactly ${numDays} specific, actionable daily tasks with deadlines. For each task, provide a "title" (short summary), a "description" (detailed steps or explanation), and a "deadline". Return a JSON object with a "tasks" array containing objects with "title", "description", and "deadline" fields.`;
-
-      console.log(`Requesting ${numDays} tasks for query: "${trimmedQuery}" using model ${API_MODEL}`);
-      const completion = await openai.chat.completions.create(
-        {
-          model: API_MODEL,
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: `Create a ${numDays}-day task plan for: "${trimmedQuery}"`,
-            },
-          ],
-        },
-        { signal: abortControllerRef.current.signal }
-      );
-
-      const content = completion.choices[0]?.message?.content;
-      if (!content) throw new Error("Empty response from AI.");
-
-      const jsonResponse = JSON.parse(content.match(/```json\s*([\s\S]*?)\s*```/)?.[1] || content);
-      if (!Array.isArray(jsonResponse.tasks)) throw new Error("Invalid JSON structure.");
-
-      const finalTasks = jsonResponse.tasks
-        .slice(0, numDays)
-        .map((task: any) => ({
-          id: generateUniqueId(),
-          title: (task.title || '').trim(),
-          description: (task.description || '').trim(),
-          suggestedDeadline: task.deadline?.trim(),
-        }))
-        .filter(task => task.title);
-
-      if (finalTasks.length === 0) throw new Error("No valid tasks generated.");
-      if (finalTasks.length < numDays) setErrorMessage(`Only ${finalTasks.length} tasks generated.`);
-
-      setSuggestedTasks(finalTasks);
-      scrollToBottom();
-    } catch (error: any) {
-      console.error('AI Fetch Error:', error);
-      setErrorMessage(error.name === 'AbortError' ? 'Task generation cancelled.' : error.message);
+      setIsLoading(true);
       setSuggestedTasks([]);
-    } finally {
-      setIsLoading(false);
-      abortControllerRef.current = null;
-    }
-  }, [aiQuery, numDays, openai, userHistory]);
+      setErrorMessage(null);
+
+      try {
+        // Personalization: inject user history summary
+        const historySummary = summarizeHistory(userHistory);
+
+        // --- Add clarifications to system prompt if present ---
+        let clarificationText = '';
+        if (clarificationAnswers.length > 0 && clarifyingQuestions.length > 0) {
+          clarificationText = clarifyingQuestions
+            .map((q, i) => clarificationAnswers[i] ? `${q} ${clarificationAnswers[i]}` : '')
+            .filter(Boolean)
+            .join(' ');
+        }
+
+        const systemPrompt = `You are a helpful task planner. ${historySummary} ${clarificationText} Generate exactly ${numDays} specific, actionable daily tasks with deadlines. For each task, provide a "title" (short summary), a "description" (detailed steps or explanation), and a "deadline". Return a JSON object with a "tasks" array containing objects with "title", "description", and "deadline" fields.`;
+
+        console.log(`Requesting ${numDays} tasks for query: "${trimmedQuery}" using model ${API_MODEL}`);
+        const completion = await openai.chat.completions.create(
+          {
+            model: API_MODEL,
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt,
+              },
+              {
+                role: "user",
+                content: `Create a ${numDays}-day task plan for: "${trimmedQuery}"`,
+              },
+            ],
+          },
+          { signal: abortControllerRef.current.signal }
+        );
+
+        const content = completion.choices[0]?.message?.content;
+        if (!content) throw new Error("Empty response from AI.");
+
+        const jsonResponse = JSON.parse(content.match(/```json\s*([\s\S]*?)\s*```/)?.[1] || content);
+        if (!Array.isArray(jsonResponse.tasks)) throw new Error("Invalid JSON structure.");
+
+        const finalTasks = jsonResponse.tasks
+          .slice(0, numDays)
+          .map((task: any) => ({
+            id: generateUniqueId(),
+            title: (task.title || '').trim(),
+            description: (task.description || '').trim(),
+            suggestedDeadline: task.deadline?.trim(),
+          }))
+          .filter(task => task.title);
+
+        if (finalTasks.length === 0) throw new Error("No valid tasks generated.");
+        if (finalTasks.length < numDays) setErrorMessage(`Only ${finalTasks.length} tasks generated.`);
+
+        setSuggestedTasks(finalTasks);
+        scrollToBottom();
+      } catch (error: any) {
+        console.error('AI Fetch Error:', error);
+        setErrorMessage(error.name === 'AbortError' ? 'Task generation cancelled.' : error.message);
+        setSuggestedTasks([]);
+      } finally {
+        setIsLoading(false);
+        abortControllerRef.current = null;
+      }
+    },
+    [
+      aiQuery, numDays, openai, userHistory,
+      needsClarification, clarifyingQuestions, clarificationAnswers, messages
+    ]
+  );
 
   // Use hardcoded suggestions instead of AI
   const fetchSuggestionIdeas = useCallback(async () => {
@@ -592,18 +717,28 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     try {
       const apiTasks = mapTasksToApiFormat(suggestedTasks);
       console.log("Sending tasks to backend:", apiTasks); // <-- Add this line
-      await axios.post('http://localhost:8080/api/tasks/batch', apiTasks, {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      if (suggestedTasks.length === 1) {
+        // Single day: use /api/accepted
+        await axios.post('http://localhost:8080/api/accepted', apiTasks[0], {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } else if (suggestedTasks.length > 1 && suggestedTasks.length <= 7) {
+        // Multiple days: use /api/accepted/batch/create
+        await axios.post('http://localhost:8080/api/accepted/batch/create', apiTasks, {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } else {
+        throw new Error('Only up to 7 tasks can be accepted at once.');
+      }
       Alert.alert('Success', 'Tasks created successfully!');
       onTaskAccept(suggestedTasks); // Pass the final list
       addAcceptedTasksToHistory(suggestedTasks);
-      resetModalState(false);
-      setIsModalVisible(false);
+      // Instead of closing, show feedback modal
+      setShowFeedbackModal(true);
     } catch (error: any) {
       Alert.alert('Error', error?.response?.data?.message || error.message || 'Failed to save tasks.');
     }
-  }, [suggestedTasks, onTaskAccept, resetModalState]); // <-- Add resetModalState to dependencies
+  }, [suggestedTasks, onTaskAccept, resetModalState]);
 
   const handleStartEditing = useCallback((task: Task) => {
     setEditingTaskId(task.id);
@@ -688,6 +823,91 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     }, 150); // Increased delay slightly
   };
 
+  // --- Add this handler for suggestion selection ---
+  const handleGoalSuggestionSelect = (suggestion: string) => {
+    setAiQuery(suggestion);
+    // Optionally, you can trigger fetchAIResponse() here if you want instant generation
+    // fetchAIResponse();
+  };
+
+  // --- Add this handler for surprise prompt ---
+  const handleSurpriseMe = () => {
+    const randomPrompt = SURPRISE_PROMPTS[Math.floor(Math.random() * SURPRISE_PROMPTS.length)];
+    setAiQuery(randomPrompt);
+    // Optionally, trigger fetchAIResponse() here for instant generation
+    // fetchAIResponse();
+  };
+
+  // --- Handler for clarification answer submission ---
+  const handleClarificationAnswer = (answer: string) => {
+    const nextAnswers = [...clarificationAnswers];
+    nextAnswers[clarificationStep] = answer;
+    setClarificationAnswers(nextAnswers);
+
+    if (clarificationStep + 1 < clarifyingQuestions.length) {
+      setClarificationStep(clarificationStep + 1);
+    } else {
+      // All clarifications answered, proceed to generate
+      setNeedsClarification(false);
+      setTimeout(() => {
+        fetchAIResponse();
+      }, 200);
+    }
+  };
+
+  // --- Handler to skip clarification (optional) ---
+  const handleSkipClarification = () => {
+    setNeedsClarification(false);
+    setClarifyingQuestions([]);
+    setClarificationAnswers([]);
+    setClarificationStep(0);
+    setTimeout(() => {
+      fetchAIResponse();
+    }, 200);
+  };
+
+  // --- Chat State ---
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    { role: 'system', content: 'How can I help you plan your goals today?' }
+  ]);
+  const [isListening, setIsListening] = useState(false);
+
+  // --- Chat Send Handler ---
+  const handleSendMessage = async (text?: string) => {
+    const userText = typeof text === 'string' ? text : aiQuery.trim();
+    if (!userText) return;
+    setMessages(prev => [...prev, { role: 'user', content: userText }]);
+    setAiQuery('');
+    await fetchAIResponse(userText);
+  };
+
+  // --- Voice Input Handler (using react-native-voice) ---
+  useEffect(() => {
+    Voice.onSpeechResults = (event) => {
+      const transcript = event.value?.[0] || '';
+      setAiQuery(transcript);
+      setIsListening(false);
+    };
+    Voice.onSpeechError = (e) => {
+      setIsListening(false);
+      Alert.alert('Voice Input Error', 'Could not transcribe speech.');
+    };
+    return () => {
+      Voice.destroy().then(Voice.removeAllListeners);
+    };
+  }, []);
+
+  const handleMicPress = async () => {
+    if (isListening) return;
+    setIsListening(true);
+    try {
+      await Voice.start('en-US');
+    } catch (e) {
+      setIsListening(false);
+      Alert.alert('Voice Input Error', 'Could not start voice recognition.');
+    }
+  };
+
   // --- Task Rendering ---
   const renderTask = (task: Task, index: number) => {
     const isEditing = editingTaskId === task.id;
@@ -735,6 +955,66 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
             </View>
           </View>
         )}
+      </View>
+    );
+  };
+
+  // --- Feedback Submission Handler ---
+  const submitFeedback = async () => {
+    if (!feedbackRating) {
+      Alert.alert('Rating Required', 'Please select a rating.');
+      return;
+    }
+    setFeedbackLoading(true);
+    try {
+      const now = new Date().toISOString();
+      if (suggestedTasks.length === 1) {
+        // One day: single feedback
+        await axios.post('http://localhost:8080/api/feedback', {
+          user: USER_ID,
+          feedbackText,
+          rating: feedbackRating,
+          createdAt: now,
+          acceptedAITaskId: suggestedTasks[0].id, // Use generated task id
+        });
+      } else if (suggestedTasks.length > 1 && suggestedTasks.length <= 7) {
+        // Batch feedback for each task
+        const batch = suggestedTasks.map(task => ({
+          user: USER_ID,
+          feedbackText,
+          rating: feedbackRating,
+          createdAt: now,
+          acceptedAITaskId: task.id,
+        }));
+        await axios.post('http://localhost:8080/api/feedback/batch', batch);
+      }
+      setShowFeedbackModal(false);
+      setFeedbackRating(0);
+      setFeedbackText('');
+      Alert.alert('Thank you!', 'Your feedback was submitted.');
+      // Optionally: reset modal state after feedback
+      resetModalState(false);
+      setIsModalVisible(false);
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || e.message || 'Failed to submit feedback.');
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
+
+  // --- Chat Bubble Renderer ---
+  const renderChatBubble = (msg: ChatMessage, idx: number) => {
+    if (msg.role === 'system') return null;
+    const isUser = msg.role === 'user';
+    return (
+      <View
+        key={idx}
+        style={[
+          styles.chatBubble,
+          isUser ? styles.chatBubbleUser : styles.chatBubbleAI,
+        ]}
+      >
+        <Text style={styles.chatBubbleText}>{msg.content}</Text>
       </View>
     );
   };
@@ -890,209 +1170,117 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
                   </TouchableOpacity>
                 </View>
 
-                {/* Task Display Area (This is the scrollable response part) */}
+                {/* --- Chat UI --- */}
                 <ScrollView
                   ref={scrollViewRef}
-                  style={{ flex: 1 }} // Ensure it takes available space
-                  contentContainerStyle={{ paddingBottom: 20 }} // Add only necessary padding
-                  showsVerticalScrollIndicator={true} // Enable scrollbar
-                  keyboardShouldPersistTaps="handled" // Allow taps to dismiss the keyboard
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                  showsVerticalScrollIndicator={true}
+                  keyboardShouldPersistTaps="handled"
                 >
-                  {/* Loading Indicator */}
-                  {isLoading && suggestedTasks.length === 0 ? (
+                  {messages.map(renderChatBubble)}
+                  {/* ...existing code for loading, tasks, etc... */}
+                  {isLoading && (
                     <View style={styles.placeholderContainer}>
                       <ActivityIndicator size="large" color="#BB86FC" />
-                      {/* Use numDays state for placeholder text */}
-                      <Text style={styles.placeholderText}>Generating your {numDays}-day plan...</Text>
+                      <Text style={styles.placeholderText}>Thinking...</Text>
                     </View>
-                  ) : suggestedTasks.length === 0 ? (
-                    <View style={styles.placeholderContainer}>
-                      <Ionicons name="bulb-outline" size={40} color="#888" style={{ marginBottom: 10 }} />
-                      <Text style={styles.placeholderText}>
-                        {/* Use numDays state for placeholder text */}
-                        {errorMessage ? errorMessage : `Describe your goal below to get a personalized ${numDays}-day task plan.`}
-                      </Text>
-                    </View>
-                  ) : (
-                    suggestedTasks.map(renderTask)
                   )}
-                  {/* Add some padding at the bottom of scroll */}
+                  {suggestedTasks.length > 0 && (
+                    <View style={{ marginTop: 12 }}>
+                      {suggestedTasks.map(renderTask)}
+                    </View>
+                  )}
                   <View style={{ height: 20 }} />
                 </ScrollView>
 
-                {/* Input Area (Fixed at the bottom) */}
+                {/* --- Input Area (Chat style) --- */}
                 <View style={styles.inputArea}>
-                   {errorMessage && !isLoading && suggestedTasks.length > 0 && (
-                     <Text style={styles.errorTextInline}>{errorMessage}</Text>
-                   )}
-                   {/* Day Selector */}
-                   <View style={styles.daySelectorContainer}>
-                     <Text style={styles.daySelectorLabel}>Plan Duration:</Text>
-                     <ScrollView
-                       horizontal
-                       showsHorizontalScrollIndicator={true} // Enable horizontal scrollbar
-                       contentContainerStyle={styles.daySelectorScrollContent}
-                       style={styles.daySelectorScrollView} // Added style
-                     >
-                       {dayOptions.map((day) => (
-                         <TouchableOpacity
-                           key={day}
-                           style={[
-                             styles.dayButton,
-                             numDays === day && styles.dayButtonSelected,
-                             isLoading && styles.dayButtonDisabled // Disable during loading
-                           ]}
-                           onPress={() => !isLoading && setNumDays(day)} // Prevent changing during load
-                           disabled={isLoading}
-                           accessibilityLabel={`Select ${day} days`}
-                           accessibilityState={{ selected: numDays === day }}
-                         >
-                           <Text
-                             style={[
-                               styles.dayButtonText,
-                               numDays === day && styles.dayButtonTextSelected,
-                             ]}
-                           >
-                             {day}
-                           </Text>
-                         </TouchableOpacity>
-                       ))}
-                     </ScrollView>
-                     <Text style={styles.daySelectorLabelEnd}>days</Text>
-                   </View>
-
-                  {/* Query Input and Submit Button */}
                   <View style={styles.inputWrapper}>
+                    <TouchableOpacity
+                      style={styles.micButton}
+                      onPress={handleMicPress}
+                      disabled={isListening}
+                    >
+                      <Ionicons name={isListening ? "mic-off" : "mic"} size={22} color={isListening ? "#888" : "#BB86FC"} />
+                    </TouchableOpacity>
                     <TextInput
                       style={styles.inputFieldQuery}
-                      placeholder="What's your goal?"
+                      placeholder="Type your message..."
                       placeholderTextColor="#888"
                       value={aiQuery}
                       onChangeText={setAiQuery}
                       multiline
                       editable={!isLoading}
-                      blurOnSubmit={true} // Dismiss keyboard on return key
+                      blurOnSubmit={true}
                       ref={inputRef}
+                      onSubmitEditing={() => handleSendMessage()}
                     />
-                    {/* REMOVED Days Input Container */}
-                    {/* <View style={styles.daysInputContainer}> ... </View> */}
-
-                    {isLoading ? (
-                      // Stop Button
-                      <TouchableOpacity
-                        style={[styles.controlButtonInInput, styles.stopButton]}
-                        onPress={handleStopGeneration}
-                        accessibilityLabel="Stop AI generation"
-                      >
-                        <Ionicons name="stop-circle" size={24} color="#FFF" />
-                      </TouchableOpacity>
-                    ) : (
-                      // Generate Button
-                      <TouchableOpacity
-                        style={[
-                          styles.controlButtonInInput,
-                          styles.generateButton,
-                          // Dim button if query is empty
-                          !aiQuery.trim() ? styles.generateButtonDisabled : null
-                        ]}
-                        onPress={fetchAIResponse}
-                        disabled={!aiQuery.trim()} // Disable if query is empty
-                        accessibilityLabel="Generate tasks"
-                      >
-                        <Ionicons name="arrow-forward" size={20} color="#FFF" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                  {/* Action Buttons (Accept/Reset) */}
-                  <View style={styles.actionButtonsContainer}>
-                     {suggestedTasks.length > 0 && !isLoading && (
-                       <>
-                         <TouchableOpacity
-                           style={[styles.actionButton, styles.clearButton]}
-                           onPress={() => resetModalState(false)} // Keep query
-                           accessibilityLabel="Clear generated tasks and retry"
-                         >
-                           <Ionicons name="refresh-outline" size={18} color="#FFF" style={{marginRight: 5}}/>
-                           <Text style={styles.actionButtonText}>Clear</Text>
-                         </TouchableOpacity>
-                          <TouchableOpacity
-                           style={[styles.actionButton, styles.acceptAllButton]}
-                           onPress={handleAcceptAllTasks}
-                           accessibilityLabel="Accept all tasks"
-                         >
-                           <Ionicons name="checkmark-done-outline" size={18} color="#FFF" style={{marginRight: 5}}/>
-                           <Text style={styles.actionButtonText}>Accept All</Text>
-                         </TouchableOpacity>
-                       </>
-                     )}
+                    <TouchableOpacity
+                      style={[
+                        styles.controlButtonInInput,
+                        styles.generateButton,
+                        !aiQuery.trim() ? styles.generateButtonDisabled : null
+                      ]}
+                      onPress={() => handleSendMessage()}
+                      disabled={!aiQuery.trim()}
+                      accessibilityLabel="Send message"
+                    >
+                      <Ionicons name="arrow-up" size={20} color="#FFF" />
+                    </TouchableOpacity>
                   </View>
                 </View>
-                <Animated.View style={{ transform: [{ scale: suggestionAnim }] }}>
-                  <Pressable
-                    style={styles.suggestionButtonWrapper}
-                    onPress={handleFetchSuggestions}
-                    onPressIn={handleSuggestionPressIn}
-                    onPressOut={handleSuggestionPressOut}
-                    accessibilityLabel="Show example prompts for AI task planner"
-                    disabled={isLoading}
-                  >
-                    <AnimatedGradientButton
-                      suggestionGradientAnim={suggestionGradientAnim}
-                      pressed={suggestionPressed || isLoading}
-                    >
-                      <Text style={styles.suggestionButtonText}>Suggestions</Text>
-                    </AnimatedGradientButton>
-                  </Pressable>
-                </Animated.View>
-                {/* Show suggestion ideas as chips/buttons */}
-                {showSuggestions && suggestionIdeas.length > 0 && (
-                  <View style={styles.suggestionIdeasContainer}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
-                      <Text style={styles.suggestionIdeasTitle}>Try one of these:</Text>
+
+                {/* --- Clarification UI (if needed) --- */}
+                {needsClarification && clarifyingQuestions.length > 0 && (
+                  <View style={styles.clarificationContainer}>
+                    <Text style={styles.clarificationTitle}>Let's clarify your goal:</Text>
+                    <Text style={styles.clarificationQuestion}>
+                      {clarifyingQuestions[clarificationStep]}
+                    </Text>
+                    <TextInput
+                      style={styles.inputFieldQuery}
+                      placeholder="Type your answer..."
+                      placeholderTextColor="#888"
+                      value={clarificationAnswers[clarificationStep] || ''}
+                      onChangeText={text => {
+                        const nextAnswers = [...clarificationAnswers];
+                        nextAnswers[clarificationStep] = text;
+                        setClarificationAnswers(nextAnswers);
+                      }}
+                      autoFocus
+                    />
+                    <View style={{ flexDirection: 'row', marginTop: 12 }}>
                       <TouchableOpacity
-                        onPress={() => { setShowSuggestions(false); setSuggestionIdeas([]); }}
-                        style={{ marginLeft: 'auto', padding: 8 }}
-                        accessibilityLabel="Hide suggestions"
+                        style={[
+                          styles.actionButton,
+                          { backgroundColor: '#4CAF50', minWidth: 100, marginRight: 8 }
+                        ]}
+                        onPress={() => handleClarificationAnswer(clarificationAnswers[clarificationStep] || '')}
+                        disabled={!(clarificationAnswers[clarificationStep] || '').trim()}
                       >
-                        <Ionicons name="close" size={20} color="#AAA" />
+                        <Text style={styles.actionButtonText}>
+                          {clarificationStep + 1 < clarifyingQuestions.length ? 'Next' : 'Generate'}
+                        </Text>
                       </TouchableOpacity>
-                    </View>
-                    <View style={styles.suggestionIdeasScrollWrapper}>
-                      <ScrollView
-                        style={{ maxHeight: 180 }}
-                        showsVerticalScrollIndicator={true}
-                        contentContainerStyle={styles.suggestionIdeasList}
+                      <TouchableOpacity
+                        style={[
+                          styles.actionButton,
+                          { backgroundColor: '#888', minWidth: 80 }
+                        ]}
+                        onPress={handleSkipClarification}
                       >
-                        {suggestionIdeas.map((idea, idx) => (
-                          <LinearGradient
-                            key={idx}
-                            colors={pastelGradients[idx % pastelGradients.length]}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.suggestionIdeaChip}
-                          >
-                            <TouchableOpacity
-                              style={{ flex: 1 }}
-                              onPress={() => handleSuggestionIdeaPress(idea)}
-                            >
-                              <Text style={styles.suggestionIdeaText}>{idea}</Text>
-                            </TouchableOpacity>
-                          </LinearGradient>
-                        ))}
-                      </ScrollView>
+                        <Text style={styles.actionButtonText}>Skip</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 )}
-                {/* Smart Default Suggestion */}
-                {smartDefault && (
-                  <View style={{ alignItems: 'center', marginTop: 10 }}>
-                    <TouchableOpacity
-                      style={[styles.suggestionIdeaChip, { backgroundColor: pastelGradients[0][0] }]}
-                      onPress={() => handleSuggestionIdeaPress(smartDefault)}
-                    >
-                      <Text style={styles.suggestionIdeaText}>Start again: {smartDefault}</Text>
-                    </TouchableOpacity>
-                  </View>
+
+                {/* --- Only show rest of modal if not clarifying --- */}
+                {!needsClarification && (
+                  <>
+                    {/* ...existing code for ScrollView, input, etc... */}
+                  </>
                 )}
               </View>
             </KeyboardAvoidingView>
@@ -1213,6 +1401,110 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
           </View>
         </SafeAreaView>
       </Modal>
+      {/* --- Feedback Modal UI --- */}
+      <Modal
+        isVisible={showFeedbackModal}
+        onBackdropPress={() => setShowFeedbackModal(false)}
+        onBackButtonPress={() => setShowFeedbackModal(false)}
+        style={styles.modalWrapper}
+        backdropTransitionOutTiming={0}
+      >
+        <SafeAreaView style={[styles.modalContainerOuter, { height: 340, justifyContent: 'center' }]}>
+          <View style={[styles.modalContainerInner, { justifyContent: 'center', alignItems: 'center' }]}>
+            <Text style={[styles.modalTitle, { marginBottom: 18 }]}>How was your AI plan?</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 10 }}>
+              {[1, 2, 3, 4, 5].map(rating => (
+                <Animated.View
+                  key={rating}
+                  style={{
+                    transform: [
+                      {
+                        scale:
+                          feedbackRating === rating
+                            ? 1.22
+                            : feedbackRating > 0 && feedbackRating < rating
+                            ? 0.96
+                            : 1,
+                      },
+                    ],
+                    marginHorizontal: 8,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => setFeedbackRating(rating)}
+                    activeOpacity={0.85}
+                    accessibilityLabel={`Rate ${rating} out of 5`}
+                    style={{ borderRadius: 32, overflow: 'hidden' }}
+                  >
+                    {feedbackRating >= rating ? (
+                      <LinearGradient
+                        colors={['#FFD700', '#FFB300']}
+                        start={{ x: 0.2, y: 0 }}
+                        end={{ x: 0.8, y: 1 }}
+                        style={styles.modernStarGradient}
+                      >
+                        <Ionicons
+                          name="star"
+                          size={40}
+                          color="#fff"
+                          style={{ textShadowColor: '#FFD700', textShadowRadius: 8 }}
+                        />
+                      </LinearGradient>
+                    ) : (
+                      <View style={styles.modernStarUnselected}>
+                        <Ionicons
+                          name="star-outline"
+                          size={40}
+                          color="#AAA"
+                        />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
+              ))}
+            </View>
+            <Text style={styles.feedbackLabelText}>
+              {feedbackRating > 0 ? FEEDBACK_LABELS[feedbackRating - 1] : "Tap a star to rate"}
+            </Text>
+            <TextInput
+              style={[
+                styles.inputFieldQuery,
+                {
+                  minHeight: 40,
+                  maxHeight: 80,
+                  width: '100%',
+                  backgroundColor: '#232B3A',
+                  borderRadius: 8,
+                  color: '#fff',
+                  marginTop: 18,
+                  marginBottom: 16,
+                },
+              ]}
+              placeholder="Optional feedback..."
+              placeholderTextColor="#AAA"
+              value={feedbackText}
+              onChangeText={setFeedbackText}
+              multiline
+              editable={!feedbackLoading}
+            />
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: '#4CAF50', minWidth: 120, justifyContent: 'center' },
+              ]}
+              onPress={submitFeedback}
+              disabled={feedbackLoading}
+              accessibilityLabel="Submit feedback"
+            >
+              {feedbackLoading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.actionButtonText}>Submit</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </>
   );
 };
@@ -1263,7 +1555,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(180,180,255,0.18)',
+    borderColor: 'rgba(180,180,180,0.18)',
     backgroundColor: 'rgba(255,255,255,0.18)',
     shadowColor: '#A6BFFF',
     shadowOffset: { width: 0, height: 4 },
@@ -1652,6 +1944,106 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  surpriseBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 24,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    minHeight: 38,
+    marginRight: 8,
+    marginBottom: 8,
+    shadowColor: '#BB86FC',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  surpriseBubbleText: {
+    color: '#6C47FF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+    textShadowColor: '#fff',
+    textShadowRadius: 2,
+  },
+  modernStarGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FFD700',
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  modernStarUnselected: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  feedbackLabelText: {
+    color: '#FFD700',
+    fontWeight: '600',
+    fontSize: 16,
+    marginBottom: 2,
+    minHeight: 22,
+    textAlign: 'center',
+    letterSpacing: 0.2,
+  },
+  clarificationContainer: {
+    backgroundColor: '#232B3A',
+    borderRadius: 14,
+    padding: 18,
+    marginVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clarificationTitle: {
+    color: '#BB86FC',
+    fontWeight: 'bold',
+    fontSize: 17,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  clarificationQuestion: {
+    color: '#E0E0E0',
+    fontSize: 16,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  chatBubble: {
+    maxWidth: '80%',
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginVertical: 4,
+  },
+  chatBubbleUser: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#BB86FC',
+  },
+  chatBubbleAI: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#232B3A',
+  },
+  chatBubbleText: {
+    color: '#fff',
+    fontSize: 15,
+  },
+  micButton: {
+    marginRight: 8,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(187,134,252,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

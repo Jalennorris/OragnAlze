@@ -34,6 +34,13 @@ public class AcceptedController {
         return ResponseEntity.status(201).body(acceptedService.createAccepted(accepted));
     }
 
+    // Batch endpoint: create multiple accepted tasks at once
+    @PostMapping("/batch/create")
+    public ResponseEntity<List<AcceptedDTO>> createAcceptedBatch(@Valid @RequestBody List<AcceptedDTO> acceptedList) {
+        List<AcceptedDTO> created = acceptedService.createAcceptedBatch(acceptedList);
+        return ResponseEntity.status(201).body(created);
+    }
+
     @PatchMapping("/{id}")
     public ResponseEntity<AcceptedDTO> updateAccepted(@PathVariable Long id, @RequestBody AcceptedDTO accepted) {
         Optional<AcceptedDTO> updated = acceptedService.updateAccepted(id, accepted);

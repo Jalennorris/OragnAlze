@@ -22,14 +22,18 @@ public class UserFeedback {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "accepted_ai_task_id")
+    private Long acceptedAITaskId;
+
     public UserFeedback() {}
 
-    public UserFeedback(Long id, Long user, String feedbackText, Integer rating, LocalDateTime createdAt) {
+    public UserFeedback(Long id, Long user, String feedbackText, Integer rating, LocalDateTime createdAt, Long acceptedAITaskId) {
         this.id = id;
         this.user = user;
         this.feedbackText = feedbackText;
         this.rating = rating;
         this.createdAt = createdAt;
+        this.acceptedAITaskId = acceptedAITaskId;
     }
 
     public Long getId() { return id; }
@@ -46,4 +50,7 @@ public class UserFeedback {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public Long getAcceptedAITaskId() { return acceptedAITaskId; }
+    public void setAcceptedAITaskId(Long acceptedAITaskId) { this.acceptedAITaskId = acceptedAITaskId; }
 }

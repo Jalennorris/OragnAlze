@@ -46,6 +46,21 @@ public class GoalService {
                 .collect(Collectors.toList());
     }
 
+    // Get all goals by user ID
+    public List<UserGoalDTO> getGoalsByUserId(Long userId) {
+        return goalRepository.findAll()
+                .stream()
+                .filter(goal -> goal.getUser() != null && goal.getUser().equals(userId))
+                .map(goal -> new UserGoalDTO(
+                    goal.getId(),
+                    goal.getUser(),
+                    goal.getGoalText(),
+                    goal.getCreatedAt()
+                    // ...add other fields as needed...
+                ))
+                .collect(Collectors.toList());
+    }
+
     // Read by id
     public Optional<UserGoalDTO> getGoalById(Long id) {
         return goalRepository.findById(id)

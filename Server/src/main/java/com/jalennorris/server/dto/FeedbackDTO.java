@@ -8,15 +8,17 @@ public class FeedbackDTO {
     private String feedbackText;
     private Integer rating;
     private LocalDateTime createdAt;
+    private Long acceptedAITaskId;
 
     public FeedbackDTO() {}
 
-    public FeedbackDTO(Long id, Long userId, String feedbackText, Integer rating, LocalDateTime createdAt) {
+    public FeedbackDTO(Long id, Long userId, String feedbackText, Integer rating, LocalDateTime createdAt, Long acceptedAITaskId) {
         this.id = id;
         this.userId = userId;
         this.feedbackText = feedbackText;
         this.rating = rating;
         this.createdAt = createdAt;
+        this.acceptedAITaskId = acceptedAITaskId;
     }
 
     public Long getId() { return id; }
@@ -33,4 +35,7 @@ public class FeedbackDTO {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public Long getAcceptedAITaskId() { return acceptedAITaskId; }
+    public void setAcceptedAITaskId(Long acceptedAITaskId) { this.acceptedAITaskId = acceptedAITaskId; }
 }
