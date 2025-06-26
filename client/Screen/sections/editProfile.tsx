@@ -368,14 +368,9 @@ const EditProfile: React.FC = () => {
 
         // Make the PATCH request with FormData
         response = await axios.patch(
-          `http://localhost:8080/api/users/${userId}`, // *** SUGGESTION: Use a dedicated endpoint for file upload ***
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              // Add any other required headers (like Authorization)
-            },
-          }
+          `http://localhost:8080/api/users/${userId}/profile-pic`, // *** SUGGESTION: Use a dedicated endpoint for file upload ***
+          formData
+          // No headers: axios will set the correct multipart boundary
         );
 
         // --- Backend should return the new public URL ---
@@ -395,9 +390,11 @@ const EditProfile: React.FC = () => {
         console.log("Saving selected color:", selectedColor);
         profilePicValue = selectedColor;
         // Send the color hex directly in the JSON payload
-        response = await axios.patch(`http://localhost:8080/api/users/${userId}`, {
-          profile_pic: profilePicValue, // Send color hex
-        });
+        response = await axios.patch(
+          `http://localhost:8080/api/users/${userId}/profile-pic`,
+          {},
+          { params: { profile_pic: selectedColor } }
+        );
          // Update state
          setProfileImage(null); // Ensure image is cleared
       }

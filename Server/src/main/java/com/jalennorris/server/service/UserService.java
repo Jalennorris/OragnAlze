@@ -153,6 +153,15 @@ public class UserService {
         });
     }
 
+    // Update only the user's profile picture (URL or color hex)
+    @Transactional
+    public void updateUserProfilePic(long userId, String profilePicUrl) {
+        UserModels user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        user.setProfile_pic(profilePicUrl);
+        userRepository.save(user);
+    }
+
     // Delete user by ID
     @Async
     @CacheEvict(value = "users", key = "#id")

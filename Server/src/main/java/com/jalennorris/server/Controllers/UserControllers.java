@@ -9,6 +9,10 @@ import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.web.bind.annotation.*;
 import  com.jalennorris.server.dto.ChangePasswordRequest;
 import  com.jalennorris.server.Response.ChangePasswordResponse;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
+import java.nio.file.*;
+import java.util.HashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,5 +90,35 @@ public class UserControllers {
         String newToken = userService.changePassword(id, request.getCurrentPassword(), request.getNewPassword())
                 .join();
         return ResponseEntity.ok(new ChangePasswordResponse(newToken));
+    }
+
+    @PatchMapping(value = "/{id}/profile-pic", consumes = { MediaType.MULTIPART_FORM_DATA_VALUE })
+    public ResponseEntity<?> updateProfilePic(
+            @PathVariable long id,
+            @RequestPart(value = "profile_pic_file", required = false) MultipartFile file,
+            @RequestParam(value = "profile_pic", required = false) String colorHex
+    ) {
+        String profilePicUrl = null;
+        try {
+            if (file != null && !file.isEmpty()) {
+                String filename = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+                Path filepath = Paths.get("uploads", filename);
+                Files.createDirectories(filepath.getParent());
+                Files.write(filepath, file.getBytes());
+                profilePicUrl = "http://localhost:8080/uploads/" + filename; // Adjust for your deployment
+            } else if (colorHex != null && colorHex.startsWith("#")) {
+                profilePicUrl = colorHex;
+            } else {
+                return ResponseEntity.badRequest().body("No file or color hex provided");
+            }
+            // Update user in DB
+            userService.updateUserProfilePic(id, profilePicUrl);
+
+            HashMap<String, String> result = new HashMap<>();
+            result.put("profile_pic_url", profilePicUrl);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Failed to update profile picture");
+        }
     }
 }

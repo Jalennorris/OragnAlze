@@ -25,8 +25,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import GoalSuggestionAlgorithm from './GoalSuggestionAlgorithm';
 import DateTimePicker from '@react-native-community/datetimepicker'; // (optional, not used here)
-import * as Speech from 'expo-speech';
-import Voice from '@react-native-voice/voice'; // You may need to install a compatible package or use a custom hook
 
 // --- Constants ---
 const MIN_DAYS = 1;
@@ -73,10 +71,13 @@ const TEMPLATES = [
   { label: "Meal Prep", prompt: "Organize a meal prep schedule.", days: 7 },
 ];
 
+// Add more shortcut options
 const SHORTCUTS = [
   { label: "Today", days: 1 },
+  { label: "Tomorrow", days: 1, prompt: "Plan my tasks for tomorrow" },
   { label: "3 Days", days: 3 },
   { label: "This Week", days: 7 },
+  { label: "Weekend", days: 2, prompt: "Plan my weekend" },
 ];
 
 const SURPRISE_PROMPTS = [
@@ -104,11 +105,6 @@ interface Task {
 
 interface AskAIButtonProps {
   onTaskAccept: (tasks: Task[]) => void; // Pass tasks with IDs
-}
-
-interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
 }
 
 // --- Helper Functions ---
@@ -235,52 +231,8 @@ const AnimatedGradientButton = ({
   );
 };
 
-// --- Helper: Detect vague prompts (simple keyword-based for demo) ---
-const VAGUE_PROMPT_KEYWORDS = [
-  "get fit", "be healthy", "be productive", "improve myself", "get organized", "lose weight", "study", "workout", "exercise", "read more", "eat better", "sleep more", "be happier", "reduce stress", "plan my week", "routine"
-];
-const isVaguePrompt = (query: string) => {
-  const lower = query.trim().toLowerCase();
-  return VAGUE_PROMPT_KEYWORDS.some(k => lower.includes(k));
-};
-
-// --- Clarifying questions for vague prompts (demo, could be more advanced) ---
-const CLARIFYING_QUESTIONS: Record<string, string[]> = {
-  "get fit": [
-    "Do you prefer home or gym workouts?",
-    "How much time per day do you have?",
-    "What is your current fitness level?",
-    "Any specific goals (strength, cardio, flexibility)?"
-  ],
-  "workout": [
-    "Do you prefer home or gym workouts?",
-    "How many days a week do you want to exercise?",
-    "What equipment do you have access to?"
-  ],
-  "study": [
-    "What subject or exam are you preparing for?",
-    "How many hours per day can you dedicate?",
-    "Do you prefer short sessions or longer blocks?"
-  ],
-  "lose weight": [
-    "Do you want to focus on exercise, diet, or both?",
-    "Any dietary restrictions?",
-    "How much weight do you want to lose?"
-  ],
-  // ...add more as needed...
-};
-
-function getClarifyingQuestions(query: string): string[] {
-  const lower = query.trim().toLowerCase();
-  for (const key in CLARIFYING_QUESTIONS) {
-    if (lower.includes(key)) return CLARIFYING_QUESTIONS[key];
-  }
-  // fallback generic
-  return [
-    "Can you provide more details about your goal?",
-    "What is your main motivation or desired outcome?",
-  ];
-}
+// --- Add: Build For Me Workflow State ---
+type BuildForMeState = 'idle' | 'clarifying' | 'generating' | 'reviewing' | 'autoAccepting' | 'done' | 'cancelled';
 
 const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
   // --- Refs ---
@@ -336,6 +288,9 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
   const [showSuggestionsOnOpen, setShowSuggestionsOnOpen] = useState(true); // Add user preference
   const [suggestionGradientAnim] = useState(new Animated.Value(0)); // 0: A, 1: B
 
+  // Track if suggestions have been auto-shown on first open
+  const [hasAutoShownSuggestions, setHasAutoShownSuggestions] = useState(false);
+
   // AI & Task State
   const [aiQuery, setAiQuery] = useState('');
   const [numDays, setNumDays] = useState<number>(DEFAULT_DAYS);
@@ -362,12 +317,6 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
   const [feedbackRating, setFeedbackRating] = useState<number>(0);
   const [feedbackText, setFeedbackText] = useState<string>('');
   const [feedbackLoading, setFeedbackLoading] = useState(false);
-
-  // --- Clarification State ---
-  const [needsClarification, setNeedsClarification] = useState(false);
-  const [clarifyingQuestions, setClarifyingQuestions] = useState<string[]>([]);
-  const [clarificationAnswers, setClarificationAnswers] = useState<string[]>([]);
-  const [clarificationStep, setClarificationStep] = useState(0);
 
   // --- Load user history and previous goals on mount ---
   useEffect(() => {
@@ -541,113 +490,87 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     });
   };
 
-  // --- Core AI Logic (modified for clarification) ---
-  const fetchAIResponse = useCallback(
-    async (userInput?: string) => {
-      const trimmedQuery = typeof userInput === 'string' ? userInput.trim() : aiQuery.trim();
-      if (!trimmedQuery) {
-        Alert.alert('Input Required', 'Please describe what you need help planning.');
-        return;
-      }
+  // --- Core AI Logic ---
+  const fetchAIResponse = useCallback(async () => {
+    const trimmedQuery = aiQuery.trim();
+    if (!trimmedQuery) {
+      Alert.alert('Input Required', 'Please describe what you need help planning.');
+      return;
+    }
 
-      // --- Smarter Prompt Engineering: Check for vague prompt ---
-      if (!needsClarification && isVaguePrompt(trimmedQuery)) {
-        // Ask clarifying questions before proceeding
-        setClarifyingQuestions(getClarifyingQuestions(trimmedQuery));
-        setClarificationAnswers([]);
-        setClarificationStep(0);
-        setNeedsClarification(true);
-        return;
-      }
+    // Always create a new goal in backend with the user's input, using correct fields
+    try {
+      await axios.post('http://localhost:8080/api/goals', {
+        user: USER_ID,
+        goalText: trimmedQuery,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      // Optionally log or ignore errors here
+    }
 
-      // Always create a new goal in backend with the user's input, using correct fields
-      try {
-        await axios.post('http://localhost:8080/api/goals', {
-          user: USER_ID,
-          goalText: trimmedQuery,
-          createdAt: new Date().toISOString(),
-        });
-      } catch (e) {
-        // Optionally log or ignore errors here
-      }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort("Starting new request");
+    }
+    abortControllerRef.current = new AbortController();
 
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort("Starting new request");
-      }
-      abortControllerRef.current = new AbortController();
+    setIsLoading(true);
+    setSuggestedTasks([]);
+    setErrorMessage(null);
 
-      setIsLoading(true);
+    try {
+      // Personalization: inject user history summary
+      const historySummary = summarizeHistory(userHistory);
+      const systemPrompt = `You are a helpful task planner. ${historySummary} Generate exactly ${numDays} specific, actionable daily tasks with deadlines. For each task, provide a "title" (short summary), a "description" (detailed steps or explanation), and a "deadline". Return a JSON object with a "tasks" array containing objects with "title", "description", and "deadline" fields.`;
+
+      console.log(`Requesting ${numDays} tasks for query: "${trimmedQuery}" using model ${API_MODEL}`);
+      const completion = await openai.chat.completions.create(
+        {
+          model: API_MODEL,
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+            {
+              role: "user",
+              content: `Create a ${numDays}-day task plan for: "${trimmedQuery}"`,
+            },
+          ],
+        },
+        { signal: abortControllerRef.current.signal }
+      );
+
+      const content = completion.choices[0]?.message?.content;
+      if (!content) throw new Error("Empty response from AI.");
+
+      const jsonResponse = JSON.parse(content.match(/```json\s*([\s\S]*?)\s*```/)?.[1] || content);
+      if (!Array.isArray(jsonResponse.tasks)) throw new Error("Invalid JSON structure.");
+
+      const finalTasks = jsonResponse.tasks
+        .slice(0, numDays)
+        .map((task: any) => ({
+          id: generateUniqueId(),
+          title: (task.title || '').trim(),
+          description: (task.description || '').trim(),
+          suggestedDeadline: task.deadline?.trim(),
+        }))
+        .filter(task => task.title);
+
+      if (finalTasks.length === 0) throw new Error("No valid tasks generated.");
+      if (finalTasks.length < numDays) setErrorMessage(`Only ${finalTasks.length} tasks generated.`);
+
+      setSuggestedTasks(finalTasks);
+      scrollToBottom();
+    } catch (error: any) {
+      console.error('AI Fetch Error:', error);
+      setErrorMessage(error.name === 'AbortError' ? 'Task generation cancelled.' : error.message);
       setSuggestedTasks([]);
-      setErrorMessage(null);
-
-      try {
-        // Personalization: inject user history summary
-        const historySummary = summarizeHistory(userHistory);
-
-        // --- Add clarifications to system prompt if present ---
-        let clarificationText = '';
-        if (clarificationAnswers.length > 0 && clarifyingQuestions.length > 0) {
-          clarificationText = clarifyingQuestions
-            .map((q, i) => clarificationAnswers[i] ? `${q} ${clarificationAnswers[i]}` : '')
-            .filter(Boolean)
-            .join(' ');
-        }
-
-        const systemPrompt = `You are a helpful task planner. ${historySummary} ${clarificationText} Generate exactly ${numDays} specific, actionable daily tasks with deadlines. For each task, provide a "title" (short summary), a "description" (detailed steps or explanation), and a "deadline". Return a JSON object with a "tasks" array containing objects with "title", "description", and "deadline" fields.`;
-
-        console.log(`Requesting ${numDays} tasks for query: "${trimmedQuery}" using model ${API_MODEL}`);
-        const completion = await openai.chat.completions.create(
-          {
-            model: API_MODEL,
-            messages: [
-              {
-                role: "system",
-                content: systemPrompt,
-              },
-              {
-                role: "user",
-                content: `Create a ${numDays}-day task plan for: "${trimmedQuery}"`,
-              },
-            ],
-          },
-          { signal: abortControllerRef.current.signal }
-        );
-
-        const content = completion.choices[0]?.message?.content;
-        if (!content) throw new Error("Empty response from AI.");
-
-        const jsonResponse = JSON.parse(content.match(/```json\s*([\s\S]*?)\s*```/)?.[1] || content);
-        if (!Array.isArray(jsonResponse.tasks)) throw new Error("Invalid JSON structure.");
-
-        const finalTasks = jsonResponse.tasks
-          .slice(0, numDays)
-          .map((task: any) => ({
-            id: generateUniqueId(),
-            title: (task.title || '').trim(),
-            description: (task.description || '').trim(),
-            suggestedDeadline: task.deadline?.trim(),
-          }))
-          .filter(task => task.title);
-
-        if (finalTasks.length === 0) throw new Error("No valid tasks generated.");
-        if (finalTasks.length < numDays) setErrorMessage(`Only ${finalTasks.length} tasks generated.`);
-
-        setSuggestedTasks(finalTasks);
-        scrollToBottom();
-      } catch (error: any) {
-        console.error('AI Fetch Error:', error);
-        setErrorMessage(error.name === 'AbortError' ? 'Task generation cancelled.' : error.message);
-        setSuggestedTasks([]);
-      } finally {
-        setIsLoading(false);
-        abortControllerRef.current = null;
-      }
-    },
-    [
-      aiQuery, numDays, openai, userHistory,
-      needsClarification, clarifyingQuestions, clarificationAnswers, messages
-    ]
-  );
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
+  }, [aiQuery, numDays, openai, userHistory]);
 
   // Use hardcoded suggestions instead of AI
   const fetchSuggestionIdeas = useCallback(async () => {
@@ -774,12 +697,19 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
   const openModal = useCallback(() => {
     resetModalState(true); // Reset when opening
     setIsModalVisible(true);
-    if (showSuggestionsOnOpen) {
+    // Only auto-show suggestions the first time
+    if (showSuggestionsOnOpen && !hasAutoShownSuggestions) {
       setSuggestionIdeas([]);
       setShowSuggestions(true);
       fetchSuggestionIdeas();
+      setHasAutoShownSuggestions(true);
+      // Auto-close suggestions after 2.5s
+      setTimeout(() => {
+        setShowSuggestions(false);
+        setSuggestionIdeas([]);
+      }, 2500);
     }
-  }, [resetModalState, showSuggestionsOnOpen, fetchSuggestionIdeas]);
+  }, [resetModalState, showSuggestionsOnOpen, fetchSuggestionIdeas, hasAutoShownSuggestions]);
 
   const closeModal = useCallback(() => {
     setIsModalVisible(false);
@@ -836,76 +766,6 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     setAiQuery(randomPrompt);
     // Optionally, trigger fetchAIResponse() here for instant generation
     // fetchAIResponse();
-  };
-
-  // --- Handler for clarification answer submission ---
-  const handleClarificationAnswer = (answer: string) => {
-    const nextAnswers = [...clarificationAnswers];
-    nextAnswers[clarificationStep] = answer;
-    setClarificationAnswers(nextAnswers);
-
-    if (clarificationStep + 1 < clarifyingQuestions.length) {
-      setClarificationStep(clarificationStep + 1);
-    } else {
-      // All clarifications answered, proceed to generate
-      setNeedsClarification(false);
-      setTimeout(() => {
-        fetchAIResponse();
-      }, 200);
-    }
-  };
-
-  // --- Handler to skip clarification (optional) ---
-  const handleSkipClarification = () => {
-    setNeedsClarification(false);
-    setClarifyingQuestions([]);
-    setClarificationAnswers([]);
-    setClarificationStep(0);
-    setTimeout(() => {
-      fetchAIResponse();
-    }, 200);
-  };
-
-  // --- Chat State ---
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'system', content: 'How can I help you plan your goals today?' }
-  ]);
-  const [isListening, setIsListening] = useState(false);
-
-  // --- Chat Send Handler ---
-  const handleSendMessage = async (text?: string) => {
-    const userText = typeof text === 'string' ? text : aiQuery.trim();
-    if (!userText) return;
-    setMessages(prev => [...prev, { role: 'user', content: userText }]);
-    setAiQuery('');
-    await fetchAIResponse(userText);
-  };
-
-  // --- Voice Input Handler (using react-native-voice) ---
-  useEffect(() => {
-    Voice.onSpeechResults = (event) => {
-      const transcript = event.value?.[0] || '';
-      setAiQuery(transcript);
-      setIsListening(false);
-    };
-    Voice.onSpeechError = (e) => {
-      setIsListening(false);
-      Alert.alert('Voice Input Error', 'Could not transcribe speech.');
-    };
-    return () => {
-      Voice.destroy().then(Voice.removeAllListeners);
-    };
-  }, []);
-
-  const handleMicPress = async () => {
-    if (isListening) return;
-    setIsListening(true);
-    try {
-      await Voice.start('en-US');
-    } catch (e) {
-      setIsListening(false);
-      Alert.alert('Voice Input Error', 'Could not start voice recognition.');
-    }
   };
 
   // --- Task Rendering ---
@@ -1002,22 +862,241 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     }
   };
 
-  // --- Chat Bubble Renderer ---
-  const renderChatBubble = (msg: ChatMessage, idx: number) => {
-    if (msg.role === 'system') return null;
-    const isUser = msg.role === 'user';
-    return (
-      <View
-        key={idx}
-        style={[
-          styles.chatBubble,
-          isUser ? styles.chatBubbleUser : styles.chatBubbleAI,
-        ]}
-      >
-        <Text style={styles.chatBubbleText}>{msg.content}</Text>
-      </View>
-    );
-  };
+  // --- Build For Me State ---
+  const [buildForMeState, setBuildForMeState] = useState<BuildForMeState>('idle');
+  const [clarifyingQuestion, setClarifyingQuestion] = useState<string | null>(null);
+  const [clarifyingAnswer, setClarifyingAnswer] = useState<string>('');
+  const [autoAcceptTimeout, setAutoAcceptTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // --- Build For Me Handler ---
+  const handleBuildForMe = useCallback(async () => {
+    setBuildForMeState('generating');
+    setIsLoading(true);
+    setSuggestedTasks([]);
+    setErrorMessage(null);
+
+    let currentQuery = aiQuery.trim();
+    if (!currentQuery) {
+      Alert.alert('Input Required', 'Please describe what you need help planning.');
+      setIsLoading(false);
+      setBuildForMeState('idle');
+      return;
+    }
+
+    // Step 1: Ask for clarification if prompt is vague
+    try {
+      const clarifyPrompt = `Is the following user goal clear enough to generate a ${numDays}-day plan? If not, ask a clarifying question. If clear, reply ONLY with "OK".\n\nGoal: "${currentQuery}"`;
+      const clarifyResp = await openai.chat.completions.create({
+        model: API_MODEL,
+        messages: [
+          { role: "system", content: "You are an expert at clarifying vague goals." },
+          { role: "user", content: clarifyPrompt }
+        ]
+      });
+      const clarifyContent = clarifyResp.choices[0]?.message?.content?.trim();
+      if (clarifyContent && clarifyContent !== "OK") {
+        setClarifyingQuestion(clarifyContent);
+        setBuildForMeState('clarifying');
+        setIsLoading(false);
+        return;
+      }
+    } catch (e) {
+      setErrorMessage('Failed to clarify prompt.');
+      setIsLoading(false);
+      setBuildForMeState('idle');
+      return;
+    }
+
+    // Step 2: Generate plan
+    try {
+      setBuildForMeState('generating');
+      setIsLoading(true);
+      // Always create a new goal in backend
+      try {
+        await axios.post('http://localhost:8080/api/goals', {
+          user: USER_ID,
+          goalText: currentQuery,
+          createdAt: new Date().toISOString(),
+        });
+      } catch {}
+      // Personalization: inject user history summary
+      const historySummary = summarizeHistory(userHistory);
+      const systemPrompt = `You are a helpful task planner. ${historySummary} Generate exactly ${numDays} specific, actionable daily tasks with deadlines. For each task, provide a "title" (short summary), a "description" (detailed steps or explanation), and a "deadline". Return a JSON object with a "tasks" array containing objects with "title", "description", and "deadline" fields.`;
+      const completion = await openai.chat.completions.create(
+        {
+          model: API_MODEL,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `Create a ${numDays}-day task plan for: "${currentQuery}"` },
+          ],
+        }
+      );
+      const content = completion.choices[0]?.message?.content;
+      if (!content) throw new Error("Empty response from AI.");
+      const jsonResponse = JSON.parse(content.match(/```json\s*([\s\S]*?)\s*```/)?.[1] || content);
+      if (!Array.isArray(jsonResponse.tasks)) throw new Error("Invalid JSON structure.");
+      const finalTasks = jsonResponse.tasks
+        .slice(0, numDays)
+        .map((task: any) => ({
+          id: generateUniqueId(),
+          title: (task.title || '').trim(),
+          description: (task.description || '').trim(),
+          suggestedDeadline: task.deadline?.trim(),
+        }))
+        .filter(task => task.title);
+      if (finalTasks.length === 0) throw new Error("No valid tasks generated.");
+      setSuggestedTasks(finalTasks);
+      setBuildForMeState('reviewing');
+      setIsLoading(false);
+
+      // Step 3: Auto-accept after short delay unless cancelled
+      const timeout = setTimeout(async () => {
+        setBuildForMeState('autoAccepting');
+        try {
+          const apiTasks = mapTasksToApiFormat(finalTasks);
+          if (finalTasks.length === 1) {
+            await axios.post('http://localhost:8080/api/accepted', apiTasks[0], {
+              headers: { 'Content-Type': 'application/json' },
+            });
+          } else if (finalTasks.length > 1 && finalTasks.length <= 7) {
+            await axios.post('http://localhost:8080/api/accepted/batch/create', apiTasks, {
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+          onTaskAccept(finalTasks);
+          addAcceptedTasksToHistory(finalTasks);
+          setBuildForMeState('done');
+          setShowFeedbackModal(true);
+        } catch (error: any) {
+          setErrorMessage(error?.response?.data?.message || error.message || 'Failed to save tasks.');
+          setBuildForMeState('idle');
+        }
+      }, 3500); // 3.5 seconds to allow user to cancel
+      setAutoAcceptTimeout(timeout);
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Failed to generate plan.');
+      setIsLoading(false);
+      setBuildForMeState('idle');
+    }
+  }, [aiQuery, numDays, openai, userHistory, onTaskAccept]);
+
+  // --- Clarifying Answer Handler ---
+  const handleClarifyingAnswerSubmit = useCallback(async () => {
+    if (!clarifyingAnswer.trim()) return;
+    setBuildForMeState('generating');
+    setIsLoading(true);
+    setClarifyingQuestion(null);
+    let combinedQuery = aiQuery.trim() + " " + clarifyingAnswer.trim();
+    setAiQuery(combinedQuery);
+    setClarifyingAnswer('');
+    // Continue with plan generation using combined query
+    // Reuse handleBuildForMe logic but skip clarification
+    try {
+      // Always create a new goal in backend
+      try {
+        await axios.post('http://localhost:8080/api/goals', {
+          user: USER_ID,
+          goalText: combinedQuery,
+          createdAt: new Date().toISOString(),
+        });
+      } catch {}
+      const historySummary = summarizeHistory(userHistory);
+      const systemPrompt = `You are a helpful task planner. ${historySummary} Generate exactly ${numDays} specific, actionable daily tasks with deadlines. For each task, provide a "title" (short summary), a "description" (detailed steps or explanation), and a "deadline". Return a JSON object with a "tasks" array containing objects with "title", "description", and "deadline" fields.`;
+      const completion = await openai.chat.completions.create(
+        {
+          model: API_MODEL,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `Create a ${numDays}-day task plan for: "${combinedQuery}"` },
+          ],
+        }
+      );
+      const content = completion.choices[0]?.message?.content;
+      if (!content) throw new Error("Empty response from AI.");
+      const jsonResponse = JSON.parse(content.match(/```json\s*([\s\S]*?)\s*```/)?.[1] || content);
+      if (!Array.isArray(jsonResponse.tasks)) throw new Error("Invalid JSON structure.");
+      const finalTasks = jsonResponse.tasks
+        .slice(0, numDays)
+        .map((task: any) => ({
+          id: generateUniqueId(),
+          title: (task.title || '').trim(),
+          description: (task.description || '').trim(),
+          suggestedDeadline: task.deadline?.trim(),
+        }))
+        .filter(task => task.title);
+      if (finalTasks.length === 0) throw new Error("No valid tasks generated.");
+      setSuggestedTasks(finalTasks);
+      setBuildForMeState('reviewing');
+      setIsLoading(false);
+
+      // Auto-accept after delay
+      const timeout = setTimeout(async () => {
+        setBuildForMeState('autoAccepting');
+        try {
+          const apiTasks = mapTasksToApiFormat(finalTasks);
+          if (finalTasks.length === 1) {
+            await axios.post('http://localhost:8080/api/accepted', apiTasks[0], {
+              headers: { 'Content-Type': 'application/json' },
+            });
+          } else if (finalTasks.length > 1 && finalTasks.length <= 7) {
+            await axios.post('http://localhost:8080/api/accepted/batch/create', apiTasks, {
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+          onTaskAccept(finalTasks);
+          addAcceptedTasksToHistory(finalTasks);
+          setBuildForMeState('done');
+          setShowFeedbackModal(true);
+        } catch (error: any) {
+          setErrorMessage(error?.response?.data?.message || error.message || 'Failed to save tasks.');
+          setBuildForMeState('idle');
+        }
+      }, 3500);
+      setAutoAcceptTimeout(timeout);
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Failed to generate plan.');
+      setIsLoading(false);
+      setBuildForMeState('idle');
+    }
+  }, [aiQuery, clarifyingAnswer, numDays, openai, userHistory, onTaskAccept]);
+
+  // --- Cancel Build For Me ---
+  const handleCancelBuildForMe = useCallback(() => {
+    setBuildForMeState('cancelled');
+    setClarifyingQuestion(null);
+    setClarifyingAnswer('');
+    setIsLoading(false);
+    if (autoAcceptTimeout) clearTimeout(autoAcceptTimeout);
+    setAutoAcceptTimeout(null);
+  }, [autoAcceptTimeout]);
+
+  // --- Reset Build For Me State on Modal Close ---
+  useEffect(() => {
+    if (!isModalVisible) {
+      setBuildForMeState('idle');
+      setClarifyingQuestion(null);
+      setClarifyingAnswer('');
+      if (autoAcceptTimeout) clearTimeout(autoAcceptTimeout);
+      setAutoAcceptTimeout(null);
+    }
+  }, [isModalVisible, autoAcceptTimeout]);
+
+  // --- FEEDBACK LABELS for Feedback Modal ---
+  const FEEDBACK_LABELS = [
+    "Terrible",
+    "Not Good",
+    "Okay",
+    "Good",
+    "Amazing!",
+  ];
+
+  // Add this handler to fix the error
+  const handleSmartDefaultPress = useCallback(() => {
+    if (smartDefault) setAiQuery(smartDefault);
+  }, [smartDefault]);
+
+  // Show/hide advanced options (day selector)
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // --- Render ---
   return (
@@ -1170,117 +1249,349 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
                   </TouchableOpacity>
                 </View>
 
-                {/* --- Chat UI --- */}
+                {/* Task Display Area (This is the scrollable response part) */}
                 <ScrollView
                   ref={scrollViewRef}
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ paddingBottom: 20 }}
-                  showsVerticalScrollIndicator={true}
-                  keyboardShouldPersistTaps="handled"
+                  style={{ flex: 1 }} // Ensure it takes available space
+                  contentContainerStyle={{ paddingBottom: 20 }} // Add only necessary padding
+                  showsVerticalScrollIndicator={true} // Enable scrollbar
+                  keyboardShouldPersistTaps="handled" // Allow taps to dismiss the keyboard
                 >
-                  {messages.map(renderChatBubble)}
-                  {/* ...existing code for loading, tasks, etc... */}
-                  {isLoading && (
+                  {/* Loading Indicator */}
+                  {isLoading && suggestedTasks.length === 0 ? (
                     <View style={styles.placeholderContainer}>
                       <ActivityIndicator size="large" color="#BB86FC" />
-                      <Text style={styles.placeholderText}>Thinking...</Text>
+                      {/* Use numDays state for placeholder text */}
+                      <Text style={styles.placeholderText}>Generating your {numDays}-day plan...</Text>
                     </View>
-                  )}
-                  {suggestedTasks.length > 0 && (
-                    <View style={{ marginTop: 12 }}>
-                      {suggestedTasks.map(renderTask)}
+                  ) : suggestedTasks.length === 0 ? (
+                    <View style={styles.placeholderContainer}>
+                      <Ionicons name="bulb-outline" size={40} color="#888" style={{ marginBottom: 10 }} />
+                      <Text style={styles.placeholderText}>
+                        {/* Use numDays state for placeholder text */}
+                        {errorMessage ? errorMessage : `Describe your goal below to get a personalized ${numDays}-day task plan.`}
+                      </Text>
                     </View>
+                  ) : (
+                    suggestedTasks.map(renderTask)
                   )}
+                  {/* Add some padding at the bottom of scroll */}
                   <View style={{ height: 20 }} />
                 </ScrollView>
 
-                {/* --- Input Area (Chat style) --- */}
+                {/* Input Area (Fixed at the bottom) */}
                 <View style={styles.inputArea}>
+                   {errorMessage && !isLoading && suggestedTasks.length > 0 && (
+                     <Text style={styles.errorTextInline}>{errorMessage}</Text>
+                   )}
+                   {/* --- Modern Compact Chips Row --- */}
+                   <View style={styles.compactChipsRow}>
+                     <ScrollView
+                       horizontal
+                       showsHorizontalScrollIndicator={false}
+                       contentContainerStyle={styles.compactChipsScroll}
+                       style={{ flexGrow: 0 }}
+                     >
+                       {smartDefault && (
+                         <TouchableOpacity
+                           style={styles.compactSmartChip}
+                           onPress={handleSmartDefaultPress}
+                           activeOpacity={0.85}
+                         >
+                           <Ionicons name="flash" size={16} color="#6C47FF" style={{ marginRight: 4 }} />
+                           <Text style={styles.compactSmartChipText} numberOfLines={1}>Plan: {smartDefault}</Text>
+                         </TouchableOpacity>
+                       )}
+                       {SHORTCUTS.map((sc, idx) => (
+                         <TouchableOpacity
+                           key={sc.label}
+                           style={[
+                             styles.compactShortcutChip,
+                             numDays === sc.days && styles.compactShortcutChipSelected,
+                           ]}
+                           onPress={() => {
+                             setNumDays(sc.days);
+                             if (sc.prompt) setAiQuery(sc.prompt);
+                           }}
+                           activeOpacity={0.85}
+                         >
+                           <Ionicons
+                             name={
+                               sc.label === "Today"
+                                 ? "sunny"
+                                 : sc.label === "Tomorrow"
+                                 ? "cloud-outline"
+                                 : sc.label === "Weekend"
+                                 ? "calendar"
+                                 : "calendar-outline"
+                             }
+                             size={15}
+                             color={numDays === sc.days ? "#fff" : "#6C47FF"}
+                             style={{ marginRight: 0 }}
+                           />
+                         </TouchableOpacity>
+                       ))}
+                     </ScrollView>
+                     <TouchableOpacity
+                       style={styles.advancedToggle}
+                       onPress={() => setShowAdvanced((v) => !v)}
+                       activeOpacity={0.8}
+                       accessibilityLabel="Show advanced options"
+                     >
+                       <Ionicons name={showAdvanced ? "chevron-up" : "options-outline"} size={20} color="#BB86FC" />
+                     </TouchableOpacity>
+                   </View>
+                   <View style={styles.chipDivider} />
+
+                   {/* --- Advanced: Day Selector --- */}
+                   {showAdvanced && (
+                     <View style={styles.daySelectorContainer}>
+                       <Text style={styles.daySelectorLabel}>Plan Duration:</Text>
+                       <ScrollView
+                         horizontal
+                         showsHorizontalScrollIndicator={true}
+                         contentContainerStyle={styles.daySelectorScrollContent}
+                         style={styles.daySelectorScrollView}
+                       >
+                         {dayOptions.map((day) => (
+                           <TouchableOpacity
+                             key={day}
+                             style={[
+                               styles.dayButton,
+                               numDays === day && styles.dayButtonSelected,
+                               isLoading && styles.dayButtonDisabled
+                             ]}
+                             onPress={() => !isLoading && setNumDays(day)}
+                             disabled={isLoading}
+                             accessibilityLabel={`Select ${day} days`}
+                             accessibilityState={{ selected: numDays === day }}
+                           >
+                             <Text
+                               style={[
+                                 styles.dayButtonText,
+                                 numDays === day && styles.dayButtonTextSelected,
+                               ]}
+                             >
+                               {day}
+                             </Text>
+                           </TouchableOpacity>
+                         ))}
+                       </ScrollView>
+                       <Text style={styles.daySelectorLabelEnd}>days</Text>
+                     </View>
+                   )}
+
+                  {/* Query Input and Submit Button */}
                   <View style={styles.inputWrapper}>
-                    <TouchableOpacity
-                      style={styles.micButton}
-                      onPress={handleMicPress}
-                      disabled={isListening}
-                    >
-                      <Ionicons name={isListening ? "mic-off" : "mic"} size={22} color={isListening ? "#888" : "#BB86FC"} />
-                    </TouchableOpacity>
                     <TextInput
                       style={styles.inputFieldQuery}
-                      placeholder="Type your message..."
+                      placeholder="What's your goal?"
                       placeholderTextColor="#888"
                       value={aiQuery}
                       onChangeText={setAiQuery}
                       multiline
                       editable={!isLoading}
-                      blurOnSubmit={true}
+                      blurOnSubmit={true} // Dismiss keyboard on return key
                       ref={inputRef}
-                      onSubmitEditing={() => handleSendMessage()}
                     />
-                    <TouchableOpacity
-                      style={[
-                        styles.controlButtonInInput,
-                        styles.generateButton,
-                        !aiQuery.trim() ? styles.generateButtonDisabled : null
-                      ]}
-                      onPress={() => handleSendMessage()}
-                      disabled={!aiQuery.trim()}
-                      accessibilityLabel="Send message"
-                    >
-                      <Ionicons name="arrow-up" size={20} color="#FFF" />
-                    </TouchableOpacity>
+                    {/* REMOVED Days Input Container */}
+                    {/* <View style={styles.daysInputContainer}> ... </View> */}
+
+                    {isLoading ? (
+                      // Stop Button
+                      <TouchableOpacity
+                        style={[styles.controlButtonInInput, styles.stopButton]}
+                        onPress={handleStopGeneration}
+                        accessibilityLabel="Stop AI generation"
+                      >
+                        <Ionicons name="stop-circle" size={24} color="#FFF" />
+                      </TouchableOpacity>
+                    ) : (
+                      // Generate Button
+                      <TouchableOpacity
+                        style={[
+                          styles.controlButtonInInput,
+                          styles.generateButton,
+                          // Dim button if query is empty
+                          !aiQuery.trim() ? styles.generateButtonDisabled : null
+                        ]}
+                        onPress={fetchAIResponse}
+                        disabled={!aiQuery.trim()} // Disable if query is empty
+                        accessibilityLabel="Generate tasks"
+                      >
+                        <Ionicons name="arrow-forward" size={20} color="#FFF" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <GoalSuggestionAlgorithm
+                    userGoals={userHistory.goals}
+                    allGoals={allGoals}
+                    query={aiQuery}
+                    onSuggestionPress={handleGoalSuggestionSelect}
+                  />
+                  {/* Modern "Surprise Me!" bubble, only show if user is typing */}
+                  {aiQuery.trim().length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 }}>
+                      <Animated.View style={{ transform: [{ scale: surprisePressed ? 0.96 : 1 }] }}>
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          onPress={handleSurpriseMe}
+                          onPressIn={() => setSurprisePressed(true)}
+                          onPressOut={() => setSurprisePressed(false)}
+                          style={{ borderRadius: 24, overflow: 'hidden' }}
+                        >
+                          <LinearGradient
+                            colors={SURPRISE_GRADIENT}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.surpriseBubble}
+                          >
+                            <Ionicons name="sparkles" size={18} color="#BB86FC" style={{ marginRight: 6 }} />
+                            <Text style={styles.surpriseBubbleText}>Surprise Me!</Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </Animated.View>
+                    </View>
+                  )}
+                  {/* Action Buttons (Accept/Reset) */}
+                  <View style={styles.actionButtonsContainer}>
+                     {suggestedTasks.length > 0 && !isLoading && (
+                       <>
+                         <TouchableOpacity
+                           style={[styles.actionButton, styles.clearButton]}
+                           onPress={() => resetModalState(false)} // Keep query
+                           accessibilityLabel="Clear generated tasks and retry"
+                         >
+                           <Ionicons name="refresh-outline" size={18} color="#FFF" style={{marginRight: 5}}/>
+                           <Text style={styles.actionButtonText}>Clear</Text>
+                         </TouchableOpacity>
+                          <TouchableOpacity
+                           style={[styles.actionButton, styles.acceptAllButton]}
+                           onPress={handleAcceptAllTasks}
+                           accessibilityLabel="Accept all tasks"
+                         >
+                           <Ionicons name="checkmark-done-outline" size={18} color="#FFF" style={{marginRight: 5}}/>
+                           <Text style={styles.actionButtonText}>Accept All</Text>
+                         </TouchableOpacity>
+                       </>
+                     )}
                   </View>
                 </View>
-
-                {/* --- Clarification UI (if needed) --- */}
-                {needsClarification && clarifyingQuestions.length > 0 && (
-                  <View style={styles.clarificationContainer}>
-                    <Text style={styles.clarificationTitle}>Let's clarify your goal:</Text>
-                    <Text style={styles.clarificationQuestion}>
-                      {clarifyingQuestions[clarificationStep]}
-                    </Text>
-                    <TextInput
-                      style={styles.inputFieldQuery}
-                      placeholder="Type your answer..."
-                      placeholderTextColor="#888"
-                      value={clarificationAnswers[clarificationStep] || ''}
-                      onChangeText={text => {
-                        const nextAnswers = [...clarificationAnswers];
-                        nextAnswers[clarificationStep] = text;
-                        setClarificationAnswers(nextAnswers);
-                      }}
-                      autoFocus
-                    />
-                    <View style={{ flexDirection: 'row', marginTop: 12 }}>
+                <Animated.View style={{ transform: [{ scale: suggestionAnim }] }}>
+                  <Pressable
+                    style={styles.suggestionButtonWrapper}
+                    onPress={handleFetchSuggestions}
+                    onPressIn={handleSuggestionPressIn}
+                    onPressOut={handleSuggestionPressOut}
+                    accessibilityLabel="Show example prompts for AI task planner"
+                    disabled={isLoading}
+                  >
+                    <AnimatedGradientButton
+                      suggestionGradientAnim={suggestionGradientAnim}
+                      pressed={suggestionPressed || isLoading}
+                    >
+                      <Text style={styles.suggestionButtonText}>Suggestions</Text>
+                    </AnimatedGradientButton>
+                  </Pressable>
+                </Animated.View>
+                {/* Show suggestion ideas as chips/buttons */}
+                {showSuggestions && suggestionIdeas.length > 0 && (
+                  <View style={styles.suggestionIdeasContainer}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                      <Text style={styles.suggestionIdeasTitle}>Try one of these:</Text>
                       <TouchableOpacity
-                        style={[
-                          styles.actionButton,
-                          { backgroundColor: '#4CAF50', minWidth: 100, marginRight: 8 }
-                        ]}
-                        onPress={() => handleClarificationAnswer(clarificationAnswers[clarificationStep] || '')}
-                        disabled={!(clarificationAnswers[clarificationStep] || '').trim()}
+                        onPress={() => { setShowSuggestions(false); setSuggestionIdeas([]); }}
+                        style={{ marginLeft: 'auto', padding: 8 }}
+                        accessibilityLabel="Hide suggestions"
                       >
-                        <Text style={styles.actionButtonText}>
-                          {clarificationStep + 1 < clarifyingQuestions.length ? 'Next' : 'Generate'}
-                        </Text>
+                        <Ionicons name="close" size={20} color="#AAA" />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.suggestionIdeasScrollWrapper}>
+                      <ScrollView
+                        style={{ maxHeight: 180 }}
+                        showsVerticalScrollIndicator={true}
+                        contentContainerStyle={styles.suggestionIdeasList}
+                      >
+                        {suggestionIdeas.map((idea, idx) => (
+                          <LinearGradient
+                            key={idx}
+                            colors={pastelGradients[idx % pastelGradients.length]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.suggestionIdeaChip}
+                          >
+                            <TouchableOpacity
+                              style={{ flex: 1 }}
+                              onPress={() => handleSuggestionIdeaPress(idea)}
+                            >
+                              <Text style={styles.suggestionIdeaText}>{idea}</Text>
+                            </TouchableOpacity>
+                          </LinearGradient>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  </View>
+                )}
+                {/* --- Build For Me Workflow UI --- */}
+                {buildForMeState === 'clarifying' && clarifyingQuestion && (
+                  <View style={styles.buildForMeClarifyContainer}>
+                    <Text style={styles.buildForMeClarifyQuestion}>{clarifyingQuestion}</Text>
+                    <TextInput
+                      style={styles.buildForMeClarifyInput}
+                      placeholder="Your answer..."
+                      placeholderTextColor="#888"
+                      value={clarifyingAnswer}
+                      onChangeText={setClarifyingAnswer}
+                      editable={true}
+                      multiline
+                    />
+                    <View style={{ flexDirection: 'row', marginTop: 10 }}>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.acceptAllButton, { flex: 1, marginRight: 8 }]}
+                        onPress={handleClarifyingAnswerSubmit}
+                      >
+                        <Text style={styles.actionButtonText}>Submit</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[
-                          styles.actionButton,
-                          { backgroundColor: '#888', minWidth: 80 }
-                        ]}
-                        onPress={handleSkipClarification}
+                        style={[styles.actionButton, styles.clearButton, { flex: 1 }]}
+                        onPress={handleCancelBuildForMe}
                       >
-                        <Text style={styles.actionButtonText}>Skip</Text>
+                        <Text style={styles.actionButtonText}>Cancel</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
                 )}
-
-                {/* --- Only show rest of modal if not clarifying --- */}
-                {!needsClarification && (
-                  <>
-                    {/* ...existing code for ScrollView, input, etc... */}
-                  </>
+                {buildForMeState === 'reviewing' && suggestedTasks.length > 0 && (
+                  <View style={styles.buildForMeReviewingContainer}>
+                    <Text style={styles.buildForMeReviewingText}>
+                      AI plan ready! Accepting in 3 seconds...
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.clearButton, { marginTop: 8 }]}
+                      onPress={handleCancelBuildForMe}
+                    >
+                      <Text style={styles.actionButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                {buildForMeState === 'autoAccepting' && (
+                  <View style={styles.buildForMeReviewingContainer}>
+                    <ActivityIndicator size="small" color="#BB86FC" />
+                    <Text style={styles.buildForMeReviewingText}>Accepting tasks...</Text>
+                  </View>
+                )}
+                {buildForMeState === 'done' && (
+                  <View style={styles.buildForMeReviewingContainer}>
+                    <Ionicons name="checkmark-circle" size={32} color="#4CAF50" />
+                    <Text style={styles.buildForMeReviewingText}>Tasks accepted!</Text>
+                  </View>
+                )}
+                {buildForMeState === 'cancelled' && (
+                  <View style={styles.buildForMeReviewingContainer}>
+                    <Ionicons name="close-circle" size={32} color="#F44336" />
+                    <Text style={styles.buildForMeReviewingText}>Cancelled.</Text>
+                  </View>
                 )}
               </View>
             </KeyboardAvoidingView>
@@ -1997,53 +2308,194 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.2,
   },
-  clarificationContainer: {
-    backgroundColor: '#232B3A',
-    borderRadius: 14,
-    padding: 18,
-    marginVertical: 18,
+  // --- Build For Me Styles ---
+  buildForMeButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#6C47FF',
+    borderRadius: 22,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    marginRight: 10,
+    elevation: 2,
   },
-  clarificationTitle: {
-    color: '#BB86FC',
-    fontWeight: 'bold',
-    fontSize: 17,
-    marginBottom: 8,
-    textAlign: 'center',
+  buildForMeButtonDisabled: {
+    opacity: 0.5,
   },
-  clarificationQuestion: {
-    color: '#E0E0E0',
-    fontSize: 16,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  chatBubble: {
-    maxWidth: '80%',
-    borderRadius: 18,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginVertical: 4,
-  },
-  chatBubbleUser: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#BB86FC',
-  },
-  chatBubbleAI: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#232B3A',
-  },
-  chatBubbleText: {
+  buildForMeButtonText: {
     color: '#fff',
+    fontWeight: 'bold',
     fontSize: 15,
   },
-  micButton: {
+  buildForMeClarifyContainer: {
+    backgroundColor: '#232B3A',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 14,
+  },
+  buildForMeClarifyQuestion: {
+    color: '#FFD700',
+    fontWeight: '600',
+    fontSize: 16,
+    marginBottom: 10,
+  },
+  buildForMeClarifyInput: {
+    backgroundColor: '#1E1E1E',
+    color: '#fff',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 15,
+    minHeight: 40,
+    maxHeight: 80,
+  },
+  buildForMeReviewingContainer: {
+    alignItems: 'center',
+    marginVertical: 14,
+  },
+  buildForMeReviewingText: {
+    color: '#BB86FC',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  // --- Smart Default Chip (improved) ---
+  smartDefaultChipGradient: {
+    borderRadius: 22,
+    padding: 2,
+    shadowColor: '#A6BFFF',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+    marginHorizontal: 2,
+  },
+  smartDefaultChipTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 22,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    minHeight: 38,
+    shadowColor: '#A6BFFF',
+    shadowOpacity: 0.10,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  smartDefaultChipText: {
+    color: '#6C47FF',
+    fontWeight: '700',
+    fontSize: 16,
+    letterSpacing: 0.1,
+    textShadowColor: '#fff',
+    textShadowRadius: 2,
+  },
+
+  // --- Shortcut Chips (improved) ---
+  shortcutChipsScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    paddingLeft: 4,
+    paddingRight: 8,
+  },
+  shortcutChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3E8FF',
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     marginRight: 8,
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(187,134,252,0.08)',
+    marginBottom: 2,
+    shadowColor: '#A6BFFF',
+    shadowOpacity: 0.10,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E0D7FF',
+  },
+  shortcutChipSelected: {
+    backgroundColor: '#6C47FF',
+    borderColor: '#6C47FF',
+    shadowOpacity: 0.18,
+  },
+  shortcutChipText: {
+    color: '#6C47FF',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  shortcutChipTextSelected: {
+    color: '#fff',
+  },
+
+  // --- Modern Compact Chips Row ---
+  compactChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+    marginTop: 2,
+    minHeight: 38,
+  },
+  compactChipsScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 0,
+    paddingLeft: 2,
+    paddingRight: 2,
+  },
+  compactSmartChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E9E3FF',
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    marginRight: 6,
+    minWidth: 60,
+    maxWidth: 160,
+    elevation: 1,
+    shadowColor: '#A6BFFF',
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+  },
+  compactSmartChipText: {
+    color: '#6C47FF',
+    fontWeight: '600',
+    fontSize: 14,
+    maxWidth: 110,
+  },
+  compactShortcutChip: {
+    backgroundColor: '#F3E8FF',
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginRight: 6,
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 1,
+    shadowColor: '#A6BFFF',
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+  },
+  compactShortcutChipSelected: {
+    backgroundColor: '#6C47FF',
+  },
+  advancedToggle: {
+    marginLeft: 4,
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(187,134,252,0.09)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipDivider: {
+    height: 1,
+    backgroundColor: '#232B3A',
+    opacity: 0.13,
+    marginVertical: 6,
+    borderRadius: 1,
   },
 });
 
