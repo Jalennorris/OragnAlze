@@ -1,3 +1,4 @@
+/* eslint-env jest */
 // ...existing code...
 
 // Mock localStorage for React Native
