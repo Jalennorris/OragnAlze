@@ -14,7 +14,6 @@ import PrivacyPolicy from '@/Screen/sections/PrivacyPolicy';
 import SecureSettings from '@/Screen/sections/SecureSettings';
 import SendFeedback from '@/Screen/sendFeedback';
 import HelpSupport from '@/Screen/helpSupport';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 // Define your stack param list for type safety
 export type AuthStackParamList = {

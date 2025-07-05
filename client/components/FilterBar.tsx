@@ -587,7 +587,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 28,
     borderRadius: 8,
-    alignItems: 'center',
     justifyContent: 'center',
     minWidth: '60%',
     backgroundColor: defaultTheme.primary,
