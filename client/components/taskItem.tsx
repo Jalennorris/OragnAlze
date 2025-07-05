@@ -129,7 +129,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
 }
 
-const TaskItem: React.FC<TaskItemProps> = ({
+const AITaskItem: React.FC<TaskItemProps> = ({
   task,
   onToggleCompletion,
   onDelete,
@@ -841,7 +841,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectTog
   return (
     <>
       {tasks.map((task) => (
-        <TaskItem
+        <AITaskItem
           key={task.taskId.toString()}
           task={task}
           onToggleCompletion={() => console.log('Toggle completion')} // Placeholder - real logic needed in parent
@@ -1033,4 +1033,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TaskItem;
+export default AITaskItem;

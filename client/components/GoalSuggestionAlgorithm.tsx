@@ -8,24 +8,23 @@ const pastelBubbles = [
 ];
 
 interface GoalSuggestionAlgorithmProps {
-  userGoals: string[];
-  allGoals: string[];
+  userGoals?: string[];
+  allGoals?: string[];
   query: string;
   onSuggestionPress: (suggestion: string) => void;
   maxSuggestions?: number;
 }
 
 const GoalSuggestionAlgorithm: React.FC<GoalSuggestionAlgorithmProps> = ({
-  userGoals,
-  allGoals,
+  userGoals = [],
+  allGoals = [],
   query,
   onSuggestionPress,
   maxSuggestions = 8,
 }) => {
-  // Filter and mix suggestions
+  // Ensure suggestions are calculated safely
   const suggestions = useMemo(() => {
     if (!query.trim()) return [];
-    // Filter goals that match the query (case-insensitive, contains)
     const filterGoals = (goals: string[]) =>
       goals.filter(
         g =>
@@ -33,11 +32,10 @@ const GoalSuggestionAlgorithm: React.FC<GoalSuggestionAlgorithmProps> = ({
           g.toLowerCase().includes(query.trim().toLowerCase()) &&
           g.trim().length > 0
       );
-    const userFiltered = filterGoals(userGoals);
-    const allFiltered = filterGoals(allGoals).filter(
+    const userFiltered = filterGoals(Array.isArray(userGoals) ? userGoals : []);
+    const allFiltered = filterGoals(Array.isArray(allGoals) ? allGoals : []).filter(
       g => !userFiltered.includes(g)
     );
-    // Calculate split
     const half = Math.floor(maxSuggestions / 2);
     const userPart = userFiltered.slice(0, half);
     const allPart = allFiltered.slice(0, maxSuggestions - userPart.length);
