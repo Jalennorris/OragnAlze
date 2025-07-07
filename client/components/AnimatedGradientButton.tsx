@@ -5,6 +5,29 @@ import { LinearGradient } from 'expo-linear-gradient';
 const suggestionGradientA = ['#A6BFFF', '#D1B3FF', '#F3E8FF'];
 const suggestionGradientB = ['#B7E0FF', '#C6B8FF', '#F9EFFF'];
 
+function interpolateGradient(a: string[], b: string[], t: number): string[] {
+  const lerp = (start: number, end: number, t: number) => Math.round(start + (end - start) * t);
+  const hexToRgb = (hex: string) => {
+    const h = hex.replace('#', '');
+    return [
+      parseInt(h.substring(0, 2), 16),
+      parseInt(h.substring(2, 4), 16),
+      parseInt(h.substring(4, 6), 16),
+    ];
+  };
+  const rgbToHex = (rgb: number[]) =>
+    '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join('');
+  return a.map((color, i) => {
+    const rgbA = hexToRgb(a[i]);
+    const rgbB = hexToRgb(b[i]);
+    return rgbToHex([
+      lerp(rgbA[0], rgbB[0], t),
+      lerp(rgbA[1], rgbB[1], t),
+      lerp(rgbA[2], rgbB[2], t),
+    ]);
+  });
+}
+
 const AnimatedGradientButton = ({
   suggestionGradientAnim,
   pressed,
@@ -19,29 +42,7 @@ const AnimatedGradientButton = ({
   useEffect(() => {
     const id = suggestionGradientAnim.addListener(({ value }) => {
       try {
-        const a = suggestionGradientA;
-        const b = suggestionGradientB;
-        const lerp = (start: number, end: number, t: number) => Math.round(start + (end - start) * t);
-        const hexToRgb = (hex: string) => {
-          const h = hex.replace('#', '');
-          return [
-            parseInt(h.substring(0, 2), 16),
-            parseInt(h.substring(2, 4), 16),
-            parseInt(h.substring(4, 6), 16),
-          ];
-        };
-        const rgbToHex = (rgb: number[]) =>
-          '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join('');
-        const colors = a.map((color, i) => {
-          const rgbA = hexToRgb(a[i]);
-          const rgbB = hexToRgb(b[i]);
-          return rgbToHex([
-            lerp(rgbA[0], rgbB[0], value),
-            lerp(rgbA[1], rgbB[1], value),
-            lerp(rgbA[2], rgbB[2], value),
-          ]);
-        });
-        setGradientColors(colors);
+        setGradientColors(interpolateGradient(suggestionGradientA, suggestionGradientB, value));
       } catch {
         setGradientColors(suggestionGradientA);
       }
