@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, Animated, ActivityIndicator, Platform, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Pressable, Animated, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
@@ -16,14 +16,6 @@ const loadFonts = async () => {
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
-
-const SIZES = {
-  padding: 20,
-  borderRadius: 10,
-  iconSize: 24,
-  profileImageSize: 120,
-  colorBlockSize: 100,
-};
 
 const colorBlocks = ['#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#F1C40F', '#8E44AD'];
 
@@ -61,7 +53,7 @@ const Header: React.FC = () => {
       duration: 600,
       useNativeDriver: true,
     }).start();
-  }, []);
+  }, [logoAnim]);
 
   const fetchUserInfo = useCallback(async () => {
     setLoading(true);
@@ -77,7 +69,7 @@ const Header: React.FC = () => {
       const data = response.data;
       setCredentials({ profile_pic: data.profile_pic });
       setLoading(false);
-    } catch (err) {
+    } catch {
       setError('Failed to fetch user info');
       setLoading(false);
     }
@@ -207,8 +199,6 @@ const Header: React.FC = () => {
 };
 
 export default Header;
-
-const { width } = Dimensions.get("window");
 
 const styles = StyleSheet.create({
   headerContainer: {

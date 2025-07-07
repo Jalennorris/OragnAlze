@@ -24,11 +24,9 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withSequence, withTiming } from 'react-native-reanimated';
-import { runOnJS } from 'react-native-reanimated';
+import Animated, { FadeIn, useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 
 // Import custom components (assuming they exist)
-import Header from '../components/header'; // Adjust path if needed
 import Navbar from '../components/Navbar'; // Adjust path if needed
 
 // Add a simple color picker (array of color hex codes)
@@ -79,9 +77,6 @@ interface Task {
 type Category = { name: string; color: string };
 
 // --- Prop types for extracted components (if needed) ---
-type HeaderProps = {};
-type NavbarProps = {};
-
 const AddTaskScreen: React.FC = () => {
   // --- State ---
   const [taskName, setTaskName] = useState<string>('');
