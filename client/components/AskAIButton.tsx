@@ -210,29 +210,21 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     }
   }, [isModalVisible, autoAcceptTimeout]);
 
+  // --- Effect: Fetch suggestions when modal opens ---
+  useEffect(() => {
+    if (isModalVisible) {
+      handleFetchSuggestions();
+    }
+  }, [isModalVisible, handleFetchSuggestions]);
+
   // --- Handlers for Modal Open/Close ---
   const openModal = useCallback(() => {
     resetModalState(true);
     setIsModalVisible(true);
-    // Show suggestions automatically if enabled
-    if (showSuggestionsOnOpen && !hasAutoShownSuggestions) {
-      setSuggestionIdeas([]);
-      setShowSuggestions(true);
-      fetchSuggestionIdeas();
-      setHasAutoShownSuggestions(true);
-      setTimeout(() => {
-        setShowSuggestions(false);
-        setSuggestionIdeas([]);
-      }, 2500);
-    }
+    // (Optional: remove the old auto-show logic here)
   }, [
     resetModalState,
-    showSuggestionsOnOpen,
-    fetchSuggestionIdeas,
-    hasAutoShownSuggestions,
-    setShowSuggestions,
-    setSuggestionIdeas,
-    setHasAutoShownSuggestions,
+    setIsModalVisible,
   ]);
 
   const closeModal = useCallback(() => {
@@ -268,6 +260,22 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     }
   }, [feedbackRating, feedbackText]);
 
+  // --- Suggestion Chips Animation ---
+  const suggestionChipsAnim = useRef(new Animated.Value(1)).current;
+  const prevShowChips = useRef<boolean>(true);
+
+  useEffect(() => {
+    const showChips = Array.isArray(suggestionIdeas) && suggestionIdeas.length > 0 && aiQuery.trim().length === 0;
+    if (showChips !== prevShowChips.current) {
+      Animated.timing(suggestionChipsAnim, {
+        toValue: showChips ? 1 : 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+      prevShowChips.current = showChips;
+    }
+  }, [aiQuery, suggestionIdeas, suggestionChipsAnim]);
+
   // --- Render ---
   return (
     <>
@@ -295,7 +303,7 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
           edges={['bottom']}
           style={[
             styles.modalContainerOuter,
-            { height: isFullSize ? '85%' : '65%' }
+            { height: isFullSize ? '90%' : '80%' } // Increased modal height
           ]}
         >
           <KeyboardAvoidingView
@@ -317,7 +325,7 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
               {/* --- Task Display Area --- */}
               <ScrollView
                 ref={scrollViewRef}
-                style={{ flex: 1 }}
+                style={{ flex: 1}}
                 contentContainerStyle={{ paddingBottom: 20 }}
                 showsVerticalScrollIndicator={true}
                 keyboardShouldPersistTaps="handled"
@@ -342,9 +350,41 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
                     styles={styles}
                   />
                 )}
-                <View style={{ height: 20 }} />
               </ScrollView>
 
+              {/* --- Suggestion Chips --- */}
+              <Animated.View
+                style={[
+                  { 
+                    opacity: suggestionChipsAnim,
+                    transform: [
+                      {
+                        scale: suggestionChipsAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.99, 1],
+                        }),
+                      },
+                    ],
+                    height: suggestionChipsAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, 90], // Adjust 48 to your chip container height
+                    }),
+                    overflow: 'hidden',
+                  },
+                  styles.suggestionIdeasContainer,
+                  { marginTop: 0 }
+                ]}
+                pointerEvents={aiQuery.trim().length === 0 ? 'auto' : 'none'}
+              >
+                {Array.isArray(suggestionIdeas) && suggestionIdeas.length > 0 && aiQuery.trim().length === 0 && (
+                  <SuggestionChips
+                    ideas={suggestionIdeas}
+                    pastelGradients={pastelGradients}
+                    onIdeaPress={handleSuggestionIdeaPress}
+                    styles={styles}
+                  />
+                )}
+              </Animated.View>
               {/* --- Input Area (AI Query, Days, Advanced, Surprise, Accept) --- */}
               <TaskInputArea
                 aiQuery={aiQuery}
@@ -374,68 +414,10 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
                 resetModalState={resetModalState}
                 handleAcceptAllTasks={handleAcceptAllTasks}
               />
-              {/* --- Suggestions Button --- */}
-              <Animated.View style={{ transform: [{ scale: suggestionAnim }] }}>
-                <Pressable
-                  style={styles.suggestionButtonWrapper}
-                  onPress={handleFetchSuggestions}
-                  onPressIn={handleSuggestionPressIn}
-                  onPressOut={handleSuggestionPressOut}
-                  accessibilityLabel="Show example prompts for AI task planner"
-                  disabled={isLoading}
-                >
-                  <AnimatedGradientButton
-                    suggestionGradientAnim={suggestionGradientAnim}
-                    pressed={suggestionPressed || isLoading}
-                  >
-                    <Text style={styles.suggestionButtonText}>Suggestions</Text>
-                  </AnimatedGradientButton>
-                </Pressable>
-              </Animated.View>
-              {/* --- Inline Suggestions Chips --- */}
-              {showSuggestions && Array.isArray(suggestionIdeas) && suggestionIdeas.length > 0 && (
-                <View style={styles.suggestionIdeasContainer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
-                    <Text style={styles.suggestionIdeasTitle}>Try one of these:</Text>
-                    <TouchableOpacity
-                      onPress={() => { setShowSuggestions(false); setSuggestionIdeas([]); }}
-                      style={{ marginLeft: 'auto', padding: 8 }}
-                      accessibilityLabel="Hide suggestions"
-                    >
-                      <Ionicons name="close" size={20} color="#AAA" />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.suggestionIdeasScrollWrapper}>
-                    <SuggestionChips
-                      ideas={suggestionIdeas}
-                      pastelGradients={pastelGradients}
-                      onIdeaPress={handleSuggestionIdeaPress}
-                      styles={styles}
-                    />
-                  </View>
-                </View>
-              )}
             </View>
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
-      {/* --- Suggestions Modal (Enhanced, with templates/shortcuts/recents) --- */}
-      <SuggestionModal
-        visible={showSuggestions}
-        onClose={() => { setShowSuggestions(false); setSuggestionIdeas([]); }}
-        onTemplatePress={handleTemplatePress}
-        onShortcutPress={handleShortcutPress}
-        onRecentPress={handleRecentIdeaPress}
-        onIdeaPress={handleSuggestionIdeaPress}
-        templates={TEMPLATES}
-        shortcuts={SHORTCUTS}
-        recent={recentIdeas}
-        ideas={suggestionIdeas}
-        pastelGradients={pastelGradients}
-        numDays={numDays}
-        showOnOpen={showSuggestionsOnOpen}
-        setShowOnOpen={setShowSuggestionsOnOpen}
-      />
 
       {/* --- Feedback Modal --- */}
       <FeedbackModal

@@ -22,15 +22,14 @@ export default function useSuggestions({
     setSuggestionIdeas(SUGGESTION_IDEAS || []);
   }, [SUGGESTION_IDEAS]);
 
+  // Remove or simplify handleFetchSuggestions so it doesn't clear suggestionIdeas
   const handleFetchSuggestions = useCallback(() => {
     setErrorMessage(null);
     setSuggestedTasks([]);
-    setSuggestionIdeas([]);
-    setIsLoading(true);
     setShowSuggestions(true);
     fetchSuggestionIdeas();
-    setIsLoading(false);
-  }, [setErrorMessage, setSuggestedTasks, setSuggestionIdeas, setIsLoading, fetchSuggestionIdeas]);
+    // Do not clear suggestionIdeas or set loading here
+  }, [setErrorMessage, setSuggestedTasks, setShowSuggestions, fetchSuggestionIdeas]);
 
   return {
     suggestionIdeas,

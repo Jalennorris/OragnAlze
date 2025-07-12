@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {
   View,
   Text,
@@ -38,7 +38,22 @@ const TaskInputArea = ({
   suggestedTasks,
   resetModalState,
   handleAcceptAllTasks,
+  
 }: any) => {
+
+  const [minHeight, setMinHeight] = useState(50);
+
+  const handleTextChange = (text: string) => {
+    setAiQuery(text);
+
+    // Smoothly increase minHeight: 50 + 1 per 2 chars over 50, max 120
+    const base = 50;
+    const max = 120;
+    const extra = Math.max(0, text.length - 50);
+    const newHeight = Math.min(max, base + Math.floor(extra / 2));
+    setMinHeight(newHeight);
+  };
+ 
   return (
     <View style={styles.inputArea}>
       {errorMessage && !isLoading && suggestedTasks.length > 0 && (
@@ -142,17 +157,36 @@ const TaskInputArea = ({
 
       {/* Query Input and Submit Button */}
       <View style={styles.inputWrapper}>
-        <TextInput
-          style={styles.inputFieldQuery}
-          placeholder="What's your goal?"
-          placeholderTextColor="#888"
-          value={aiQuery}
-          onChangeText={setAiQuery}
-          multiline
-          editable={!isLoading}
-          blurOnSubmit={true}
-          ref={inputRef}
-        />
+        <View style={{ flex: 1, position: 'relative', justifyContent: 'center' }}>
+          <TextInput
+            style={[
+              styles.inputFieldQuery,
+              { paddingRight: 40, minHeight, fontSize: 18 }, // minHeight must come after any style with height
+            ]}
+            autoCorrect={false}
+            placeholder="What's your goal?"
+            placeholderTextColor="#888"
+            value={aiQuery}
+
+            onChangeText={handleTextChange}
+            multiline
+            editable={!isLoading}
+            blurOnSubmit={true}
+            ref={inputRef}
+          />
+          {/* --- Clear Button inside TextInput --- */}
+          {aiQuery.length > 0 && !isLoading && (
+            <TouchableOpacity
+              style={styles.clearInputButton}
+              onPress={() => resetModalState(false)}
+              accessibilityLabel="Clear generated tasks and retry"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="refresh-outline" size={20} color="#BBB" />
+            </TouchableOpacity>
+          )}
+        </View>
+        {/* ...existing code for stop/generate button... */}
         {isLoading ? (
           <TouchableOpacity
             style={[styles.controlButtonInInput, styles.stopButton]}
@@ -206,29 +240,21 @@ const TaskInputArea = ({
         </View>
       )}
       <View style={styles.actionButtonsContainer}>
-        {suggestedTasks.length > 0 && !isLoading && (
-          <>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.clearButton]}
-              onPress={() => resetModalState(false)}
-              accessibilityLabel="Clear generated tasks and retry"
-            >
-              <Ionicons name="refresh-outline" size={18} color="#FFF" style={{ marginRight: 5 }} />
-              <Text style={styles.actionButtonText}>Clear</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.acceptAllButton]}
-              onPress={handleAcceptAllTasks}
-              accessibilityLabel="Accept all tasks"
-            >
-              <Ionicons name="checkmark-done-outline" size={18} color="#FFF" style={{ marginRight: 5 }} />
-              <Text style={styles.actionButtonText}>Accept All</Text>
-            </TouchableOpacity>
-          </>
-        )}
+        {suggestedTasks.length > 0 && !isLoading ? (
+          // Only show "Accept All" after tasks are generated and reviewed
+          <TouchableOpacity
+            style={[styles.actionButton, styles.acceptAllButton]}
+            onPress={handleAcceptAllTasks}
+            accessibilityLabel="Accept all tasks"
+          >
+            <Ionicons name="checkmark-done-outline" size={18} color="#FFF" style={{ marginRight: 5 }} />
+            <Text style={styles.actionButtonText}>Accept All</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
 };
+
 
 export default TaskInputArea;

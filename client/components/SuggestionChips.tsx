@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ScrollView, TouchableOpacity, Text } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,9 +16,13 @@ const SuggestionChips: React.FC<SuggestionChipsProps> = ({
   styles,
 }) => (
   <ScrollView
-    style={{ maxHeight: 180 }}
-    showsVerticalScrollIndicator={true}
-    contentContainerStyle={styles.suggestionIdeasList}
+    horizontal={true}
+    style={{ maxHeight: undefined, minHeight: 40 }} // remove maxHeight, set minHeight for horizontal chips
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={[
+      styles.suggestionIdeasList,
+      { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }
+    ]}
   >
     {Array.isArray(ideas) ? ideas.map((idea, idx) => (
       <LinearGradient

@@ -69,7 +69,7 @@ const Suggestions: React.FC<SuggestionsProps> = ({ onSuggestionSelect, showTitle
   }, [fetchIdeas]);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={styles.container}>
       {showTitle && (
         <Text style={styles.title}>
           <Ionicons name="bulb-outline" size={22} color="#BB86FC" /> Suggestions for your AI Task Planner
@@ -81,7 +81,11 @@ const Suggestions: React.FC<SuggestionsProps> = ({ onSuggestionSelect, showTitle
           <Text style={styles.loadingText}>Loading ideas...</Text>
         </View>
       ) : (
-        <View style={styles.ideasList}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.ideasList}
+        >
           {ideas.map((idea, idx) => (
             <TouchableOpacity
               key={idx}
@@ -99,9 +103,9 @@ const Suggestions: React.FC<SuggestionsProps> = ({ onSuggestionSelect, showTitle
               </LinearGradient>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       )}
-    </ScrollView>
+    </View>
   );
 };
 
@@ -131,13 +135,12 @@ const styles = StyleSheet.create({
   },
   ideasList: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 4,
   },
   ideaChip: {
-    marginRight: 10,
-    marginBottom: 12,
+    marginRight: 12,
+    marginBottom: 0,
     borderRadius: 18,
     overflow: 'hidden',
   },

@@ -128,7 +128,12 @@ const SuggestionModal: React.FC<SuggestionModalProps> = ({
           {ideas.length > 0 && (
             <>
               <Text style={styles.sectionTitle}>Ideas</Text>
-              <View style={styles.suggestionIdeasList}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.suggestionIdeasList}
+                style={{ marginTop: 4, marginBottom: 8 }}
+              >
                 {ideas.map((idea, idx) => (
                   <LinearGradient
                     key={idx}
@@ -145,7 +150,7 @@ const SuggestionModal: React.FC<SuggestionModalProps> = ({
                     </TouchableOpacity>
                   </LinearGradient>
                 ))}
-              </View>
+              </ScrollView>
             </>
           )}
           {/* Show on open toggle */}
@@ -262,17 +267,14 @@ const styles = StyleSheet.create({
     maxWidth: 110,
   },
   suggestionIdeasList: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    marginTop: 4,
-    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   suggestionIdeaChip: {
     borderRadius: 24,
     paddingVertical: 12,
     paddingHorizontal: 18,
     marginRight: 10,
-    marginBottom: 10,
     minWidth: 140,
     justifyContent: 'center',
     alignItems: 'center',

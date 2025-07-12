@@ -1,7 +1,7 @@
 import { StyleSheet, Platform } from 'react-native';
 
 const styles = StyleSheet.create({
-  // --- Ultra-Modern Floating Button ---
+  // --- Floating AI Button Styles ---
   buttonContainer: {
     position: 'absolute',
     bottom: 38,
@@ -96,7 +96,8 @@ const styles = StyleSheet.create({
     zIndex: -1,
     alignSelf: 'center',
   },
-  // --- Modal ---
+
+  // --- Modal Styles ---
   modalWrapper: {
     justifyContent: 'flex-end',
     margin: 0,
@@ -130,6 +131,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
   },
+
+  // --- Placeholder & Error Styles ---
   scrollContent: {
     flexGrow: 1,
     paddingTop: 10,
@@ -155,6 +158,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 10,
   },
+
+  // --- Task List Styles ---
   taskItem: {
     backgroundColor: '#1E1E1E',
     borderRadius: 12,
@@ -235,6 +240,8 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     padding: 5,
   },
+
+  // --- Input Area Styles ---
   inputArea: {
     paddingTop: 8,
     borderTopWidth: 1,
@@ -292,8 +299,9 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
   inputWrapper: {
+    
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     backgroundColor: '#1E1E1E',
     borderRadius: 12,
     paddingHorizontal: 12,
@@ -329,6 +337,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F44336',
     paddingHorizontal: 20,
   },
+
+  // --- Action Buttons (Accept/Clear) ---
   actionButtonsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -357,6 +367,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
+
+  // --- Suggestions Button & Chips ---
   suggestionButtonWrapper: {
     alignItems: 'center',
     marginTop: 10,
@@ -375,6 +387,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   suggestionIdeasContainer: {
+
+
+    zIndex: 2,
+    height: 65,
     marginTop: 18,
     alignItems: 'flex-start',
     width: '100%',
@@ -418,6 +434,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+
+  // --- Surprise Bubble Styles ---
   surpriseBubble: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -441,6 +459,8 @@ const styles = StyleSheet.create({
     textShadowColor: '#fff',
     textShadowRadius: 2,
   },
+
+  // --- Feedback/Star Styles ---
   modernStarGradient: {
     width: 48,
     height: 48,
@@ -470,6 +490,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.2,
   },
+
+  // --- Build For Me Styles ---
   buildForMeButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -520,6 +542,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+
+  // --- Smart Default Chip Styles ---
   smartDefaultChipGradient: {
     borderRadius: 22,
     padding: 2,
@@ -551,6 +575,8 @@ const styles = StyleSheet.create({
     textShadowColor: '#fff',
     textShadowRadius: 2,
   },
+
+  // --- Shortcut Chips (Horizontal Scroll) ---
   shortcutChipsScrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -587,6 +613,8 @@ const styles = StyleSheet.create({
   shortcutChipTextSelected: {
     color: '#fff',
   },
+
+  // --- Compact Chips (Horizontal Scroll) ---
   compactChipsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -638,6 +666,8 @@ const styles = StyleSheet.create({
   compactShortcutChipSelected: {
     backgroundColor: '#6C47FF',
   },
+
+  // --- Advanced Toggle & Divider ---
   advancedToggle: {
     marginLeft: 4,
     padding: 6,

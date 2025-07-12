@@ -196,13 +196,13 @@ const AITaskItem: React.FC<TaskItemProps> = ({
         toValue: 0,
         duration: 300,
         easing: Easing.elastic(1),
-        useNativeDriver: true,
+        useNativeDriver: true, // opacity supports native driver
       }),
       Animated.timing(animatedHeight, {
         toValue: 0,
         duration: 300,
         easing: Easing.elastic(1),
-        useNativeDriver: false,
+        useNativeDriver: false, // <-- FIX: height does NOT support native driver
       }),
     ]).start(() => callback());
   }, [animatedOpacity, animatedHeight]);
