@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, ScrollView } from 'react-native';
 
 // Add pastel color palette for bubbles
 const pastelBubbles = [
@@ -44,8 +44,11 @@ const GoalSuggestionAlgorithm: React.FC<GoalSuggestionAlgorithmProps> = ({
 
   if (suggestions.length === 0) return null;
 
-  return (
-    <View style={styles.suggestionBubbleContainer}>
+  return (    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.suggestionBubbleContainer}
+    >
       {suggestions.map((s, idx) => (
         <TouchableOpacity
           key={s + idx}
@@ -59,15 +62,16 @@ const GoalSuggestionAlgorithm: React.FC<GoalSuggestionAlgorithmProps> = ({
           <Text style={styles.suggestionBubbleText}>{s}</Text>
         </TouchableOpacity>
       ))}
-    </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   suggestionBubbleContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'center',
+    paddingVertical: 4,
+    // Removed flexWrap and gap for horizontal scroll
     marginTop: 6,
     marginBottom: 10,
     zIndex: 100,

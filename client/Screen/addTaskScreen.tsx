@@ -24,7 +24,8 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withSequence, withTiming } from 'react-native-reanimated';
+import  { FadeIn, useSharedValue, useAnimatedStyle, withSequence, withTiming } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated'; // <-- Add this line
 import { runOnJS } from 'react-native-reanimated';
 
 // Import custom components (assuming they exist)
@@ -165,18 +166,14 @@ const AddTaskScreen: React.FC = () => {
   }, [hideDatePicker]);
 
   const animateButtonPress = React.useCallback((callback?: () => void) => {
-    Animated.sequence([
-      Animated.timing(buttonScale, {
-        toValue: 0.95,
-        duration: 50,
-        useNativeDriver: true,
-      }),
-      Animated.timing(buttonScale, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-    ]).start(callback);
+    buttonScale.value = withSequence(
+      withTiming(0.95, { duration: 50 }),
+      withTiming(1, { duration: 100 }, (finished) => {
+        if (finished && callback) {
+          runOnJS(callback)();
+        }
+      })
+    );
   }, [buttonScale]);
 
   const openAddCategoryModal = React.useCallback(() => {
@@ -700,23 +697,12 @@ const AddTaskScreen: React.FC = () => {
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
-      {/* Floating New Task Button */}
-      {showNewTaskButton && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => setShowNewTaskButton(false)}
-          accessibilityLabel="Add Another Task"
-          accessibilityHint="Start adding a new task"
-          accessibilityRole="button"
-          testID="button-new-task"
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={28} color="#fff" />
-        </TouchableOpacity>
-      )}
+
+     
       <View style={styles.navbarContainer}>
-        <Navbar />
+     
       </View>
+      <Navbar />
     </SafeAreaView>
   );
 };

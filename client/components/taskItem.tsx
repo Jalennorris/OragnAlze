@@ -146,7 +146,6 @@ const AITaskItem: React.FC<TaskItemProps> = ({
 }) => {
   // Animation values
   const animatedOpacity = useRef(new Animated.Value(1)).current;
-  const animatedHeight = useRef(new Animated.Value(150)).current; // Adjust initial height if needed
 
   // Format due date for better readability
   const formattedDueDate = task.deadline
@@ -191,21 +190,13 @@ const AITaskItem: React.FC<TaskItemProps> = ({
 
   // Animate deletion
   const animateDelete = useCallback((callback: () => void) => {
-    Animated.parallel([
-      Animated.timing(animatedOpacity, {
-        toValue: 0,
-        duration: 300,
-        easing: Easing.elastic(1),
-        useNativeDriver: true, // opacity supports native driver
-      }),
-      Animated.timing(animatedHeight, {
-        toValue: 0,
-        duration: 300,
-        easing: Easing.elastic(1),
-        useNativeDriver: false, // <-- FIX: height does NOT support native driver
-      }),
-    ]).start(() => callback());
-  }, [animatedOpacity, animatedHeight]);
+    Animated.timing(animatedOpacity, {
+      toValue: 0,
+      duration: 300,
+      easing: Easing.elastic(1),
+      useNativeDriver: true,
+    }).start(() => callback());
+  }, [animatedOpacity]);
 
   // Loading state for actions
   const [isLoading, setIsLoading] = useState(false);
@@ -237,7 +228,6 @@ const AITaskItem: React.FC<TaskItemProps> = ({
         } catch (error: any) {
           // ...existing code...
           animatedOpacity.setValue(1);
-          animatedHeight.setValue(150);
         } finally {
           setIsLoading(false);
         }
@@ -246,7 +236,7 @@ const AITaskItem: React.FC<TaskItemProps> = ({
       // ...existing code...
       setIsLoading(false);
     }
-  }, [task.taskId, task.taskName, onDelete, animateDelete, animatedOpacity, animatedHeight, onRefresh, isOffline]);
+  }, [task.taskId, task.taskName, onDelete, animateDelete, animatedOpacity, onRefresh, isOffline]);
 
   // Handle task completion toggle with Axios
   const handleToggleCompletion = async () => {
@@ -500,14 +490,14 @@ const AITaskItem: React.FC<TaskItemProps> = ({
             ]
           );
         }}
-        style={styles.deleteButton}
+        style={styles.deleteButton} // Set background to red
         accessibilityRole="button"
         accessibilityLabel="Delete Task"
         accessibilityHint="Deletes this task"
       >
-        <Animated.View style={{ transform: [{ scale }] }}>
+        <Animated.View style={[styles.deleteButtonItems,{ transform: [{ scale }] }]}>
           <Ionicons name="trash-outline" size={24} color="#FFF" />
-          <SwipeIndicator direction="right" />
+        
         </Animated.View>
       </TouchableOpacity>
     );
@@ -534,17 +524,15 @@ const AITaskItem: React.FC<TaskItemProps> = ({
           Haptics.selectionAsync();
           handleToggleCompletion();
         }}
-        style={[styles.completeButton, { backgroundColor: actionColor }]}
+        style={styles.completeButton}
         accessibilityRole="button"
         accessibilityLabel={actionLabel}
         accessibilityHint="Toggles task completion"
       >
-        <Animated.View style={{ transform: [{ scale }] }}>
-          <Ionicons name={actionIcon} size={24} color="#FFF" />
-          <Text style={styles.actionText} allowFontScaling>
-            {actionText}
-          </Text>
-          <SwipeIndicator direction="left" />
+        <Animated.View style={[{ transform: [{ scale }] }, styles.completeButtonItems]}>
+          <Ionicons name={actionIcon} size={35} color="#FFF" />
+          
+     
         </Animated.View>
       </TouchableOpacity>
     );
@@ -620,7 +608,6 @@ const AITaskItem: React.FC<TaskItemProps> = ({
       <Animated.View
         style={{
           opacity: animatedOpacity,
-          height: animatedHeight,
           overflow: 'hidden',
           transform: [{ scale: scaleAnim }],
         }}
@@ -838,6 +825,12 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectTog
     });
   };
 
+  // Add a real onDelete handler (replace with your logic)
+  const handleDelete = (taskId: number) => {
+    // Update your state or call your API here
+    console.log('Delete task', taskId);
+  };
+
   return (
     <>
       {tasks.map((task) => (
@@ -845,7 +838,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectTog
           key={task.taskId.toString()}
           task={task}
           onToggleCompletion={() => console.log('Toggle completion')} // Placeholder - real logic needed in parent
-          onDelete={() => console.log('Delete task')} // Placeholder - real logic needed in parent
+          onDelete={handleDelete} // Pass correct handler
           priorityColor={getPriorityColor(task.priority.toLowerCase() as 'low' | 'medium' | 'high')} // Ensure lowercase priority
           isSelected={selectedTaskIds.includes(task.taskId)} // Pass selection status
           onSelectToggle={onSelectToggle} // Pass selection handler
@@ -1031,6 +1024,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
+  deleteButton: {
+    backgroundColor: '#FF3B30',
+    width: '50%',
+    height: '90%',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+
+
+  },
+  deleteButtonItems :{
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completeButton:{
+    backgroundColor: '#4CAF50',
+    width: '50%',
+    height: '90%',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  completeButtonItems:{
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  }
 });
 
 export default AITaskItem;

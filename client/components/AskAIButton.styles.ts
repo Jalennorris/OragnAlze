@@ -309,17 +309,26 @@ const styles = StyleSheet.create({
     minHeight: 50,
   },
   inputFieldQuery: {
-    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     color: '#E0E0E0',
-    fontSize: 16,
+    fontSize: 14,
     paddingTop: Platform.OS === 'ios' ? 10 : 8,
     paddingBottom: Platform.OS === 'ios' ? 10 : 8,
-    marginRight: 8,
-    maxHeight: 100,
+    marginRight: 2,
+    minHeight: 50,
+ 
     textAlignVertical: 'center',
+    borderRadius: 12,
+    position: 'relative', 
+    justifyContent: 'center' ,
+  
+    right: 10,
+    width: 345
   },
   controlButtonInInput: {
     marginLeft: 8,
+    marginBottom: 0, // changed from 8 to 0 to bring the button up
     borderRadius: 20,
     padding: 10,
     justifyContent: 'center',
@@ -329,13 +338,19 @@ const styles = StyleSheet.create({
   },
   generateButton: {
     backgroundColor: '#6200EE',
+    bottom: 3
   },
   generateButtonDisabled: {
     backgroundColor: '#444',
+    bottom: 3
+  
   },
   stopButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#F44336', // strong red
     paddingHorizontal: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    bottom: 3
   },
 
   // --- Action Buttons (Accept/Clear) ---
@@ -346,18 +361,20 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   actionButton: {
+    position: 'relative',
+    bottom: 240,
     flexDirection: 'row',
     borderRadius: 25,
-    paddingVertical: 12,
+    paddingVertical: 20,
     paddingHorizontal: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
     flex: 1,
     marginHorizontal: 5,
     elevation: 2,
   },
   acceptAllButton: {
-    backgroundColor: '#4CAF50',
+   
   },
   clearButton: {
     backgroundColor: '#FF9800',
@@ -653,8 +670,8 @@ const styles = StyleSheet.create({
   compactShortcutChip: {
     backgroundColor: '#F3E8FF',
     borderRadius: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 3, // reduced from 6
+    paddingHorizontal: 18, // increased from 10
     marginRight: 6,
     alignItems: 'center',
     justifyContent: 'center',
@@ -663,8 +680,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 2,
   },
-  compactShortcutChipSelected: {
-    backgroundColor: '#6C47FF',
+  compactShortcutChipText: {
+    color: '#6C47FF',
+    fontWeight: '600',
+    fontSize: 13, // reduced from 14
+    textAlign: 'center',
+    maxWidth: 110,
   },
 
   // --- Advanced Toggle & Divider ---

@@ -189,7 +189,7 @@ const UpdateEmail: React.FC = () => {
             <Text style={[styles.backButtonText, { color: COLORS.primary }]}>Back</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: COLORS.text }]}>{t('update_email')}</Text>
+          <Text style={[styles.title, { color: COLORS.text }]}>{t('Update Email')}</Text>
 
           <View style={styles.card}>
             <Formik
@@ -203,7 +203,7 @@ const UpdateEmail: React.FC = () => {
                     <Icon name="email" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
                     <TextInput
                       style={styles.input}
-                      placeholder={t('current_email')}
+                      placeholder={t('Current email')}
                       placeholderTextColor={COLORS.placeholder}
                       value={values.currentEmail}
                       onChangeText={handleChange('currentEmail')}
@@ -222,7 +222,7 @@ const UpdateEmail: React.FC = () => {
                     <Icon name="email" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
                     <TextInput
                       style={styles.input}
-                      placeholder={t('new_email')}
+                      placeholder={t(' New email')}
                       placeholderTextColor={COLORS.placeholder}
                       value={values.newEmail}
                       onChangeText={handleChange('newEmail')}
@@ -241,7 +241,7 @@ const UpdateEmail: React.FC = () => {
                     <Icon name="email" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
                     <TextInput
                       style={styles.input}
-                      placeholder={t('confirm_new_email')}
+                      placeholder={t('Confirm new email')}
                       placeholderTextColor={COLORS.placeholder}
                       value={values.confirmEmail}
                       onChangeText={handleChange('confirmEmail')}
@@ -275,7 +275,7 @@ const UpdateEmail: React.FC = () => {
                     {isLoading ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
-                      <Text style={styles.saveButtonText}>{t('save_changes')}</Text>
+                      <Text style={styles.saveButtonText}>{t('Save email changes')}</Text>
                     )}
                   </TouchableOpacity>
                 </View>

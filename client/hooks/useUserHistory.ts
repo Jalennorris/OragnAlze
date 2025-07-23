@@ -41,10 +41,12 @@ export function useUserHistory() {
         if (raw) {
           parsed = JSON.parse(raw);
         }
-        const mergedGoals = [
-          ...filteredBackendGoals,
-          ...parsed.goals.filter(g => !filteredBackendGoals.includes(g)),
-        ].slice(0, 20);
+        const mergedGoals = Array.from(
+          new Set([
+            ...filteredBackendGoals,
+            ...parsed.goals
+          ])
+        ).slice(0, 20);
         setUserHistory({
           ...parsed,
           goals: mergedGoals,
@@ -66,7 +68,9 @@ export function useUserHistory() {
   const addGoalToHistory = (goal: string) => {
     setUserHistory(prev => ({
       ...prev,
-      goals: [goal, ...prev.goals.filter(g => g !== goal)].slice(0, 20),
+      goals: Array.from(
+        new Set([goal, ...prev.goals])
+      ).slice(0, 20),
     }));
   };
 

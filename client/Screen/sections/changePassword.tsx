@@ -55,6 +55,10 @@ const ChangePassword: React.FC = () => {
       Alert.alert('Error', 'New password and confirmation do not match.');
       return false;
     }
+    if (currentPassword === newPassword) {
+      Alert.alert('Error', 'New password must be different from current password.');
+      return false;
+    }
     if (!/^(?=.*[A-Z])(?=.*\d).{8,}$/.test(newPassword)) {
       Alert.alert(
         'Error',
@@ -87,10 +91,23 @@ const ChangePassword: React.FC = () => {
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error: any) {
-      Alert.alert(
-        'Error',
-        error.response?.data?.message || 'Network error. Please check your internet connection and try again.'
-      );
+      // Debug log
+      console.log('Change password error:', error.response);
+
+      const backendMsg = error.response?.data?.message;
+      if (
+        error.response?.status === 401 ||
+        (typeof backendMsg === 'string' && backendMsg.toLowerCase().includes('current password'))
+      ) {
+        Alert.alert('Error', 'The current password you entered is incorrect.');
+      } else if (backendMsg) {
+        Alert.alert('Error', backendMsg);
+      } else {
+        Alert.alert(
+          'Error',
+          'Network error. Please check your internet connection and try again.'
+        );
+      }
     } finally {
       setIsSaving(false);
     }

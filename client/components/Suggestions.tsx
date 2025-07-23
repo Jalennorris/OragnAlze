@@ -8,6 +8,7 @@ import config from '@/src/config';
 interface SuggestionsProps {
   onSuggestionSelect?: (suggestion: string) => void;
   showTitle?: boolean;
+  userHistory?: string[];
 }
 
 const API_MODEL = "microsoft/mai-ds-r1:free";
@@ -47,7 +48,7 @@ const Suggestions: React.FC<SuggestionsProps> = ({ onSuggestionSelect, showTitle
       } catch {
         parsed = [];
       }
-      setIdeas(Array.isArray(parsed) ? parsed : []);
+      setIdeas([...new SetArray.isArray(parsed) ? parsed : []]);
     } catch {
       setIdeas([
         "Plan my week for studying for finals.",

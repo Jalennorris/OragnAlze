@@ -87,16 +87,12 @@ const getButtonStyle = (variant: string): ViewStyle => {
 // Main Welcome Component
 const Welcome: React.FC = () => {
   const navigation = useNavigation();
-  const [typedText, setTypedText] = useState('');
-  const [showCursor, setShowCursor] = useState(true);
   const logo = 'OrganAIze'; // Ensure correct casing
-  const typingSpeed = 200;
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const heroAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(0)).current;
-  const cursorAnim = useRef(new Animated.Value(1)).current;
 
   const tasks = [
     { id: '1', title: 'Smart Scheduling', description: 'Let AI optimize your daily agenda.' },
@@ -104,56 +100,28 @@ const Welcome: React.FC = () => {
     { id: '3', title: 'Progress Insights', description: 'Visualize your productivity trends.' },
   ];
 
-  // Typewriter effect for logo
+  // Animate logo, cards, and buttons in sequence
   useEffect(() => {
-    let index = 0;
-    setTypedText('');
-    setShowCursor(true);
-
-    const interval = setInterval(() => {
-      if (index < logo.length - 1) {
-        setTypedText((prev) => prev + logo[index]);
-        index++;
-      } else {
-        clearInterval(interval);
-        setTimeout(() => setShowCursor(false), 600);
-        Animated.timing(heroAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }).start();
-        Animated.timing(cardAnim, {
+    Animated.timing(heroAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start(() => {
+      Animated.timing(cardAnim, {
+        toValue: 1,
+        duration: 800,
+        delay: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 800,
           delay: 200,
           useNativeDriver: true,
         }).start();
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 800,
-          delay: 400,
-          useNativeDriver: true,
-        }).start();
-      }
-    }, typingSpeed);
-
-    return () => {
-      clearInterval(interval);
-      setShowCursor(false);
-    };
-  }, [logo, typingSpeed, heroAnim, cardAnim, fadeAnim]);
-
-  // Blinking cursor animation
-  useEffect(() => {
-    if (!showCursor) return;
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(cursorAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
-        Animated.timing(cursorAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
-      ])
-    ).start();
-    return () => cursorAnim.stopAnimation();
-  }, [showCursor, cursorAnim]);
+      });
+    });
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -169,10 +137,7 @@ const Welcome: React.FC = () => {
             style={[
               styles.heroContainer,
               {
-                opacity: heroAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.7, 1],
-                }),
+                opacity: heroAnim,
                 transform: [
                   {
                     translateY: heroAnim.interpolate({
@@ -185,18 +150,7 @@ const Welcome: React.FC = () => {
             ]}
           >
             <Typography variant="hero" style={styles.logoText}>
-              {typedText}
-              {showCursor ? (
-                <Animated.Text
-                  style={{
-                    opacity: cursorAnim,
-                    color: COLORS.accent,
-                    fontWeight: 'bold',
-                  }}
-                >
-                  |
-                </Animated.Text>
-              ) : null}
+              {logo}
             </Typography>
             <Typography variant="subtitle" style={styles.heroSubtitle}>
               AI-powered productivity, reimagined.
@@ -258,7 +212,9 @@ const Welcome: React.FC = () => {
               title="Already have an account? Log In"
               onPress={() => navigation.navigate('login')}
               variant="link"
-              textStyle={{ color: COLORS.white, fontSize: 16 }}
+              textStyle={{ color: COLORS.white, fontSize: 16, textDecorationLine: 'underline', fontWeight: 500 }}
+              style={{marginTop: 8, paddingVertical:8}}
+
             />
           </Animated.View>
         </View>

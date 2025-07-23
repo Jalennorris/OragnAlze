@@ -812,7 +812,7 @@ const TaskDetail: React.FC = () => {
                     activeOpacity={0.85}
                   >
                     <Ionicons name="add" size={22} color="#fff" />
-                    <Text style={styles.fabInlineText}>Add Subtask</Text>
+                   
                   </TouchableOpacity>
                   {subtasksLoading ? (
                     <ActivityIndicator size="small" color={MODERN_COLORS.accent} style={{ marginTop: 24 }} />

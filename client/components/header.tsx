@@ -87,6 +87,14 @@ const Header: React.FC = () => {
     fetchUserInfo();
   }, [fetchUserInfo, retryCount]);
 
+  useEffect(() => {
+    // Auto-refresh every 60 seconds (background update)
+    const intervalId = setInterval(() => {
+      fetchUserInfo();
+    }, 60000);
+    return () => clearInterval(intervalId);
+  }, [fetchUserInfo]);
+
   const handleRetry = () => setRetryCount((c) => c + 1);
 
   const handleProfilePress = () => {

@@ -964,8 +964,9 @@ const CalendarScreen: React.FC = () => {
               </View>
             </Animated.View>
           </Modal>
-          <NavBar />
+         
         </View>
+        <NavBar />
       </SafeAreaView>
     </LinearGradient>
   );

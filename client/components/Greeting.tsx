@@ -207,9 +207,12 @@ const FloatingLabelInput: React.FC<{
   };
   return (
     <View style={{ position: 'relative', width: '100%' }}>
-      <Animated.Text style={labelStyle} pointerEvents="none">
-        {placeholder}
-      </Animated.Text>
+      {/* Only show label if value is empty */}
+      {(!value || value.length === 0) && (
+        <Animated.Text style={labelStyle} pointerEvents="none">
+          {placeholder}
+        </Animated.Text>
+      )}
       <TextInput
         ref={inputRef}
         style={[
@@ -553,7 +556,7 @@ const Greeting: React.FC = () => {
                 editable={!isLoading}
                 error={!!error}
                 inputRef={textInputRef}
-                placeholder="Your Name"
+                placeholder='Enter your name'
                 maxLength={MAX_NAME_LENGTH}
               />
             )}

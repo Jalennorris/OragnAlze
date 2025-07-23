@@ -14,6 +14,7 @@ import {
   Modal,
   FlatList,
   SafeAreaView,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
@@ -62,8 +63,24 @@ const SIZES = {
 };
 
 // Predefined colors for profile picture selection
-const colorBlocks = ['#FF5733', '#33FF57', '#3357FF', '#FF33A1', '#F1C40F', '#8E44AD'];
-
+const colorBlocks = [
+  '#FF5733', // Existing
+  '#33FF57', // Existing
+  '#3357FF', // Existing
+  '#FF33A1', // Existing
+  '#F1C40F', // Existing
+  '#8E44AD', // Existing
+  '#1ABC9C', // Teal
+  '#3498DB', // Light Blue
+  '#E74C3C', // Red
+  '#2ECC71', // Green
+  '#9B59B6', // Purple
+  '#34495E', // Dark Gray-Blue
+  '#F39C12', // Orange
+  '#D35400', // Dark Orange
+  '#BDC3C7', // Light Gray
+  '#7F8C8D', // Gray
+];
 // --- Validation Schema ---
 const profileSchema = Yup.object().shape({
   firstName: Yup.string().required('First name is required'),
@@ -80,6 +97,7 @@ const BackButton = ({ onPress }: { onPress: () => void }) => (
 );
 
 const ProfileImage = ({ uri, color, onPress }: { uri?: string; color?: string; onPress: () => void }) => (
+  
   <TouchableOpacity
     onPress={onPress}
     style={[
@@ -134,7 +152,11 @@ const ProfileImage = ({ uri, color, onPress }: { uri?: string; color?: string; o
 // --- Main EditProfile Component ---
 const EditProfile: React.FC = () => {
   // --- State Variables ---
-  // profileImage now stores EITHER a local file URI (if newly selected) OR a public URL (if fetched/uploaded)
+  // profileImage: stores either a local file URI (if newly selected) or a public URL (if fetched/uploaded)
+  // selectedColor: stores the selected color hex for profile picture
+  // isLoading: indicates loading state for async actions
+  // isModalVisible: controls visibility of the color selection modal
+  // credentials: stores user profile info
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -146,45 +168,25 @@ const EditProfile: React.FC = () => {
     profilePic: null, // This should store the public URL or color hex from the DB
     displayName: '',
   });
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const navigation = useNavigation();
 
   useEffect(() => {
     getUserInfo();
-    // loadProfilePreference is less critical now if getUserInfo correctly sets the initial state from DB
-    // It might still be useful as a fallback if getUserInfo fails or has no pic initially
-    // loadProfilePreference();
+    // Optionally loadProfilePreference as fallback if needed
   }, []);
 
   // --- Helper Function ---
-  // Checks if a string is a local file URI
+  // Checks if a string is a local file URI (used to determine if image needs upload)
   const isLocalFileUri = (uri: string | null): boolean => {
     return !!uri && (uri.startsWith('file://') || uri.startsWith('content://'));
   };
 
-
   // --- Async Functions ---
 
-  // Load/Save preference might need adjustment. Now saving the *public URL* or color is more important.
-  const loadProfilePreference = async () => {
-    try {
-      // Preference stored could be a public URL or a color hex
-      const savedPreference = await AsyncStorage.getItem('profilePreference');
-      if (savedPreference) {
-        if (savedPreference.startsWith('#')) {
-          setSelectedColor(savedPreference);
-          setProfileImage(null);
-        } else {
-          // Assume it's a URL (could be local URI if saved before upload logic was added)
-          setProfileImage(savedPreference);
-          setSelectedColor(null);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load profile preference:', error);
-    }
-  };
-
+ 
+  // Saves profile picture/color preference to AsyncStorage
   const saveProfilePreference = async (preference: string | null) => {
     try {
       // Save the public URL or color hex
@@ -198,6 +200,7 @@ const EditProfile: React.FC = () => {
     }
   };
 
+  // Fetches user info from backend and sets local state
   const getUserInfo = async () => {
     setIsLoading(true);
     try {
@@ -215,6 +218,7 @@ const EditProfile: React.FC = () => {
         profilePic: data.profile_pic || null, // Store the URL/color from DB
         displayName: data.username || '',
       });
+      console.log('Fetched user info:', setCredentials);
 
       // Set initial display state based on fetched data (URL or color)
       if (data.profile_pic) {
@@ -242,196 +246,61 @@ const EditProfile: React.FC = () => {
     }
   };
 
-  // Handle image selection - Sets local file URI to state AFTER RESIZING
-  const handleImageUpload = useCallback(async () => {
-    const libraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (libraryPermission.status !== 'granted') {
-      Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to upload an image.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1, // Pick in highest quality, resize later
-    });
+  // --- Image/Color Selection Handlers (image upload/take photo are unused, but left for reference) ---
+  // Handle image selection from library (unused)
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const originalUri = result.assets[0].uri;
 
-      try {
-        // Resize the image
-        const manipulatedImage = await manipulateAsync(
-          originalUri,
-          [{ resize: { width: 800 } }], // Resize width to 800px, height adjusts automatically
-          { compress: 0.7, format: SaveFormat.JPEG } // Compress and save as JPEG
-        );
-
-        const imageUri = manipulatedImage.uri; // Use the URI of the resized image
-        setProfileImage(imageUri); // Set the RESIZED local URI
-        setSelectedColor(null);
-        setIsModalVisible(false);
-        // Don't save local URI to preference, wait for successful upload
-      } catch (error) {
-        console.error("Error resizing image: ", error);
-        Alert.alert("Error", "Could not process the selected image.");
-      }
-    }
-  }, [setIsModalVisible, setProfileImage, setSelectedColor]);
-
-  // Handle taking photo - Sets local file URI to state AFTER RESIZING
-  const handleTakePhoto = useCallback(async () => {
-    const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-    if (cameraPermission.status !== 'granted') {
-      Alert.alert('Permission Required', 'Sorry, we need camera permissions to take a photo.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1, // Capture in highest quality, resize later
-    });
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const originalUri = result.assets[0].uri;
-
-      try {
-        // Resize the image
-        const manipulatedImage = await manipulateAsync(
-          originalUri,
-          [{ resize: { width: 800 } }], // Resize width to 800px, height adjusts automatically
-          { compress: 0.7, format: SaveFormat.JPEG } // Compress and save as JPEG
-        );
-
-        const imageUri = manipulatedImage.uri; // Use the URI of the resized image
-        setProfileImage(imageUri); // Set the RESIZED local URI
-        setSelectedColor(null);
-        setIsModalVisible(false);
-        // Don't save local URI to preference, wait for successful upload
-      } catch (error) {
-        console.error("Error resizing image: ", error);
-        Alert.alert("Error", "Could not process the taken photo.");
-      }
-    }
-  }, [setIsModalVisible, setProfileImage, setSelectedColor]);
-
-  // Handle color selection
+  // Handle color selection for profile picture
   const handleColorSelect = useCallback((color: string) => {
     setSelectedColor(color);
     setProfileImage(null); // Clear any selected image URI/URL
     setIsModalVisible(false);
-    // Save color preference immediately (it doesn't need uploading)
     saveProfilePreference(color);
   }, [setIsModalVisible, setProfileImage, setSelectedColor]);
 
-  // *** MODIFIED: Save profile picture (Uploads image or saves color) ***
+  // --- Save Profile Picture (color only, using JSON) ---
+  // Handles saving the selected color as the profile picture using JSON
   const handleSaveProfilePicture = async () => {
+    setIsLoading(true);
     const userId = await AsyncStorage.getItem('userId');
     if (!userId) {
       Alert.alert('Error', 'User ID not found. Please log in again.');
       return;
     }
 
+    if (!selectedColor) {
+      Alert.alert('Info', 'Please select a color for your profile picture.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      let profilePicValue: string | null = null; // This will hold the value to save (URL or color)
-      let response: any; // To store axios response
-
-      // --- Case 1: A new local image was selected (now it's the resized one) ---
-      if (isLocalFileUri(profileImage)) {
-        console.log("Uploading resized image:", profileImage); // Log the potentially resized URI
-        // Create FormData to send the image file
-
-        // Extract filename and type from the potentially manipulated URI
-        const uriParts = profileImage.split('/');
-        const fileNameWithPotentialQuery = uriParts[uriParts.length - 1];
-        // Remove potential query parameters from Expo Manipulator URIs if present
-        const fileName = fileNameWithPotentialQuery.split('?')[0];
-        // Determine file type - Expo Manipulator often saves as JPEG or PNG
-        let fileType = fileName.split('.').pop()?.toLowerCase();
-        if (!fileType || !['jpeg', 'jpg', 'png'].includes(fileType)) {
-            fileType = 'jpeg'; // Default to jpeg if unsure or format changed
-            console.warn("Could not determine file type from URI, defaulting to jpeg");
+      // Use the dedicated endpoint for profile picture only
+      const response = await axios.patch(
+        `http://localhost:8080/api/users/${userId}/profile-pic`,
+        { profile_pic: selectedColor },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
         }
-        const mimeType = `image/${fileType === 'jpg' ? 'jpeg' : fileType}`;
+      );
+      console.log('Updated profile picture:', response.data);
 
-        const formData = new FormData();
-        formData.append('profile_pic_file', { // Use a distinct field name for the file
-          uri: profileImage,
-          name: fileName,
-          type: mimeType, // Use determined mime type
-        } as any); // Type assertion needed for React Native FormData
-
-        // Add other fields if your backend expects them in the same request
-        // formData.append('userId', userId);
-
-        // Make the PATCH request with FormData
-        response = await axios.patch(
-          `http://localhost:8080/api/users/${userId}/profile-pic`, // *** SUGGESTION: Use a dedicated endpoint for file upload ***
-          formData
-          // No headers: axios will set the correct multipart boundary
-        );
-
-        // --- Backend should return the new public URL ---
-        if (response.data && response.data.profile_pic_url) {
-           profilePicValue = response.data.profile_pic_url; // Get the URL from response
-           console.log("Upload successful, new URL:", profilePicValue);
-           // Update state with the *new public URL*
-           setProfileImage(profilePicValue);
-           setSelectedColor(null); // Ensure color is cleared
-        } else {
-           throw new Error('Image uploaded, but no URL was returned from the server.');
-        }
-
-      }
-      // --- Case 2: A color was selected ---
-      else if (selectedColor) {
-        console.log("Saving selected color:", selectedColor);
-        profilePicValue = selectedColor;
-        // Send the color hex directly in the JSON payload
-        response = await axios.patch(
-          `http://localhost:8080/api/users/${userId}/profile-pic`,
-          {},
-          { params: { profile_pic: selectedColor } }
-        );
-         // Update state
-         setProfileImage(null); // Ensure image is cleared
-      }
-      // --- Case 3: No change or image is already a URL (Optional: could skip save) ---
-      else {
-         console.log("No new image or color selected to save.");
-         // Optionally, you could still PATCH other data if needed, or just return
-         // For this function focused on the picture, we can just show success if nothing changed
-         Alert.alert('Info', 'No profile picture change detected.');
-         setIsLoading(false);
-         return; // Exit early
-      }
-
-      // --- Post-Save Updates (if upload/color save happened) ---
-      if (profilePicValue !== undefined) { // Check if a value was set (either URL or color)
-        // Update credentials state
-        setCredentials(prev => ({ ...prev, profilePic: profilePicValue }));
-        // Save the final value (URL or color) to AsyncStorage
-        await saveProfilePreference(profilePicValue);
-        Alert.alert('Success', 'Profile picture updated successfully!');
-      }
-
+      setProfileImage(null); // Ensure image is cleared
+      setCredentials(prev => ({ ...prev, profilePic: selectedColor }));
+    
+      await saveProfilePreference(selectedColor);
+      Alert.alert('Success', 'Profile picture updated successfully!');
     } catch (error: any) {
       console.error('Failed to save profile picture:', error);
       let errorMessage = 'Failed to update profile picture. Please try again.';
       if (error.response) {
-        // Server responded with a status code outside 2xx range
-        console.error("Server Error Data:", error.response.data);
-        console.error("Server Error Status:", error.response.status);
         errorMessage = `Server error: ${error.response.data?.message || error.response.status}`;
       } else if (error.request) {
-        // Request was made but no response received
-        console.error("Network Error:", error.request);
         errorMessage = 'Network error. Please check your connection.';
       } else {
-        // Something else happened in setting up the request
-        console.error('Error', error.message);
         errorMessage = error.message;
       }
       Alert.alert('Error', errorMessage);
@@ -440,15 +309,8 @@ const EditProfile: React.FC = () => {
     }
   };
 
-
-  // Handle saving the entire form (first name, last name, email)
-  // NOTE: This function currently DOES NOT handle image uploads.
-  // It sends the current `profilePicValue` (which might be a local URI if not saved yet).
-  // For consistency, you might want to:
-  // 1. Ensure the picture is saved *first* using handleSaveProfilePicture.
-  // 2. OR replicate the image upload logic within this function if a new image was selected.
-  // 3. OR modify the backend PATCH /api/users/:userId to also accept multipart/form-data.
-  // Approach 1 (saving picture first) is often simpler.
+  // --- Save Profile Info (name, email, etc) ---
+  // Handles saving the user's profile info (first name, last name, email)
   const handleSaveChanges = async (values: { firstName: string; lastName: string; email: string }) => {
     setIsLoading(true);
     try {
@@ -484,6 +346,7 @@ const EditProfile: React.FC = () => {
           firstName: values.firstName,
           lastName: values.lastName,
           email: values.email,
+          profilePic: profilePicValue
           // profilePic is already updated if handleSaveProfilePicture was called
       }));
 
@@ -499,7 +362,15 @@ const EditProfile: React.FC = () => {
     }
   };
 
+  // Refresh handler
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    await getUserInfo();
+    setIsRefreshing(false);
+  };
+
   // --- Render Functions ---
+  // Renders a selectable color block for the modal
   const renderColorBlock = ({ item }: { item: string }) => (
     <TouchableOpacity
       style={[
@@ -529,7 +400,13 @@ const EditProfile: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
       >
-        <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
+          }
+        >
           <BackButton onPress={() => navigation.goBack()} />
           <Text style={styles.title}>Edit Profile</Text>
 
@@ -653,11 +530,13 @@ const EditProfile: React.FC = () => {
           >
             <View style={styles.modalOverlay}>
               <View style={styles.modalContainer}>
+                {/* Modal drag indicator */}
                 <View style={styles.dragIndicatorOuter}>
                   <View style={styles.dragIndicator} />
                 </View>
                 <Text style={styles.modalTitle}>Choose Profile Picture</Text>
-                <Text style={styles.modalSubtitle}>Select a color, upload an image, or take a photo</Text>
+                <Text style={styles.modalSubtitle}>Select a color for your profile picture</Text>
+                {/* Color selection grid */}
                 <FlatList
                   data={colorBlocks}
                   renderItem={renderColorBlock}
@@ -665,26 +544,7 @@ const EditProfile: React.FC = () => {
                   numColumns={3}
                   contentContainerStyle={styles.colorListContainer}
                 />
-                <TouchableOpacity style={styles.modalButton} onPress={handleImageUpload} activeOpacity={0.7}>
-                  <LinearGradient
-                    colors={[COLORS.gradientStart, COLORS.gradientEnd]}
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  />
-                  <Icon name="photo-library" size={SIZES.iconSize} color={COLORS.background} style={styles.buttonIcon} />
-                  <Text style={styles.modalButtonText}>Upload from Library</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalButton} onPress={handleTakePhoto} activeOpacity={0.7}>
-                  <LinearGradient
-                    colors={[COLORS.gradientStart, COLORS.gradientEnd]}
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  />
-                  <Icon name="photo-camera" size={SIZES.iconSize} color={COLORS.background} style={styles.buttonIcon} />
-                  <Text style={styles.modalButtonText}>Take Photo</Text>
-                </TouchableOpacity>
+                {/* Cancel button */}
                 <TouchableOpacity style={styles.closeButton} onPress={() => setIsModalVisible(false)} activeOpacity={0.7}>
                   <Text style={styles.closeButtonText}>Cancel</Text>
                 </TouchableOpacity>

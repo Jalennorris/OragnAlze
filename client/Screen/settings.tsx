@@ -141,6 +141,7 @@ const Settings: React.FC = () => {
   const [email, setEmail] = React.useState('');
   const [profilePicColor, setProfilePicColor] = React.useState<string | undefined>(undefined);
 
+
   // Parallax for profile header
   const scrollY = React.useRef(new Animated.Value(0)).current;
   const headerTranslate = scrollY.interpolate({
@@ -301,17 +302,21 @@ const Settings: React.FC = () => {
       );
     });
 
-    // Fetch user info
-    axios.get('http://localhost:8080/api/users/95')
-      .then(res => {
-        setFirstname(res.data.firstname || '');
-        setLastname(res.data.lastname || '');
-        setEmail(res.data.email || '');
-        setProfilePicColor(res.data.profile_pic || undefined);
-      })
-      .catch(err => {
-        console.error('Failed to fetch user info', err);
-      });
+    // Move async code into an IIFE
+    (async () => {
+      const userId = await AsyncStorage.getItem('userId');
+      // Fetch user info
+      axios.get(`http://localhost:8080/api/users/${userId}`)
+        .then(res => {
+          setFirstname(res.data.firstname || '');
+          setLastname(res.data.lastname || '');
+          setEmail(res.data.email || '');
+          setProfilePicColor(res.data.profile_pic || undefined);
+        })
+        .catch(err => {
+          console.error('Failed to fetch user info', err);
+        });
+    })();
 
     return () => {
       subscription.remove();
@@ -571,7 +576,7 @@ const Settings: React.FC = () => {
                   ]}
                 >
                   <Animated.Image
-                    source={{ uri: AVATAR_PLACEHOLDER }}
+                    source={{ uri: profilePicColor }}
                     style={[
                       modernStyles.avatar,
                       { transform: [{ scale: avatarScale }] },
@@ -585,20 +590,7 @@ const Settings: React.FC = () => {
                     ]}
                     accessibilityLabel="User avatar"
                   />
-                  <TouchableOpacity
-                    style={[
-                      modernStyles.avatarEditBtn,
-                      isDarkModeEnabled && {
-                        backgroundColor: '#818cf8',
-                        borderColor: '#232526',
-                      },
-                    ]}
-                    onPress={animateAvatar}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Change avatar"
-                  >
-                    <Icon name="photo-camera" size={18} color="#fff" />
-                  </TouchableOpacity>
+                 
                 </Animated.View>
                 <Text
                   style={[

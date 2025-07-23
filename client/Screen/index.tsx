@@ -278,10 +278,10 @@ const HomeScreen: React.FC = () => {
 
         if (online) {
           const userId = await AsyncStorage.getItem('userId');
-          if (!userId) {
+           if (!userId) {
             navigation.navigate("login");
             throw new Error("User ID not found");
-          }
+          } 
 
           const apiUrl = `http://localhost:8080/api/tasks/user/${userId}`;
           const response = await fetch(apiUrl);
@@ -755,7 +755,7 @@ const HomeScreen: React.FC = () => {
           <View style={styles.taskcontainer}>
             {showSpinner && !refreshing ? (
               <Loader colors={COLORS} />
-            ) : error && !refreshing ? (
+            ) : error && !refreshing && tasks.length > 0 ? (
               <ErrorState
                 errorMessage="Something went wrong!"
                 onRetry={() => {
@@ -764,7 +764,7 @@ const HomeScreen: React.FC = () => {
                 }}
                 colors={COLORS}
               />
-            ) : tasks.length > 0 ? (
+            ) : tasks.length > 0 || tasks.length === 0 ? (
               <>
                 <View style={styles.iconsContainer}>
                   <SearchBar

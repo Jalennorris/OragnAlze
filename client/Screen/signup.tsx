@@ -126,7 +126,7 @@ const Signup: React.FC = () => {
       
       console.log('Successfully signed up:', response.data);
       setLoading(false);
-      navigation.navigate('/'); // Redirect to home or login page after signup
+      navigation.navigate('login'); // Redirect to home or login page after signup
     } catch (error) {
       console.error('Signup failed:', error);
       setError('Signup failed. Please try again.');
@@ -141,147 +141,155 @@ const Signup: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={60}
-      >
-        <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.container}>
-          <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-            <Ionicons
-              name="arrow-back"
-              size={28}
-              color={COLORS.primary}
-              onPress={() => navigation.navigate('welcome')}
-              style={styles.backButton}
-              accessibilityRole="button"
-              accessibilityHint="Go back to welcome screen"
-            />
+      <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.gradient}>
+        <KeyboardAvoidingView
+          style={{ flex: 1, width: '100%' }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={60}
+        >
+          {/* Back Button */}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.navigate('welcome')}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            accessibilityHint="Navigates to the welcome screen"
+          >
+            <Ionicons name="arrow-back" size={28} color={COLORS.white} />
+          </TouchableOpacity>
+          {/* Logo/Title Section */}
+          <View style={styles.logoContainer}>
+            <Ionicons name="rocket-outline" size={40} color={COLORS.white} style={{ marginBottom: 8 }} />
+            <Text style={styles.brandTitle}>OrganAIze</Text>
+          </View>
+          {/* Card */}
+          <Animated.View style={[
+            styles.card,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+          ]}>
             <Text style={styles.title}>Create Your Account</Text>
             <View style={styles.inputContainer}>
+              {/* First Name */}
               <TextInput
                 placeholder="First Name"
-                placeholderTextColor="#b0b0b0"
+                placeholderTextColor="#bbb"
                 style={styles.input}
                 value={credentials.firstname}
                 onChangeText={(text) => handleChange('firstname', text)}
                 accessibilityLabel="First Name input"
-                accessibilityHint="Enter your first name"
                 returnKeyType="next"
               />
+              {/* Last Name */}
               <TextInput
                 placeholder="Last Name"
-                placeholderTextColor="#b0b0b0"
+                placeholderTextColor="#bbb"
                 style={styles.input}
                 value={credentials.lastname}
                 onChangeText={(text) => handleChange('lastname', text)}
                 accessibilityLabel="Last Name input"
-                accessibilityHint="Enter your last name"
                 returnKeyType="next"
               />
+              {/* Username */}
               <TextInput
                 placeholder="Username"
-                placeholderTextColor="#b0b0b0"
+                placeholderTextColor="#bbb"
                 style={styles.input}
                 value={credentials.username}
                 onChangeText={(text) => handleChange('username', text)}
                 accessibilityLabel="Username input"
-                accessibilityHint="Choose a username"
-                returnKeyType="next"
                 autoCapitalize="none"
+                returnKeyType="next"
               />
+              {/* Email */}
               <TextInput
                 placeholder="Email"
-                placeholderTextColor="#b0b0b0"
+                placeholderTextColor="#bbb"
                 style={styles.input}
                 value={credentials.email}
                 onChangeText={(text) => handleChange('email', text)}
                 keyboardType="email-address"
                 accessibilityLabel="Email input"
-                accessibilityHint="Enter your email address"
-                returnKeyType="next"
                 autoCapitalize="none"
+                returnKeyType="next"
               />
-              <View style={styles.passwordRow}>
+              {/* Password */}
+              <View style={{ position: 'relative' }}>
                 <TextInput
                   placeholder="Password"
-                  placeholderTextColor="#b0b0b0"
+                  placeholderTextColor="#bbb"
                   secureTextEntry={!showPassword}
-                  style={[styles.input, { flex: 1 }]}
+                  style={styles.input}
                   value={credentials.password}
                   onChangeText={(text) => handleChange('password', text)}
                   accessibilityLabel="Password input"
-                  accessibilityHint="Enter your password"
-                  returnKeyType="next"
                   autoCapitalize="none"
+                  returnKeyType="next"
                 />
                 <TouchableOpacity
-                  onPress={() => setShowPassword((prev) => !prev)}
                   style={styles.eyeIcon}
+                  onPress={() => setShowPassword((prev) => !prev)}
                   accessibilityLabel={showPassword ? "Hide password" : "Show password"}
                 >
                   <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} color={COLORS.primary} />
                 </TouchableOpacity>
               </View>
-              <View style={styles.passwordRow}>
+              {/* Confirm Password */}
+              <View style={{ position: 'relative' }}>
                 <TextInput
                   placeholder="Confirm Password"
-                  placeholderTextColor="#b0b0b0"
+                  placeholderTextColor="#bbb"
                   secureTextEntry={!showConfirmPassword}
-                  style={[styles.input, { flex: 1 }]}
+                  style={styles.input}
                   value={credentials.confirmPassword}
                   onChangeText={(text) => handleChange('confirmPassword', text)}
                   accessibilityLabel="Confirm Password input"
-                  accessibilityHint="Re-enter your password"
-                  returnKeyType="done"
                   autoCapitalize="none"
+                  returnKeyType="done"
                 />
                 <TouchableOpacity
-                  onPress={() => setShowConfirmPassword((prev) => !prev)}
                   style={styles.eyeIcon}
+                  onPress={() => setShowConfirmPassword((prev) => !prev)}
                   accessibilityLabel={showConfirmPassword ? "Hide password" : "Show password"}
                 >
                   <Ionicons name={showConfirmPassword ? "eye-off" : "eye"} size={22} color={COLORS.primary} />
                 </TouchableOpacity>
               </View>
+              {/* Error */}
               {error && (
-                <View style={styles.errorBox}>
-                  <Ionicons name="alert-circle" size={18} color={COLORS.error} style={{ marginRight: 6 }} />
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
+                <Text style={styles.errorText} accessibilityLiveRegion="polite">{error}</Text>
               )}
-              <TouchableOpacity
-                style={[styles.button, loading && styles.buttonDisabled]}
-                onPress={handleSignup}
-                accessibilityRole="button"
-                accessibilityHint="Sign up for a new account"
-                disabled={loading}
-                activeOpacity={0.85}
-              >
-                {loading ? (
-                  <ActivityIndicator size="small" color={COLORS.white} />
-                ) : (
+              {/* Sign Up Button */}
+              {loading ? (
+                <ActivityIndicator size="large" color={COLORS.primary} accessibilityLabel="Loading" style={{ marginTop: 10 }} />
+              ) : (
+                <TouchableOpacity
+                  style={styles.button}
+                  onPress={handleSignup}
+                  accessibilityRole="button"
+                  accessibilityLabel="Sign Up"
+                  accessibilityHint="Sign up for a new account"
+                  disabled={loading}
+                >
                   <Text style={styles.buttonText}>Sign Up</Text>
-                )}
-              </TouchableOpacity>
+                </TouchableOpacity>
+              )}
             </View>
-            <View style={styles.dividerRow}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>or continue with</Text>
-              <View style={styles.divider} />
-            </View>
+            {/* Divider */}
+            <Text style={styles.orText}>or continue with</Text>
+            {/* Google Button */}
             <TouchableOpacity
               style={styles.googleButton}
               onPress={() => promptAsync()}
-              disabled={!request}
+              disabled={!request || loading}
               accessibilityRole="button"
+              accessibilityLabel="Sign Up with Google"
               accessibilityHint="Sign up with your Google account"
-              activeOpacity={0.85}
             >
-              <Ionicons name="logo-google" size={22} color={COLORS.white} style={{ marginRight: 8 }} />
+              <Ionicons name="logo-google" size={22} color={COLORS.primary} />
               <Text style={styles.googleButtonText}>Sign Up with Google</Text>
             </TouchableOpacity>
-            <Text style={styles.text}>
+            {/* Login Link */}
+            <Text style={styles.signupText}>
               Already have an account?{' '}
               <Text
                 style={styles.linkText}
@@ -293,8 +301,8 @@ const Signup: React.FC = () => {
               </Text>
             </Text>
           </Animated.View>
-        </LinearGradient>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
     </SafeAreaView>
   );
 };
@@ -304,165 +312,138 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.primary,
   },
-  container: {
+  gradient: {
     flex: 1,
-    justifyContent: 'flex-start',
+    width: '100%',
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  card: {
-    width: '92%',
-    backgroundColor: COLORS.white,
-    borderRadius: 28,
-    paddingVertical: 28,
-    paddingHorizontal: 22,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.13,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-    marginBottom: 18,
   },
   backButton: {
     position: 'absolute',
-    top: 18,
-    left: 18,
-    zIndex: 2,
-    backgroundColor: '#f2f2f2',
-    borderRadius: 16,
-    padding: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
+    top: 50,
+    left: 24,
+    zIndex: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 20,
+    padding: 6,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginTop: 90,
+    marginBottom: 18,
+  },
+  brandTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: COLORS.white,
+    letterSpacing: 2,
+  },
+  card: {
+    width: '92%',
+    alignSelf: 'center',
+    backgroundColor: COLORS.glass,
+    borderRadius: 24,
+    padding: 28,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.13,
+    shadowRadius: 24,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 24,
   },
   title: {
-    fontSize: 26,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: 'bold',
     color: COLORS.primary,
-    textAlign: 'center',
-    marginTop: 18,
     marginBottom: 18,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
-    letterSpacing: 0.2,
+    textAlign: 'center',
+    letterSpacing: 1,
   },
   inputContainer: {
     width: '100%',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   input: {
-    height: 48,
-    borderColor: '#e0e0e0',
+    height: 44,
+    borderColor: COLORS.primary,
     borderWidth: 1,
-    marginBottom: 14,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: '#f7f8fa',
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.22)',
     color: COLORS.textDark,
     fontSize: 16,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
-  },
-  passwordRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  eyeIcon: {
-    padding: 8,
-    marginLeft: 2,
   },
   button: {
     backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    borderRadius: 16,
+    paddingVertical: 12,
+    borderRadius: 18,
     width: '100%',
     alignItems: 'center',
     marginTop: 6,
-    marginBottom: 4,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-    transitionDuration: '200ms',
-  },
-  buttonDisabled: {
-    opacity: 0.7,
+    marginBottom: 2,
   },
   buttonText: {
     color: COLORS.white,
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    marginVertical: 18,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e0e0e0',
-  },
-  dividerText: {
-    marginHorizontal: 10,
-    color: '#b0b0b0',
+  orText: {
+    color: COLORS.textDark,
+    marginTop: 16,
+    marginBottom: 10,
     fontSize: 14,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
+    textAlign: 'center',
+    opacity: 0.8,
   },
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4285F4',
-    paddingVertical: 12,
+    backgroundColor: COLORS.white,
+    paddingVertical: 10,
     paddingHorizontal: 18,
-    borderRadius: 16,
+    borderRadius: 18,
+    marginTop: 2,
     marginBottom: 18,
-    width: '100%',
-    justifyContent: 'center',
-    shadowColor: '#4285F4',
-    shadowOpacity: 0.13,
-    shadowRadius: 6,
+    alignSelf: 'center',
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   googleButtonText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
-  },
-  text: {
     color: COLORS.primary,
-    marginTop: 2,
     fontSize: 15,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
+    marginLeft: 10,
+    fontWeight: 'bold',
+  },
+  signupText: {
+    color: COLORS.textDark,
+    marginTop: 8,
+    fontSize: 14,
     textAlign: 'center',
+    opacity: 0.9,
   },
   linkText: {
-    color: COLORS.secondary,
+    color: COLORS.primary,
     fontWeight: 'bold',
     textDecorationLine: 'underline',
   },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffeaea',
-    borderRadius: 10,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    marginBottom: 10,
-    marginTop: -4,
-  },
   errorText: {
     color: COLORS.error,
-    fontSize: 15,
-    fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'Roboto',
+    marginTop: 2,
+    marginBottom: 6,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 16,
+    top: 12,
+    zIndex: 1,
   },
 });
 
