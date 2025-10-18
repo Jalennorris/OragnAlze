@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -35,6 +35,46 @@ import Navbar from '../components/Navbar'; // Adjust path if needed
 // Add a simple color picker (array of color hex codes)
 const CATEGORY_COLORS = ['#6a11cb', '#ff9800', '#43a047', '#e91e63', '#00bcd4', '#f44336', '#9c27b0', '#607d8b', '#ffd600', '#795548'];
 
+const DARK_COLORS = {
+  background: '#18181b',
+  card: '#232336',
+  accent: '#818cf8',    // Indigo
+  accent2: '#fbbf24',   // Amber
+  accent3: '#34d399',   // Emerald
+  text: '#f3f4f6',
+  muted: '#a1a1aa',
+  border: '#232336',
+  input: '#232336',
+  placeholder: '#52525b',
+  error: '#f87171',
+  pill: '#232336',
+  pillActive: '#818cf8',
+  pillText: '#f3f4f6',
+  pillTextActive: '#18181b',
+  divider: '#232336',
+  success: '#34d399',
+};
+
+const LIGHT_COLORS = {
+  background: '#f8fafc',
+  card: '#fff',
+  accent: '#7c3aed',
+  accent2: '#6366f1',
+  accent3: '#43cea2',
+  text: '#181c2f',
+  muted: '#8a8fa3',
+  border: '#e0e7ef',
+  input: '#f3f4f8',
+  placeholder: '#a3a3a3',
+  error: '#F44336',
+  pill: '#e0e7ef',
+  pillActive: '#7c3aed',
+  pillText: '#232946',
+  pillTextActive: '#fff',
+  divider: '#e0e7ef',
+  success: '#43cea2',
+};
+
 // --- Enums for Priority and Status ---
 export enum Priority {
   Low = 'low',
@@ -50,9 +90,9 @@ export enum Status {
 // --- Constants ---
 const BASE_API_URL = 'http://localhost:8080/api'; // Use a constant for the base URL
 const PRIORITY_COLORS: Record<Priority, string> = {
-  [Priority.Low]: '#8BC34A',
-  [Priority.Medium]: '#FFC107',
-  [Priority.High]: '#F44336',
+  [Priority.Low]: '#34d399',     // Emerald
+  [Priority.Medium]: '#fbbf24',  // Amber
+  [Priority.High]: '#f87171',    // Red
 };
 const STATUS_OPTIONS: Status[] = [
   Status.NotStarted,
@@ -110,6 +150,11 @@ const AddTaskScreen: React.FC = () => {
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [showNewTaskButton, setShowNewTaskButton] = useState(false);
+  const [colorScheme, setColorScheme] = useState<'light' | 'dark'>('light');
+  const [estimateDays, setEstimateDays] = React.useState<string>('0');
+  const [estimateHours, setEstimateHours] = React.useState<string>('0');
+  const [EstimatedApplied, setEstimatedApplied] = React.useState<boolean>(false);
+
 
   const navigation = useNavigation();
   const buttonScale = useSharedValue(1);
@@ -148,7 +193,90 @@ const AddTaskScreen: React.FC = () => {
     taskNameRef.current?.focus();
   }, [navigation]);
 
+  useEffect(() => {
+    const getColorScheme = async () => {
+      try {
+        const storedDarkMode = await AsyncStorage.getItem('darkMode');
+        setColorScheme(storedDarkMode && JSON.parse(storedDarkMode) ? 'dark' : 'light');
+      } catch {
+        setColorScheme('light');
+      }
+    };
+    getColorScheme();
+    // Listen for navigation focus to update dark mode immediately after settings change
+    const unsubscribe = navigation.addListener?.('focus', getColorScheme);
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [navigation]);
+
+  const COLORS = colorScheme === 'dark' ? DARK_COLORS : LIGHT_COLORS;
+
   // --- Input Handlers (useCallback) ---
+
+
+
+const safeInt = (v: string) => {
+  const n = parseInt(v,10);
+  return  Number.isFinite(n) ? n : 0;
+}
+
+
+
+const normalizeDuration = (days: number, hours: number ) => {
+  const extraDays = Math.floor(hours / 24);
+  const normalizedHours = hours % 24;
+  return{days: days + extraDays, hours: normalizedHours};
+
+}
+
+
+const addDurationToIso = (iso: string, days: number, hours : number) =>{
+  const base = new Date(iso);
+  const {days: d, hours: h} = normalizeDuration(days, hours);
+  const result = new Date(base);
+  result.setDate(result.getDate() + d)
+
+  result.setHours(result.getHours() + h);
+  return result.toISOString();
+}
+
+const estimatedDuePreview = React.useMemo(() => {
+  const d = parseInt(estimateDays || '0', 10);
+  const h = parseInt(estimateHours || '0', 10)
+
+  if(!dueDate) return undefined;
+  try {
+    return addDurationToIso(dueDate, d, h)
+  } catch (error) {
+    return undefined
+    
+  }
+}, [estimateDays, estimateHours,dueDate])
+
+const applyEstimateToDue = React.useCallback(() => {
+  const d = parseInt(estimateDays || '0', 10);
+  const h = parseInt(estimateHours || '0', 10);
+  const safeD = Number.isNaN(d) ? 0 : d;
+  const safeH = Number.isNaN(h) ? 0 : h;
+  
+  const baseIso = dueDate || new Date().toISOString();
+  try {
+    const newIso = addDurationToIso(baseIso, safeD, safeH);
+    setDueDate(newIso);
+    setEstimatedApplied(true);
+  } catch (e) {
+    // optional: handle invalid date error (toast/log)
+  }
+}, [estimateDays, estimateHours, dueDate, setDueDate]);
+
+const resetEstimate = React.useCallback(() => {
+  setEstimateDays('0');
+  setEstimateHours('0');
+  setEstimatedApplied(false);
+},[setEstimateDays, setEstimateHours, setEstimatedApplied]);
+
+
   const handleNumericInput = React.useCallback(
     (value: string, setter: React.Dispatch<React.SetStateAction<string>>) => {
       if (/^\d*$/.test(value)) {
@@ -280,9 +408,9 @@ const AddTaskScreen: React.FC = () => {
 
   // --- Render ---
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: COLORS.background }]}>
       <LinearGradient
-        colors={['#f8fafc', '#e0e7ff', '#f8fafc']}
+        colors={colorScheme === 'dark' ? [COLORS.background, COLORS.card, COLORS.background] : ['#f8fafc', '#e0e7ff', '#f8fafc']}
         style={StyleSheet.absoluteFill}
         start={[0, 0]}
         end={[1, 1]}
@@ -295,28 +423,28 @@ const AddTaskScreen: React.FC = () => {
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <ScrollView
-            contentContainerStyle={styles.scrollViewContent}
+            contentContainerStyle={[styles.scrollViewContent, { backgroundColor: COLORS.background }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.container}>
+            <View style={[styles.container, { backgroundColor: COLORS.background }]}>
               <Animated.View entering={FadeIn.duration(600)}>
-                <Text style={styles.title}>Create a New Task</Text>
-                <Text style={styles.subtitle}>Organize your day with clarity and style</Text>
+                <Text style={[styles.title, { color: COLORS.text }]}>Create a New Task</Text>
+                <Text style={[styles.subtitle, { color: COLORS.accent }]}>Organize your day with clarity and style</Text>
               </Animated.View>
 
               {/* Divider */}
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: COLORS.divider }]} />
 
               {/* Task Name */}
-              <Animated.View style={styles.card} entering={FadeIn.delay(100).duration(500)}>
+              <Animated.View style={[styles.card, { backgroundColor: COLORS.card }]} entering={FadeIn.delay(100).duration(500)}>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="clipboard-outline" size={24} color="#7c3aed" style={styles.icon} />
+                  <Ionicons name="clipboard-outline" size={24} color={COLORS.accent} style={styles.icon} />
                   <TextInput
                     ref={taskNameRef}
-                    style={styles.input}
+                    style={[styles.input, { color: COLORS.text, backgroundColor: COLORS.input }]}
                     placeholder="Task Name *"
-                    placeholderTextColor="#a3a3a3"
+                    placeholderTextColor={COLORS.placeholder}
                     value={taskName}
                     onChangeText={text => {
                       setTaskName(text);
@@ -331,17 +459,17 @@ const AddTaskScreen: React.FC = () => {
                     testID="input-task-name"
                   />
                 </View>
-                {errors.taskName ? <Text style={styles.errorText} testID="error-task-name">{errors.taskName}</Text> : null}
+                {errors.taskName ? <Text style={[styles.errorText, { color: COLORS.error }]} testID="error-task-name">{errors.taskName}</Text> : null}
               </Animated.View>
 
               {/* Task Description */}
-              <Animated.View style={styles.card} entering={FadeIn.delay(200).duration(500)}>
+              <Animated.View style={[styles.card, { backgroundColor: COLORS.card }]} entering={FadeIn.delay(200).duration(500)}>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="document-text-outline" size={24} color="#7c3aed" style={styles.icon} />
+                  <Ionicons name="document-text-outline" size={24} color={COLORS.accent} style={styles.icon} />
                   <TextInput
-                    style={[styles.input, styles.textArea]}
+                    style={[styles.input, styles.textArea, { color: COLORS.text, backgroundColor: COLORS.input }]}
                     placeholder="Task Description *"
-                    placeholderTextColor="#a3a3a3"
+                    placeholderTextColor={COLORS.placeholder}
                     value={taskDescription}
                     onChangeText={text => {
                       setTaskDescription(text);
@@ -358,59 +486,77 @@ const AddTaskScreen: React.FC = () => {
                     testID="input-task-desc"
                   />
                 </View>
-                {errors.taskDescription ? <Text style={styles.errorText} testID="error-task-desc">{errors.taskDescription}</Text> : null}
+                {errors.taskDescription ? <Text style={[styles.errorText, { color: COLORS.error }]} testID="error-task-desc">{errors.taskDescription}</Text> : null}
               </Animated.View>
 
               {/* Divider */}
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: COLORS.divider }]} />
 
               {/* Estimated Duration */}
-              <Animated.View style={styles.card} entering={FadeIn.delay(300).duration(500)}>
-                <Text style={styles.label}>Estimated Duration</Text>
-                <Text style={styles.helpText}>How long do you expect this task to take?</Text>
+              <Animated.View style={[styles.card, { backgroundColor: COLORS.card }]} entering={FadeIn.delay(300).duration(500)}>
+                <Text style={[styles.label, { color: COLORS.text }]}>Estimated Duration</Text>
+                <Text style={[styles.helpText, { color: COLORS.muted }]}>How long do you expect this task to take?</Text>
                 <View style={styles.durationContainer}>
-                  <Ionicons name="time-outline" size={22} color="#7c3aed" style={styles.icon} />
+                  <Ionicons name="time-outline" size={22} color={COLORS.accent} style={styles.icon} />
                   <View style={styles.durationInputWrapper}>
                     <TextInput
-                      style={[styles.input, styles.durationInput]}
+                      style={[styles.input, styles.durationInput, { color: COLORS.text, backgroundColor: COLORS.input }]}
                       placeholder="Days"
-                      placeholderTextColor="#a3a3a3"
+                      placeholderTextColor={COLORS.placeholder}
                       keyboardType="numeric"
-                      value={estimatedDays}
-                      onChangeText={(value) => handleNumericInput(value, setEstimatedDays)}
+                      value={estimateDays}
+                      onChangeText={(value) => handleNumericInput(value, setEstimateDays)}
                       accessibilityLabel="Estimated duration in days"
                       accessibilityHint="Enter the number of days estimated for this task"
                       allowFontScaling={true}
                     />
-                    <Text style={styles.durationLabel} allowFontScaling={true}>days</Text>
+                    <Text style={[styles.durationLabel, { color: COLORS.accent }]} allowFontScaling={true}>days</Text>
                   </View>
+
                   <View style={styles.durationInputWrapper}>
                     <TextInput
-                      style={[styles.input, styles.durationInput]}
+                      style={[styles.input, styles.durationInput, { color: COLORS.text, backgroundColor: COLORS.input }]}
                       placeholder="Hours"
-                      placeholderTextColor="#a3a3a3"
+                      placeholderTextColor={COLORS.placeholder}
                       keyboardType="numeric"
-                      value={estimatedHours}
-                      onChangeText={(value) => handleNumericInput(value, setEstimatedHours)}
+                      value={estimateHours}
+                      onChangeText={(value) => handleNumericInput(value, setEstimateHours)}
                       accessibilityLabel="Estimated duration in hours"
                       accessibilityHint="Enter the number of hours estimated for this task"
                       allowFontScaling={true}
                     />
-                    <Text style={styles.durationLabel} allowFontScaling={true}>hours</Text>
+                    <Text style={[styles.durationLabel, { color: COLORS.accent }]} allowFontScaling={true}>hours</Text>
                   </View>
+                </View>
+                <View  style= {styles.preViewDuration}> 
+                <Text style={styles.preViewDurationText}>
+                    Preview: {estimatedDuePreview ? new Date(estimatedDuePreview).toLocaleString() : 'N/A'} {' '}
+                </Text>
+                {EstimatedApplied === false  ? (
+                <TouchableOpacity onPress={applyEstimateToDue} style={styles.preViewDurationButton} >
+                    <Text style={styles.preViewDurationApplyText}>Apply Estimate</Text>
+                </TouchableOpacity>
+                ) : 
+                (
+                  <TouchableOpacity onPress={resetEstimate} style={styles.preViewDurationResetButton} > 
+                    <Text style={styles.preViewDurationApplyText}>Reset Estimate</Text>
+                  </TouchableOpacity>
+                )
+                    }
                 </View>
               </Animated.View>
 
               {/* Status Selector */}
-              <Animated.View style={styles.card} entering={FadeIn.delay(400).duration(500)}>
-                <Text style={styles.label}>Status</Text>
+              <Animated.View style={[styles.card, { backgroundColor: COLORS.card }]} entering={FadeIn.delay(400).duration(500)}>
+                <Text style={[styles.label, { color: COLORS.text }]}>Status</Text>
                 <View style={styles.pillGroup}>
                   {STATUS_OPTIONS.map((option) => (
                     <TouchableOpacity
                       key={option}
                       style={[
                         styles.pill,
-                        status === option && styles.pillActive,
+                        { backgroundColor: COLORS.pill },
+                        status === option && [styles.pillActive, { backgroundColor: COLORS.pillActive }],
                       ]}
                       onPress={() => setStatus(option)}
                       accessibilityLabel={`Set status to ${option}`}
@@ -422,7 +568,8 @@ const AddTaskScreen: React.FC = () => {
                     >
                       <Text style={[
                         styles.pillText,
-                        status === option && styles.pillTextActive
+                        { color: COLORS.pillText },
+                        status === option && [styles.pillTextActive, { color: COLORS.pillTextActive }]
                       ]}>{option}</Text>
                     </TouchableOpacity>
                   ))}
@@ -430,11 +577,11 @@ const AddTaskScreen: React.FC = () => {
               </Animated.View>
 
               {/* Divider */}
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: COLORS.divider }]} />
 
               {/* Due Date Picker */}
-              <Animated.View style={styles.card} entering={FadeIn.delay(500).duration(500)}>
-                <Text style={styles.label}>Due Date *</Text>
+              <Animated.View style={[styles.card, { backgroundColor: COLORS.card }]} entering={FadeIn.delay(500).duration(500)}>
+                <Text style={[styles.label, { color: COLORS.text }]}>Due Date *</Text>
                 <TouchableOpacity
                   onPress={showDatePicker}
                   style={styles.dateInputContainer}
@@ -445,12 +592,12 @@ const AddTaskScreen: React.FC = () => {
                   testID="button-due-date"
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="calendar-outline" size={22} color="#7c3aed" style={styles.icon} />
-                  <Text style={styles.dateText} allowFontScaling={true}>
+                  <Ionicons name="calendar-outline" size={22} color={COLORS.accent} style={styles.icon} />
+                  <Text style={[styles.dateText, { color: COLORS.text }]} allowFontScaling={true}>
                     {dueDate ? format(new Date(dueDate), 'MMMM d, yyyy') : 'Select Date'}
                   </Text>
                 </TouchableOpacity>
-                {errors.dueDate ? <Text style={styles.errorText} testID="error-due-date">{errors.dueDate}</Text> : null}
+                {errors.dueDate ? <Text style={[styles.errorText, { color: COLORS.error }]} testID="error-due-date">{errors.dueDate}</Text> : null}
                 <DateTimePickerModal
                   isVisible={isDatePickerVisible}
                   mode="date"
@@ -465,9 +612,9 @@ const AddTaskScreen: React.FC = () => {
               </Animated.View>
 
               {/* Priority Selector */}
-              <Animated.View style={styles.card} entering={FadeIn.delay(600).duration(500)}>
-                <Text style={styles.label}>Priority</Text>
-                <Text style={styles.helpText}>Set how important or urgent this task is.</Text>
+              <Animated.View style={[styles.card, { backgroundColor: COLORS.card }]} entering={FadeIn.delay(600).duration(500)}>
+                <Text style={[styles.label, { color: COLORS.text }]}>Priority</Text>
+                <Text style={[styles.helpText, { color: COLORS.muted }]}>Set how important or urgent this task is.</Text>
                 <View style={styles.pillGroup}>
                   {(Object.values(Priority) as Priority[]).map((key) => (
                     <TouchableOpacity
@@ -498,11 +645,11 @@ const AddTaskScreen: React.FC = () => {
               </Animated.View>
 
               {/* Divider */}
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: COLORS.divider }]} />
 
               {/* Category Selector */}
-              <Animated.View style={styles.card} entering={FadeIn.delay(700).duration(500)}>
-                <Text style={styles.label}>Category *</Text>
+              <Animated.View style={[styles.card, { backgroundColor: COLORS.card }]} entering={FadeIn.delay(700).duration(500)}>
+                <Text style={[styles.label, { color: COLORS.text }]}>Category *</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -543,7 +690,7 @@ const AddTaskScreen: React.FC = () => {
                     ))}
                     {/* Add Category Button */}
                     <TouchableOpacity
-                      style={[styles.pill, styles.addCategoryButton]}
+                      style={[styles.pill, styles.addCategoryButton, { backgroundColor: COLORS.input, borderColor: COLORS.accent }]}
                       onPress={openAddCategoryModal}
                       accessibilityLabel="Add custom category"
                       accessibilityHint="Tap to add a new custom category"
@@ -551,11 +698,11 @@ const AddTaskScreen: React.FC = () => {
                       testID="button-add-category"
                       activeOpacity={0.85}
                     >
-                      <Ionicons name="add-circle-outline" size={24} color="#7c3aed" />
+                      <Ionicons name="add-circle-outline" size={24} color={COLORS.accent} />
                     </TouchableOpacity>
                   </View>
                 </ScrollView>
-                {errors.category ? <Text style={styles.errorText} testID="error-category">{errors.category}</Text> : null}
+                {errors.category ? <Text style={[styles.errorText, { color: COLORS.error }]} testID="error-category">{errors.category}</Text> : null}
               </Animated.View>
 
               {/* Add Category Modal */}
@@ -570,11 +717,12 @@ const AddTaskScreen: React.FC = () => {
               >
                 <View style={styles.modalOverlay}>
                   <View style={styles.modalBlur} />
-                  <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle} allowFontScaling={true}>Add Custom Category</Text>
+                  <View style={[styles.modalContent, { backgroundColor: COLORS.card }]}>
+                    <Text style={[styles.modalTitle, { color: COLORS.text }]} allowFontScaling={true}>Add Custom Category</Text>
                     <TextInput
-                      style={styles.modalInput}
+                      style={[styles.modalInput, { color: COLORS.text, backgroundColor: COLORS.input }]}
                       placeholder="Enter category name"
+                      placeholderTextColor={COLORS.placeholder}
                       value={newCategory}
                       onChangeText={setNewCategory}
                       maxLength={30}
@@ -585,14 +733,14 @@ const AddTaskScreen: React.FC = () => {
                       testID="input-new-category"
                       allowFontScaling={true}
                     />
-                    <Text style={styles.modalLabel} allowFontScaling={true}>Pick a color:</Text>
+                    <Text style={[styles.modalLabel, { color: COLORS.text }]} allowFontScaling={true}>Pick a color:</Text>
                     <View style={styles.colorPickerRow}>
                       {CATEGORY_COLORS.map((color) => (
                         <TouchableOpacity
                           key={color}
                           style={[
                             styles.colorCircle,
-                            { backgroundColor: color, borderWidth: categoryColor === color ? 3 : 0, borderColor: '#7c3aed' }
+                            { backgroundColor: color, borderWidth: categoryColor === color ? 3 : 0, borderColor: COLORS.accent }
                           ]}
                           onPress={() => setCategoryColor(color)}
                           accessibilityLabel={`Pick color ${color}`}
@@ -606,7 +754,7 @@ const AddTaskScreen: React.FC = () => {
                     </View>
                     <View style={styles.modalButtonRow}>
                       <TouchableOpacity
-                        style={styles.modalButton}
+                        style={[styles.modalButton, { backgroundColor: COLORS.input }]}
                         onPress={closeAddCategoryModal}
                         accessibilityLabel="Cancel Add Category"
                         accessibilityHint="Cancel adding a new category"
@@ -614,10 +762,10 @@ const AddTaskScreen: React.FC = () => {
                         testID="button-cancel-category"
                         activeOpacity={0.85}
                       >
-                        <Text style={styles.modalButtonText} allowFontScaling={true}>Cancel</Text>
+                        <Text style={[styles.modalButtonText, { color: COLORS.text }]} allowFontScaling={true}>Cancel</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.modalButton, styles.modalButtonPrimary]}
+                        style={[styles.modalButton, styles.modalButtonPrimary, { backgroundColor: COLORS.accent }]}
                         onPress={handleAddCategory}
                         accessibilityLabel="Add Category"
                         accessibilityHint="Add this new category"
@@ -625,12 +773,12 @@ const AddTaskScreen: React.FC = () => {
                         testID="button-confirm-category"
                         activeOpacity={0.85}
                       >
-                        <Text style={[styles.modalButtonText, styles.modalButtonPrimaryText]} allowFontScaling={true}>Add</Text>
+                        <Text style={[styles.modalButtonText, styles.modalButtonPrimaryText, { color: COLORS.pillTextActive }]} allowFontScaling={true}>Add</Text>
                       </TouchableOpacity>
                     </View>
                     {isLoading && (
                       <View style={styles.modalLoadingOverlay}>
-                        <ActivityIndicator size="large" color="#7c3aed" testID="modal-loading-indicator" />
+                        <ActivityIndicator size="large" color={COLORS.accent} testID="modal-loading-indicator" />
                       </View>
                     )}
                   </View>
@@ -638,13 +786,13 @@ const AddTaskScreen: React.FC = () => {
               </Modal>
 
               {/* Notes Input */}
-              <Animated.View style={styles.card} entering={FadeIn.delay(800).duration(500)}>
+              <Animated.View style={[styles.card, { backgroundColor: COLORS.card }]} entering={FadeIn.delay(800).duration(500)}>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="reader-outline" size={24} color="#7c3aed" style={styles.icon} />
+                  <Ionicons name="reader-outline" size={24} color={COLORS.accent} style={styles.icon} />
                   <TextInput
-                    style={[styles.input, styles.textArea]}
+                    style={[styles.input, styles.textArea, { color: COLORS.text, backgroundColor: COLORS.input }]}
                     placeholder="Additional Notes (Optional)"
-                    placeholderTextColor="#a3a3a3"
+                    placeholderTextColor={COLORS.placeholder}
                     value={notes}
                     onChangeText={setNotes}
                     multiline
@@ -669,7 +817,7 @@ const AddTaskScreen: React.FC = () => {
                 entering={FadeIn.delay(900).duration(500)}
               >
                 <LinearGradient
-                  colors={isSaveDisabled ? ['#c7d2fe', '#c7d2fe'] : ['#7c3aed', '#6366f1']}
+                  colors={isSaveDisabled ? [COLORS.divider, COLORS.divider] : [COLORS.accent, COLORS.accent2]}
                   start={[0, 0]}
                   end={[1, 0]}
                   style={{ width: '100%', borderRadius: 32, alignItems: 'center', padding: 22 }}
@@ -728,13 +876,11 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: 'bold',
     marginBottom: 2,
-    color: '#181c2f',
     textAlign: 'center',
     letterSpacing: 0.5,
   },
   subtitle: {
     fontSize: 18,
-    color: '#6366f1',
     textAlign: 'center',
     marginBottom: 18,
     fontWeight: '600',
@@ -742,13 +888,11 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#e0e7ef',
     marginVertical: 10,
     borderRadius: 1,
     opacity: 0.7,
   },
   card: {
-    backgroundColor: '#fff',
     borderRadius: 28,
     padding: 26,
     marginBottom: 0,
@@ -767,7 +911,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#232946',
     marginBottom: 8,
     marginLeft: 5,
     letterSpacing: 0.2,
@@ -775,7 +918,6 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3f4f8',
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 14,
@@ -790,7 +932,6 @@ const styles = StyleSheet.create({
   durationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3f4f8',
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 10,
@@ -803,14 +944,11 @@ const styles = StyleSheet.create({
   },
   icon: {
     marginRight: 14,
-    color: '#7c3aed',
   },
   input: {
     flex: 1,
-    color: '#232946',
     fontSize: 17,
     paddingVertical: 8,
-    backgroundColor: 'transparent',
   },
   textArea: {
     height: 100,
@@ -821,14 +959,12 @@ const styles = StyleSheet.create({
   durationInput: {
     flex: 1,
     marginHorizontal: 6,
-    backgroundColor: '#e0e7ff',
     borderRadius: 10,
     paddingHorizontal: 10,
   },
   dateInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3f4f8',
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 14,
@@ -841,7 +977,6 @@ const styles = StyleSheet.create({
     minHeight: 54,
   },
   dateText: {
-    color: '#232946',
     fontSize: 17,
     marginLeft: 10,
     fontWeight: '500',
@@ -859,17 +994,14 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: '#e0e7ef',
     marginRight: 10,
     marginBottom: 10,
     minHeight: 40,
     minWidth: 68,
     borderWidth: 0,
     elevation: 0,
-    transitionDuration: '150ms',
   },
   pillActive: {
-    backgroundColor: '#7c3aed',
     shadowColor: '#7c3aed',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -879,12 +1011,9 @@ const styles = StyleSheet.create({
   pillText: {
     fontWeight: 'bold',
     fontSize: 15,
-    color: '#232946',
     letterSpacing: 0.2,
   },
-  pillTextActive: {
-    color: '#fff',
-  },
+  pillTextActive: {},
   categoryButton: {
     minWidth: 90,
     flexDirection: 'row',
@@ -894,9 +1023,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   addCategoryButton: {
-    backgroundColor: '#f3f4f8',
     borderWidth: 2,
-    borderColor: '#7c3aed',
     justifyContent: 'center',
     alignItems: 'center',
     minWidth: 48,
@@ -913,12 +1040,10 @@ const styles = StyleSheet.create({
   modalBlur: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(255,255,255,0.25)',
-    backdropFilter: 'blur(8px)',
     zIndex: 1,
   },
   modalContent: {
     width: '92%',
-    backgroundColor: '#fff',
     borderRadius: 26,
     padding: 34,
     alignItems: 'center',
@@ -933,7 +1058,6 @@ const styles = StyleSheet.create({
     fontSize: 23,
     fontWeight: 'bold',
     marginBottom: 20,
-    color: '#232946',
     letterSpacing: 0.2,
   },
   modalInput: {
@@ -943,8 +1067,6 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 17,
     marginBottom: 20,
-    color: '#232946',
-    backgroundColor: '#f3f4f8',
   },
   modalButtonRow: {
     flexDirection: 'row',
@@ -957,19 +1079,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 26,
     borderRadius: 12,
     marginLeft: 12,
-    backgroundColor: '#e0e7ff',
   },
-  modalButtonPrimary: {
-    backgroundColor: '#7c3aed',
-  },
+  modalButtonPrimary: {},
   modalButtonText: {
     fontSize: 16,
-    color: '#232946',
     fontWeight: '600',
   },
-  modalButtonPrimaryText: {
-    color: '#fff',
-  },
+  modalButtonPrimaryText: {},
   saveButton: {
     borderRadius: 32,
     alignItems: 'center',
@@ -982,12 +1098,10 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   saveButtonDisabled: {
-    backgroundColor: '#c7d2fe',
     elevation: 1,
     shadowOpacity: 0.07,
   },
   saveButtonText: {
-    color: '#fff',
     fontWeight: 'bold',
     fontSize: 22,
     letterSpacing: 0.3,
@@ -1010,15 +1124,49 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
     backgroundColor: 'transparent',
   },
+  preViewDuration: {
+    marginTop: 40,
+    flexDirection: 'column',
+    alignItems: 'center',
+    
+    
+
+  },
+  preViewDurationText: {
+    marginBottom: 12,
+    fontSize: 15,
+    fontWeight: '500',
+    
+  },
+  preViewDurationApplyText: {
+  textAlign: 'center',  
+    fontSize: 14,
+    fontWeight: '500',
+    
+  },
+  preViewDurationButton: {
+    backgroundColor:  '#6366f1',
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    
+  },
+  preViewDurationResetButton: {
+
+    backgroundColor: '#dc2626',
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    height: 45
+    
+  },
   durationLabel: {
     fontSize: 16,
-    color: '#7c3aed',
     marginRight: 8,
     fontWeight: '500',
   },
   helpText: {
     fontSize: 14,
-    color: '#8a8fa3',
     marginBottom: 4,
     marginLeft: 5,
   },
@@ -1028,7 +1176,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginRight: 6,
     borderWidth: 2,
-    borderColor: '#fff',
     shadowColor: '#232946',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.10,
@@ -1048,18 +1195,15 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     marginHorizontal: 8,
     marginVertical: 6,
-    borderColor: '#7c3aed',
   },
   modalLabel: {
     fontSize: 16,
-    color: '#232946',
     marginBottom: 8,
     marginTop: 10,
     alignSelf: 'flex-start',
     fontWeight: '500',
   },
   errorText: {
-    color: '#F44336',
     fontSize: 14,
     marginBottom: 10,
     marginLeft: 8,
@@ -1077,7 +1221,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 100,
     right: 28,
-    backgroundColor: '#43a047',
     width: 64,
     height: 64,
     borderRadius: 32,
@@ -1091,7 +1234,6 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   newTaskButtonText: {
-    color: '#fff',
     fontWeight: 'bold',
     fontSize: 18,
     letterSpacing: 0.2,

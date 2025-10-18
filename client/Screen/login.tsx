@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Google from 'expo-auth-session/providers/google';
 import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import AppleSignInButton from './AppleSignInButton';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import {router } from 'expo-router';
+import { useAuth } from '@/Provider/AuthProvider';
 
 type Credentials = {
   username: string;
@@ -30,10 +33,7 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [passwordVisible, setPasswordVisible] = useState(false);
-
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: '964543696153-o2t3m0bedk6o1aqe5puscq51f33fq89t.apps.googleusercontent.com',
-  });
+  const {signIn} = useAuth();
 
   // Animations
   const cardAnim = useRef(new Animated.Value(60)).current;
@@ -48,26 +48,6 @@ const Login: React.FC = () => {
     await AsyncStorage.setItem('email', data.email);
     await AsyncStorage.setItem('token', data.token);
   };
-
-  useEffect(() => {
-    const handleGoogleLogin = async () => {
-      if (response?.type === 'success' && response.authentication?.accessToken) {
-        try {
-          const backendResponse = await axios.post('http://localhost:8080/api/auth/google', {
-            token: response.authentication.accessToken,
-          });
-          await storeUserData(backendResponse.data);
-          navigation.navigate('index');
-        } catch (err: any) {
-          setError(
-            err?.response?.data?.message ||
-            'Google login failed. Please try again.'
-          );
-        }
-      }
-    };
-    handleGoogleLogin();
-  }, [response, navigation]);
 
   useEffect(() => {
     Animated.parallel([
@@ -92,11 +72,14 @@ const Login: React.FC = () => {
       return;
     }
     setLoading(true);
+    setError(null);
     try {
       const response = await axios.post('http://localhost:8080/api/auth/login', credentials);
       await storeUserData(response.data);
+      await signIn(response.data.userId.toString());
+      console.log('Login successful:', response.data.userId.toString());
       setLoading(false);
-      navigation.navigate('index');
+      navigation.replace('index');
     } catch (error: any) {
       setError(
         error?.response?.data?.message ||
@@ -110,6 +93,19 @@ const Login: React.FC = () => {
     setCredentials((prev) => ({ ...prev, [name]: value }));
     setError(null);
   }, []);
+
+  const handleAppleLogin = async (credential: AppleAuthentication.AppleAuthenticationCredential) => {
+    try {
+      // Send credential.identityToken to your backend for verification and login
+      const backendResponse = await axios.post('http://localhost:8080/api/auth/apple', {
+        token: credential.identityToken,
+      });
+      await storeUserData(backendResponse.data);
+      router.replace('/index');
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Apple login failed. Please try again.');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -204,17 +200,7 @@ const Login: React.FC = () => {
               )}
             </View>
             <Text style={styles.orText}>or continue with</Text>
-            <TouchableOpacity
-              style={styles.googleButton}
-              onPress={() => promptAsync()}
-              disabled={!request || loading}
-              accessibilityRole="button"
-              accessibilityLabel="Login with Google"
-              accessibilityHint="Authenticate using your Google account"
-            >
-              <Ionicons name="logo-google" size={22} color={COLORS.primary} />
-              <Text style={styles.googleButtonText}>Login with Google</Text>
-            </TouchableOpacity>
+            <AppleSignInButton onLogin={handleAppleLogin} disabled={loading} />
             <Text style={styles.signupText}>
               Don't have an account?{' '}
               <Text
@@ -324,28 +310,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     opacity: 0.8,
-  },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 18,
-    marginTop: 2,
-    marginBottom: 18,
-    alignSelf: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  googleButtonText: {
-    color: COLORS.primary,
-    fontSize: 15,
-    marginLeft: 10,
-    fontWeight: 'bold',
   },
   signupText: {
     color: COLORS.textDark,

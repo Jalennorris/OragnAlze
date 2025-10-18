@@ -15,6 +15,7 @@ import { BlurView } from 'expo-blur';
 import * as Linking from 'expo-linking';
 import Header from '@/components/header';
 import NavBar from '@/components/Navbar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface ThemeColors {
   background: string;
@@ -159,8 +160,17 @@ const SectionItem: React.FC<{ section: PolicySection; colors: ThemeColors }> = R
 
 const PrivacyPolicy: React.FC = () => {
   const navigation = useNavigation();
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
+  // const colorScheme = useColorScheme();
+  // const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
+  const [isDarkMode, setIsDarkMode] = React.useState(false);
+
+  React.useEffect(() => {
+    AsyncStorage.getItem('darkMode').then(val => {
+      setIsDarkMode(val ? JSON.parse(val) : false);
+    });
+  }, []);
+
+  const theme = isDarkMode ? darkTheme : lightTheme;
 
   return (
     <View style={{ flex: 1 }}>

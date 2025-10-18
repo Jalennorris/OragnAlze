@@ -304,6 +304,7 @@ const Greeting: React.FC = () => {
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
 
   // --- Refs ---
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -419,6 +420,22 @@ const Greeting: React.FC = () => {
     setDisplayName(storedDisplayName || '');
   }, []);
 
+  useEffect(() => {
+    const fetchDarkMode = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('darkMode');
+        if (stored !== null) {
+          setDarkMode(JSON.parse(stored));
+        }
+      } catch {
+        setDarkMode(false);
+      }
+    };
+    fetchDarkMode();
+    const interval = setInterval(fetchDarkMode, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // --- Effects ---
   useEffect(() => {
     loadInitialDisplayName();
@@ -507,9 +524,13 @@ const Greeting: React.FC = () => {
   // --- Render ---
   return (
     <View style={{ alignItems: 'center' }}>
-      <BlurView intensity={60} tint="light" style={styles.blurCard}>
+      <BlurView intensity={60} tint={darkMode ? "dark" : "light"} style={[styles.blurCard, darkMode && stylesDark.blurCard]}>
         <LinearGradient
-          colors={['rgba(255,255,255,0.7)', 'rgba(236,233,254,0.8)', 'rgba(255,255,255,0.6)']}
+          colors={
+            darkMode
+              ? ['rgba(24,24,27,0.8)', 'rgba(30,27,52,0.8)', 'rgba(24,24,27,0.7)']
+              : ['rgba(255,255,255,0.7)', 'rgba(236,233,254,0.8)', 'rgba(255,255,255,0.6)']
+          }
           style={StyleSheet.absoluteFill}
           start={[0.1, 0.1]}
           end={[0.9, 0.9]}
@@ -525,10 +546,11 @@ const Greeting: React.FC = () => {
               <Animated.Text
                 style={[
                   styles.greeting,
+                  darkMode && stylesDark.greeting,
                   {
                     opacity: greetingFade,
                     transform: [{ translateX: greetingSlide }],
-                    textShadowColor: 'rgba(124,58,237,0.10)',
+                    textShadowColor: darkMode ? 'rgba(0,0,0,0.18)' : 'rgba(124,58,237,0.10)',
                     textShadowOffset: { width: 0, height: 2 },
                     textShadowRadius: 8,
                   },
@@ -571,6 +593,8 @@ const Greeting: React.FC = () => {
               style={({ pressed }) => [
                 styles.editButton,
                 isEditing && styles.editButtonActive,
+                darkMode && stylesDark.editButton,
+                isEditing && darkMode && stylesDark.editButtonActive,
                 pressed && { opacity: 0.7 },
               ]}
               disabled={isLoading || isInitialLoading}
@@ -585,7 +609,7 @@ const Greeting: React.FC = () => {
                 <Ionicons
                   name={isEditing ? 'checkmark-circle-outline' : 'create-outline'}
                   size={26}
-                  color={isEditing ? COLORS.primary : COLORS.darkText}
+                  color={isEditing ? COLORS.primary : (darkMode ? "#f1f5f9" : COLORS.darkText)}
                 />
               )}
             </Pressable>
@@ -596,6 +620,7 @@ const Greeting: React.FC = () => {
               android_ripple={{ color: COLORS.error, borderless: true }}
               style={({ pressed }) => [
                 styles.cancelButton,
+                darkMode && stylesDark.cancelButton,
                 pressed && { opacity: 0.7 },
               ]}
               accessibilityRole="button"
@@ -608,7 +633,7 @@ const Greeting: React.FC = () => {
           )}
         </View>
         {error && !isInitialLoading && (
-          <Text style={styles.errorText} accessibilityLiveRegion="assertive" testID="error-text">
+          <Text style={[styles.errorText, darkMode && stylesDark.errorText]} accessibilityLiveRegion="assertive" testID="error-text">
             {error}
           </Text>
         )}
@@ -790,6 +815,30 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.08)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
+  },
+});
+
+// Dark mode styles
+const stylesDark = StyleSheet.create({
+  blurCard: {
+    backgroundColor: 'rgba(24,24,27,0.8)',
+  },
+  greeting: {
+    color: '#f1f5f9',
+  },
+  editButton: {
+    backgroundColor: '#23232b',
+    borderColor: '#23232b',
+  },
+  editButtonActive: {
+    backgroundColor: '#8bb4ff',
+    borderColor: '#8bb4ff',
+  },
+  cancelButton: {
+    backgroundColor: 'transparent',
+  },
+  errorText: {
+    color: '#f87171',
   },
 });
 

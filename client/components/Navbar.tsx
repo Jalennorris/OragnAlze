@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 // Add BlurView for glassmorphism
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // --- Types ---
 interface ThemeColors {
@@ -56,6 +57,15 @@ const MODERN_COLORS: ThemeColors = {
   navBorder: 'rgba(120,120,120,0.08)',
   navActiveBg: 'rgba(99,102,241,0.10)', // Indigo-100
   shadowColor: '#6366F1',
+};
+
+const DARK_COLORS: ThemeColors = {
+  primary: '#8bb4ff',
+  inactive: '#888',
+  navBg: 'rgba(24,24,27,0.85)',
+  navBorder: 'rgba(36,36,36,0.18)',
+  navActiveBg: 'rgba(139,180,255,0.10)',
+  shadowColor: '#23232b',
 };
 
 const TAB_CONFIG: TabConfigItem[] = [
@@ -151,7 +161,25 @@ const TabItem: React.FC<TabItemProps> = React.memo(
 // --- NavBar Component ---
 const NavBar: React.FC<NavBarProps> = React.memo(({ theme, initialRouteName }) => {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const mergedColors = { ...MODERN_COLORS, ...theme };
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const fetchDarkMode = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('darkMode');
+        if (stored !== null) {
+          setDarkMode(JSON.parse(stored));
+        }
+      } catch {
+        setDarkMode(false);
+      }
+    };
+    fetchDarkMode();
+    const interval = setInterval(fetchDarkMode, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const mergedColors = { ...(darkMode ? DARK_COLORS : MODERN_COLORS), ...theme };
 
   // Determine initial active tab from navigation state or prop
   const getInitialActiveTab = () => {
@@ -223,7 +251,7 @@ const NavBar: React.FC<NavBarProps> = React.memo(({ theme, initialRouteName }) =
 
   return (
     <SafeAreaView style={[styles.safeAreaViewWrapper, { backgroundColor: 'transparent' }]}>
-      <BlurView intensity={38} tint="light" style={[
+      <BlurView intensity={38} tint={darkMode ? "dark" : "light"} style={[
         styles.blurView,
         { width: maxBarWidth, left: (deviceWidth - maxBarWidth) / 2 }
       ]}>

@@ -56,11 +56,13 @@ public class UserModels {
     @Column(name = "profile_pic")
     private String profile_pic;
 
+    private Boolean isDarkMode = false;
+
     // Default constructor
     public UserModels() {}
 
     // Parameterized constructor
-    public UserModels(String firstname, String lastname, String email, String username, String password, Role role, String display_name, String profile_pic) {
+    public UserModels(String firstname, String lastname, String email, String username, String password, Role role, String display_name, String profile_pic, Boolean isDarkMode) {
         this.firstname = firstname;
         this.lastname = lastname;
         this.email = email;
@@ -69,6 +71,8 @@ public class UserModels {
         this.role = role;
         this.display_name = display_name;
         this.profile_pic = profile_pic;
+        this.isDarkMode = isDarkMode;
+
     }
 
     // Getters and setters
@@ -150,5 +154,14 @@ public class UserModels {
 
     public void setProfile_pic(String profile_pic) {
         this.profile_pic = profile_pic;
+    }
+
+
+    public Boolean getIsDarkMode(){
+        return isDarkMode;
+    }
+
+    public  void setIsDarkMode(Boolean isDarkMode){
+        this.isDarkMode = isDarkMode;
     }
 }

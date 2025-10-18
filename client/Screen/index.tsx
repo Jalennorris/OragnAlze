@@ -34,6 +34,9 @@ import ErrorState from '@/components/ErrorState';
 import Loader from '@/components/Loader';
 import AskAIButton from '@/components/AskAIButton';
 
+import { useAuth } from '../Provider/AuthProvider';
+import {router} from 'expo-router';
+
 interface Task {
   taskId: number;
   userId: number;
@@ -202,8 +205,25 @@ const CompletedTasksSection: React.FC<{
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation();
-  const colorScheme = useColorScheme();
+  const { userId, signOut } = useAuth();
+  // const colorScheme = useColorScheme();
+  // const COLORS = colorScheme === 'light' ? LIGHT_COLORS : DARK_COLORS;
+
+  const [colorScheme, setColorScheme] = useState<'light' | 'dark'>('light');
   const COLORS = colorScheme === 'light' ? LIGHT_COLORS : DARK_COLORS;
+
+  // Listen for navigation focus to update dark mode immediately after settings change
+  useEffect(() => {
+    const updateColorScheme = async () => {
+      const storedDarkMode = await AsyncStorage.getItem('darkMode');
+      if (storedDarkMode !== null) {
+        setColorScheme(JSON.parse(storedDarkMode) ? 'dark' : 'light');
+      }
+    };
+    updateColorScheme();
+    const unsubscribe = navigation.addListener('focus', updateColorScheme);
+    return unsubscribe;
+  }, [navigation]);
 
   const [showFutureTasks, setShowFutureTasks] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -216,7 +236,7 @@ const HomeScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'work' | 'personal' | 'school' | 'other'>('all');
   const [showFilterOptions, setShowFilterOptions] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const isInitialLoad = useRef(true);
   const [showSpinner, setShowSpinner] = useState(true);
 
   const [currentPage, setCurrentPage] = useState(0);
@@ -252,7 +272,6 @@ const HomeScreen: React.FC = () => {
 
       if (!online) return;
 
-      const userId = await AsyncStorage.getItem('userId');
       if (!userId) return;
 
       const apiUrl = `http://localhost:8080/api/tasks/user/${userId}/sync`;
@@ -264,7 +283,7 @@ const HomeScreen: React.FC = () => {
     } catch (error) {
       console.error('Error syncing offline changes:', error);
     }
-  }, []);
+  }, [userId]);
 
   const getTasks = useCallback(
     async (forceRefresh = false, showLoader = true) => {
@@ -272,53 +291,39 @@ const HomeScreen: React.FC = () => {
       setError('');
 
       try {
-        const netInfoState = await NetInfo.fetch();
-        const online = !!netInfoState.isConnected;
-        setIsOffline(!online);
+        if (!userId) {
+          navigation.navigate("login");
+          throw new Error("User ID not found");
+        }
 
-        if (online) {
-          const userId = await AsyncStorage.getItem('userId');
-           if (!userId) {
-            navigation.navigate("login");
-            throw new Error("User ID not found");
-          } 
+        const apiUrl = `http://localhost:8080/api/tasks/user/${userId}`;
+        const response = await fetch(apiUrl);
 
-          const apiUrl = `http://localhost:8080/api/tasks/user/${userId}`;
-          const response = await fetch(apiUrl);
-
-          if (!response.ok) {
-            if (response.status === 404) {
-              setTasks([]);
-              await AsyncStorage.removeItem('cachedTasks');
-              setError("No tasks found. Add some!");
-            } else {
-              throw new Error(`HTTP error! status: ${response.status}`);
-            }
+        if (!response.ok) {
+          if (response.status === 404) {
+            setTasks([]);
+            await AsyncStorage.removeItem('cachedTasks');
+            setError("No tasks found. Add some!");
           } else {
-            const fetchedTasks: Task[] = await response.json();
-            const offlineChanges = await AsyncStorage.getItem('offlineChanges');
-            const changes = offlineChanges ? JSON.parse(offlineChanges) : [];
-
-            const resolvedTasks = fetchedTasks.map((task) => {
-              const conflict = changes.find((change) => change.taskId === task.taskId);
-              if (conflict) {
-                if (conflict.type === 'edit') {
-                  return { ...task, ...conflict.updatedTask };
-                }
-              }
-              return task;
-            });
-
-            setTasks(resolvedTasks);
-            await AsyncStorage.setItem('cachedTasks', JSON.stringify(resolvedTasks));
+            throw new Error(`HTTP error! status: ${response.status}`);
           }
         } else {
-          setError('You are offline. Showing cached tasks.');
-          const cacheLoaded = await loadTasksFromCache();
-          if (!cacheLoaded && isInitialLoad) {
-            setError('Offline and no cached tasks available.');
-            setTasks([]);
-          }
+          const fetchedTasks: Task[] = await response.json();
+          const offlineChanges = await AsyncStorage.getItem('offlineChanges');
+          const changes = offlineChanges ? JSON.parse(offlineChanges) : [];
+
+          const resolvedTasks = fetchedTasks.map((task) => {
+            const conflict = changes.find((change) => change.taskId === task.taskId);
+            if (conflict) {
+              if (conflict.type === 'edit') {
+                return { ...task, ...conflict.updatedTask };
+              }
+            }
+            return task;
+          });
+
+          setTasks(resolvedTasks);
+          await AsyncStorage.setItem('cachedTasks', JSON.stringify(resolvedTasks));
         }
       } catch (err) {
         const errorMessage = (err as Error).message || 'An unknown error occurred';
@@ -332,39 +337,43 @@ const HomeScreen: React.FC = () => {
       } finally {
         setLoading(false);
         setRefreshing(false);
-        setIsInitialLoad(false);
+        if (isInitialLoad.current) {
+          isInitialLoad.current = false;
+        }
         setShowSpinner(false);
       }
     },
-    [navigation, isInitialLoad]
+    [navigation, userId]
   );
 
   useEffect(() => {
-    getTasks();
-    syncOfflineChanges();
+    let interval: NodeJS.Timeout | null = null;
 
-    const unsubscribe = NetInfo.addEventListener(state => {
-      const currentlyOffline = !state.isConnected;
-      if (isOffline !== currentlyOffline) {
-        setIsOffline(currentlyOffline);
-        if (!currentlyOffline) {
-          syncOfflineChanges();
-          getTasks();
-        } else {
-          setError("You are offline. Showing cached tasks.");
+    const initializeTasks = async () => {
+      try {
+        if (!userId) {
+          navigation.navigate("login"); // Directly navigate to login
+          return; // Stop further execution
         }
-      }
-    });
 
-    const interval = setInterval(() => {
-      getTasks(false, false);
-    }, 10000);
+        await getTasks();
+        syncOfflineChanges();
+
+        // Set up interval only if userId exists
+        interval = setInterval(() => {
+          getTasks(false, false);
+        }, 10000);
+      } catch (error) {
+        console.error("Error initializing tasks:", error);
+      }
+    };
+
+    initializeTasks();
 
     return () => {
-      unsubscribe();
-      clearInterval(interval);
+      if (interval) clearInterval(interval); // Clear interval on component unmount
     };
-  }, [getTasks, syncOfflineChanges, isOffline]);
+  }, [getTasks, syncOfflineChanges, navigation, userId]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -593,6 +602,7 @@ const HomeScreen: React.FC = () => {
     onShare: (task: Task) => void;
     showSection?: boolean;
     setShowSection?: (show: boolean) => void;
+    color?: string; // <-- Add this line
   }> = ({
     title,
     tasks,
@@ -604,6 +614,7 @@ const HomeScreen: React.FC = () => {
     onShare,
     showSection,
     setShowSection,
+    color, // <-- Add this line
   }) => {
     const isCollapsible = title === 'Today' || title === 'This Week';
     const isOpen = showSection === undefined ? true : showSection;
@@ -622,7 +633,11 @@ const HomeScreen: React.FC = () => {
               style={{ marginRight: 6 }}
             />
           )}
-          <Text style={[styles.dateText, title === 'Today' && styles.todayText]}>
+          <Text style={[
+            styles.dateText,
+            title === 'Today' && styles.todayText,
+            color && { color }, // <-- Use color prop if provided
+          ]}>
             {title}
           </Text>
           {icon && (
@@ -747,11 +762,6 @@ const HomeScreen: React.FC = () => {
               ))}
             </View>
           </View>
-          {isOffline && (
-            <View style={styles.offlineIndicator}>
-              <Text style={styles.offlineText}>Offline Mode</Text>
-            </View>
-          )}
           <View style={styles.taskcontainer}>
             {showSpinner && !refreshing ? (
               <Loader colors={COLORS} />
@@ -832,6 +842,7 @@ const HomeScreen: React.FC = () => {
                             onShare={shareTask}
                             showSection={showThisWeek}
                             setShowSection={setShowThisWeek}
+                            color={COLORS.background === '#121212' ? '#fff' : COLORS.text} // <-- Add this line
                           />
                           <FutureTask
                             futureTasks={futureTasks}
@@ -843,7 +854,7 @@ const HomeScreen: React.FC = () => {
                             getPriorityColor={getPriorityColor}
                             colors={COLORS}
                           />
-                          <Text style={styles.dateText}>All Tasks</Text>
+                          <Text style={[styles.dateText, { color: COLORS.text }]}>All Tasks</Text>
                           {incompleteTasks.length === 0 && (
                             <EmptyState
                               message="No incomplete tasks!"

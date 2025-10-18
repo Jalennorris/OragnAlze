@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -29,6 +29,22 @@ const COLORS = {
   gradientEnd: '#38BDF8',
 };
 
+const DARK_COLORS = {
+  primary: '#a5b4fc',
+  secondary: '#818cf8',
+  background: '#18181b',
+  error: '#f87171',
+  text: '#f3f4f6',
+  placeholder: '#52525b',
+  card: 'rgba(36,37,46,0.85)',
+  border: '#232336',
+  shadow: '#232336',
+  gradientStart: '#818cf8',
+  gradientEnd: '#6366f1',
+};
+
+const LIGHT_COLORS = COLORS;
+
 const SIZES = {
   padding: 28,
   borderRadius: 28,
@@ -43,8 +59,15 @@ const ChangePassword: React.FC = () => {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   const navigation = useNavigation();
+
+  useEffect(() => {
+    AsyncStorage.getItem('darkMode').then(val => {
+      setIsDarkMode(val ? JSON.parse(val) : false);
+    });
+  }, []);
 
   const validateForm = (): boolean => {
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -113,20 +136,22 @@ const ChangePassword: React.FC = () => {
     }
   };
 
+  const themeColors = isDarkMode ? DARK_COLORS : LIGHT_COLORS;
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
       {isSaving && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={themeColors.primary} />
         </View>
       )}
-      <View style={styles.container} pointerEvents={isSaving ? 'none' : 'auto'}>
+      <View style={[styles.container, { backgroundColor: themeColors.background }]} pointerEvents={isSaving ? 'none' : 'auto'}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-          <Icon name="arrow-back" size={SIZES.iconSize} color={COLORS.primary} />
-          <Text style={styles.backButtonText}>Back</Text>
+          <Icon name="arrow-back" size={SIZES.iconSize} color={themeColors.primary} />
+          <Text style={[styles.backButtonText, { color: themeColors.primary }]}>Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Change Password</Text>
-        <View style={styles.card}>
+        <Text style={[styles.title, { color: themeColors.text }]}>Change Password</Text>
+        <View style={[styles.card, { backgroundColor: themeColors.card, borderColor: themeColors.border, shadowColor: themeColors.shadow }]}>
           <PasswordInput
             icon="lock"
             placeholder="Current Password"
@@ -136,7 +161,7 @@ const ChangePassword: React.FC = () => {
             isPasswordVisible={showCurrent}
             onToggleVisibility={() => setShowCurrent(v => !v)}
             containerStyle={styles.inputContainer}
-            inputStyle={styles.input}
+            inputStyle={[styles.input, { color: themeColors.text }]}
             iconStyle={styles.icon}
           />
           <PasswordInput
@@ -148,7 +173,7 @@ const ChangePassword: React.FC = () => {
             isPasswordVisible={showNew}
             onToggleVisibility={() => setShowNew(v => !v)}
             containerStyle={styles.inputContainer}
-            inputStyle={styles.input}
+            inputStyle={[styles.input, { color: themeColors.text }]}
             iconStyle={styles.icon}
           />
           <PasswordInput
@@ -160,7 +185,7 @@ const ChangePassword: React.FC = () => {
             isPasswordVisible={showConfirm}
             onToggleVisibility={() => setShowConfirm(v => !v)}
             containerStyle={styles.inputContainer}
-            inputStyle={styles.input}
+            inputStyle={[styles.input, { color: themeColors.text }]}
             iconStyle={styles.icon}
           />
           <TouchableOpacity
@@ -172,7 +197,7 @@ const ChangePassword: React.FC = () => {
             accessibilityRole="button"
           >
             <LinearGradient
-              colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+              colors={isDarkMode ? [themeColors.gradientStart, themeColors.gradientEnd] : [COLORS.gradientStart, COLORS.gradientEnd]}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import TaskItem from './taskItem';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Task {
   taskId: number;
@@ -27,7 +28,12 @@ interface DateSectionProps {
     text: string;
   };
   icon?: React.ReactNode; // Optional icon to display when there are no tasks
+  color?: string; // <-- Add this line
 }
+
+const DARK_COLORS = {
+  text: '#f1f5f9',
+};
 
 const DateSection: React.FC<DateSectionProps> = ({
   title,
@@ -38,12 +44,40 @@ const DateSection: React.FC<DateSectionProps> = ({
   getPriorityColor,
   colors,
   icon, // Add icon prop
+  color, // <-- Add this line
 }) => {
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const fetchDarkMode = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('darkMode');
+        if (stored !== null) {
+          setDarkMode(JSON.parse(stored));
+        }
+      } catch {
+        setDarkMode(false);
+      }
+    };
+    fetchDarkMode();
+    const interval = setInterval(fetchDarkMode, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const mergedColors = darkMode ? { ...colors, ...DARK_COLORS } : colors;
+
   // Determine extra spacing for Today/This Week
   const isSpecialSection = title === 'Today' || title === 'This Week';
   return (
     <View style={styles.container}>
-      <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+      <Text
+        style={[
+          styles.title,
+          { color: color || mergedColors.text || '#f1f5f9' }, // Use explicit color prop if provided
+        ]}
+      >
+        {title}
+      </Text>
       {tasks.length > 0 ? (
         tasks.map((task) => (
           <View
@@ -65,7 +99,7 @@ const DateSection: React.FC<DateSectionProps> = ({
       ) : (
         <View style={styles.emptyStateContainer}>
           {icon && <View style={styles.iconContainer}>{icon}</View>} {/* Render icon if provided */}
-          <Text style={[styles.emptyStateText, { color: colors.text }]}>No tasks for {title.toLowerCase()}!</Text>
+          <Text style={[styles.emptyStateText, { color: mergedColors.text }]}>No tasks for {title.toLowerCase()}!</Text>
         </View>
       )}
     </View>

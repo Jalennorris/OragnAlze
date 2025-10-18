@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated, FlatList } from 're
 import TaskItem from '../components/taskItem';
 import Icon from 'react-native-vector-icons/Ionicons';
 import EmptyState from '../components/EmptyState';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Define types for the task structure
 interface Task {
@@ -29,6 +30,13 @@ interface FutureTaskProps {
   colors: { [key: string]: string };
 }
 
+const DARK_COLORS = {
+  text: '#f1f5f9',
+  background: '#181c22',
+  card: '#23272f',
+  border: '#23232b',
+};
+
 const FutureTask: React.FC<FutureTaskProps> = ({
   futureTasks,
   showFutureTasks,
@@ -41,6 +49,25 @@ const FutureTask: React.FC<FutureTaskProps> = ({
 }) => {
   // Animation state
   const [heightAnim] = React.useState(new Animated.Value(showFutureTasks ? 1 : 0));
+  const [darkMode, setDarkMode] = React.useState(false);
+
+  React.useEffect(() => {
+    const fetchDarkMode = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('darkMode');
+        if (stored !== null) {
+          setDarkMode(JSON.parse(stored));
+        }
+      } catch {
+        setDarkMode(false);
+      }
+    };
+    fetchDarkMode();
+    const interval = setInterval(fetchDarkMode, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const mergedColors = darkMode ? { ...colors, ...DARK_COLORS } : colors;
 
   React.useEffect(() => {
     Animated.timing(heightAnim, {
@@ -65,11 +92,11 @@ const FutureTask: React.FC<FutureTaskProps> = ({
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15 }}>
           {showFutureTasks ? (
-            <Icon name="chevron-up" size={18} color={colors.text} />
+            <Icon name="chevron-up" size={18} color={mergedColors.text} />
           ) : (
-            <Icon name="chevron-down" size={18} color={colors.text} />
+            <Icon name="chevron-down" size={18} color={mergedColors.text} />
           )}
-          <Text style={[styles.futureHeader, { color: colors.text, paddingHorizontal: 0 }]}>
+          <Text style={[styles.futureHeader, { color: mergedColors.text, paddingHorizontal: 0 }]}>
             {'  '}Future Tasks
           </Text>
         </View>
@@ -92,7 +119,7 @@ const FutureTask: React.FC<FutureTaskProps> = ({
               <EmptyState
                 message="No future tasks! Try adding tasks with upcoming deadlines."
                 iconName="calendar-outline"
-                colors={colors}
+                colors={mergedColors}
               />
             }
           />

@@ -27,7 +27,25 @@ const FAVORITES_KEY = 'motivational_quotes_favorites';
 
 const MotivationalQuotes: React.FC = () => {
   const colorScheme = useColorScheme();
-  const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const fetchDarkMode = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('darkMode');
+        if (stored !== null) {
+          setDarkMode(JSON.parse(stored));
+        }
+      } catch {
+        setDarkMode(false);
+      }
+    };
+    fetchDarkMode();
+    const interval = setInterval(fetchDarkMode, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const theme = (darkMode || colorScheme === 'dark') ? darkTheme : lightTheme;
 
   const [type, setType] = useState<QuoteType>('all');
   const [q, setQ] = useState<Quote | undefined>(undefined);
@@ -285,7 +303,7 @@ const MotivationalQuotes: React.FC = () => {
 
   return (
     <LinearGradient
-      colors={colorScheme === 'dark'
+      colors={darkMode || colorScheme === 'dark'
         ? ['#181c22', '#181c22']
         : ['#fff', '#fff']}
       style={s.gradient}
@@ -557,6 +575,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 10,
     paddingTop: 10,
+   
   },
   topBar: {
     flexDirection: 'row',

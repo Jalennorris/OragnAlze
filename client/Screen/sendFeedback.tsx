@@ -20,10 +20,41 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as Linking from 'expo-linking';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const FEEDBACK_EMAIL = 'feedback@organalze.com';
 const FEEDBACK_BODY_MAX = 1000;
 const { width } = Dimensions.get('window');
+
+const LIGHT_COLORS = {
+  background: '#f8fafc',
+  card: 'rgba(255,255,255,0.85)',
+  text: '#18181b',
+  accent: '#6366f1',
+  accent2: '#818cf8',
+  border: '#e0e7ef',
+  placeholder: '#a1a1aa',
+  error: '#f87171',
+  toast: 'rgba(55,48,163,0.97)',
+  toastText: '#fff',
+  fab: '#6366f1',
+  fabDisabled: '#a5b4fc',
+};
+
+const DARK_COLORS = {
+  background: '#18181b',
+  card: 'rgba(36,37,46,0.85)',
+  text: '#f3f4f6',
+  accent: '#a5b4fc',
+  accent2: '#818cf8',
+  border: '#232336',
+  placeholder: '#52525b',
+  error: '#f87171',
+  toast: 'rgba(129,140,248,0.97)',
+  toastText: '#18181b',
+  fab: '#a5b4fc',
+  fabDisabled: '#232336',
+};
 
 const SendFeedback: React.FC = () => {
   const [subject, setSubject] = useState('');
@@ -32,6 +63,7 @@ const SendFeedback: React.FC = () => {
   const [sent, setSent] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [focusField, setFocusField] = useState<'subject' | 'body' | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const navigation = useNavigation();
   const fabScale = useRef(new Animated.Value(1)).current;
   const toastAnim = useRef(new Animated.Value(0)).current;
@@ -46,6 +78,12 @@ const SendFeedback: React.FC = () => {
       useNativeDriver: true,
       easing: Easing.out(Easing.exp),
     }).start();
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem('darkMode').then(val => {
+      setIsDarkMode(val ? JSON.parse(val) : false);
+    });
   }, []);
 
   // Animated gradient background
@@ -133,20 +171,22 @@ const SendFeedback: React.FC = () => {
     });
   };
 
+  const COLORS = isDarkMode ? DARK_COLORS : LIGHT_COLORS;
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }}>
       <View style={{ flex: 1 }}>
         {/* Animated Gradient Background */}
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: bgInterpolate },
+            { backgroundColor: isDarkMode ? '#18181b' : bgInterpolate },
           ]}
         >
           <View
             style={{
               ...StyleSheet.absoluteFillObject,
-              backgroundColor: 'rgba(255,255,255,0.85)',
+              backgroundColor: COLORS.card,
             }}
           />
         </Animated.View>
@@ -162,25 +202,25 @@ const SendFeedback: React.FC = () => {
           >
             {/* Minimal icon-only header */}
             <View style={styles.headerContainer}>
-              <View style={styles.headerBlur}>
+              <View style={[styles.headerBlur, { backgroundColor: COLORS.card }]}>
                 <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
-                  <Icon name="arrow-back-ios" size={22} color="#6366f1" />
+                  <Icon name="arrow-back-ios" size={22} color={COLORS.accent} />
                 </Pressable>
               </View>
             </View>
             {/* Centered Title */}
             <View style={styles.centeredTitleRow}>
-              <Text style={styles.feedbackTitle}>Feedback</Text>
+              <Text style={[styles.feedbackTitle, { color: COLORS.accent }]}>Feedback</Text>
             </View>
             {/* Parallax fade-in glassmorphism card */}
             <Animated.View style={[styles.centeredCardRow, { opacity: cardFade, transform: [{ translateY: cardTranslate }] }]}>
-              <View style={styles.card}>
+              <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border, shadowColor: COLORS.accent }]}>
                 {/* Floating label for subject */}
                 <View style={styles.inputWrapper}>
                   <Animated.Text
                     style={[
                       styles.floatingLabel,
-                      (focusField === 'subject' || subject) && styles.floatingLabelActive,
+                      (focusField === 'subject' || subject) && [styles.floatingLabelActive, { color: COLORS.accent, backgroundColor: COLORS.card }],
                     ]}
                     pointerEvents="none"
                   >
@@ -189,14 +229,16 @@ const SendFeedback: React.FC = () => {
                   <TextInput
                     style={[
                       styles.input,
-                      focusField === 'subject' && styles.inputFocused,
+                      focusField === 'subject' && [styles.inputFocused, { borderColor: COLORS.accent, backgroundColor: COLORS.card }],
+                      { color: COLORS.text, backgroundColor: COLORS.card, borderColor: COLORS.border },
                     ]}
                     value={subject}
                     onChangeText={setSubject}
                     returnKeyType="next"
-                    selectionColor="#6366f1"
+                    selectionColor={COLORS.accent}
                     onFocus={() => setFocusField('subject')}
                     onBlur={() => setFocusField(null)}
+                    placeholderTextColor={COLORS.placeholder}
                   />
                 </View>
                 {/* Floating label for feedback */}
@@ -204,7 +246,7 @@ const SendFeedback: React.FC = () => {
                   <Animated.Text
                     style={[
                       styles.floatingLabel,
-                      (focusField === 'body' || body) && styles.floatingLabelActive,
+                      (focusField === 'body' || body) && [styles.floatingLabelActive, { color: COLORS.accent, backgroundColor: COLORS.card }],
                     ]}
                     pointerEvents="none"
                   >
@@ -214,7 +256,8 @@ const SendFeedback: React.FC = () => {
                     style={[
                       styles.input,
                       styles.textArea,
-                      focusField === 'body' && styles.inputFocused,
+                      focusField === 'body' && [styles.inputFocused, { borderColor: COLORS.accent, backgroundColor: COLORS.card }],
+                      { color: COLORS.text, backgroundColor: COLORS.card, borderColor: COLORS.border },
                     ]}
                     value={body}
                     onChangeText={text => {
@@ -222,18 +265,19 @@ const SendFeedback: React.FC = () => {
                     }}
                     multiline
                     numberOfLines={6}
-                    selectionColor="#6366f1"
+                    selectionColor={COLORS.accent}
                     onFocus={() => setFocusField('body')}
                     onBlur={() => setFocusField(null)}
+                    placeholderTextColor={COLORS.placeholder}
                   />
                 </View>
                 <View style={styles.charCountRow}>
-                  <Text style={styles.charCount}>{body.length}/{FEEDBACK_BODY_MAX}</Text>
+                  <Text style={[styles.charCount, { color: COLORS.placeholder }]}>{body.length}/{FEEDBACK_BODY_MAX}</Text>
                 </View>
                 {sent && (
-                  <TouchableOpacity style={styles.resetBtn} onPress={handleReset}>
-                    <Icon name="refresh" size={20} color="#6366f1" />
-                    <Text style={styles.resetText}>Reset</Text>
+                  <TouchableOpacity style={[styles.resetBtn, { backgroundColor: COLORS.card }]} onPress={handleReset}>
+                    <Icon name="refresh" size={20} color={COLORS.accent} />
+                    <Text style={[styles.resetText, { color: COLORS.accent }]}>Reset</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -251,7 +295,8 @@ const SendFeedback: React.FC = () => {
             <TouchableOpacity
               style={[
                 styles.fab,
-                (!body.trim() || loading) && styles.fabDisabled,
+                { backgroundColor: COLORS.fab },
+                (!body.trim() || loading) && [styles.fabDisabled, { backgroundColor: COLORS.fabDisabled }],
               ]}
               onPress={handleSend}
               accessibilityLabel="Send feedback"
@@ -275,6 +320,7 @@ const SendFeedback: React.FC = () => {
               style={[
                 styles.toast,
                 {
+                  backgroundColor: COLORS.toast,
                   opacity: toastAnim,
                   transform: [
                     {
@@ -287,7 +333,7 @@ const SendFeedback: React.FC = () => {
                 },
               ]}
             >
-              <Text style={styles.toastText}>Feedback ready to send!</Text>
+              <Text style={[styles.toastText, { color: COLORS.toastText }]}>Feedback ready to send!</Text>
             </Animated.View>
           )}
         </KeyboardAvoidingView>
@@ -300,7 +346,7 @@ const styles = StyleSheet.create({
   outerContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    alignItems: 'center', // Center everything horizontally
+    alignItems: 'center',
     padding: 0,
     minHeight: '100%',
     backgroundColor: 'transparent',
@@ -325,7 +371,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.7)',
   },
   backButton: {
     width: 36,
@@ -333,7 +378,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f1f5f9',
     marginRight: 0,
     shadowColor: '#fff',
     shadowOpacity: 0.8,
@@ -348,7 +392,6 @@ const styles = StyleSheet.create({
   feedbackTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#6366f1',
     marginBottom: 8,
     alignSelf: 'center',
     letterSpacing: 0.2,
@@ -361,17 +404,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   card: {
-    backgroundColor: 'rgba(255,255,255,0.75)',
     borderRadius: 32,
     padding: 36,
-    shadowColor: '#6366f1',
     shadowOpacity: 0.18,
     shadowRadius: 32,
     elevation: 16,
     marginHorizontal: 2,
     marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: 'rgba(99,102,241,0.13)',
     overflow: 'hidden',
     width: Math.min(width * 0.95, 440),
     alignSelf: 'center',
@@ -386,7 +426,6 @@ const styles = StyleSheet.create({
     left: 22,
     top: 24,
     fontSize: 17,
-    color: '#a1a1aa',
     zIndex: 2,
     backgroundColor: 'transparent',
     paddingHorizontal: 2,
@@ -396,27 +435,20 @@ const styles = StyleSheet.create({
   floatingLabelActive: {
     top: -12,
     fontSize: 13,
-    color: '#6366f1',
     opacity: 1,
-    backgroundColor: 'rgba(255,255,255,0.92)',
     paddingHorizontal: 6,
     fontWeight: '700',
   },
   input: {
-    backgroundColor: 'rgba(241,245,249,0.92)',
     borderRadius: 18,
     padding: 20,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#e0e7ff',
-    color: '#18181b',
     marginTop: 10,
     minHeight: 52,
     fontWeight: '500',
   },
   inputFocused: {
-    borderColor: '#6366f1',
-    backgroundColor: 'rgba(224,231,255,0.98)',
     shadowColor: '#6366f1',
     shadowOpacity: 0.13,
     shadowRadius: 8,
@@ -435,7 +467,6 @@ const styles = StyleSheet.create({
   },
   charCount: {
     fontSize: 12,
-    color: '#a1a1aa',
     fontWeight: '600',
   },
   fabContainer: {
@@ -451,10 +482,8 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#6366f1',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#6366f1',
     shadowOpacity: 0.22,
     shadowRadius: 24,
     elevation: 16,
@@ -462,14 +491,12 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   fabDisabled: {
-    backgroundColor: '#a5b4fc',
   },
   toast: {
     position: 'absolute',
     bottom: 120,
     left: width * 0.15,
     right: width * 0.15,
-    backgroundColor: 'rgba(55,48,163,0.97)',
     borderRadius: 18,
     paddingVertical: 18,
     paddingHorizontal: 22,
@@ -481,7 +508,6 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   toastText: {
-    color: '#fff',
     fontWeight: '700',
     fontSize: 16,
     letterSpacing: 0.1,
@@ -494,11 +520,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: 'rgba(99,102,241,0.08)',
   },
   resetText: {
     alignSelf: 'center',
-    color: '#6366f1',
     fontWeight: '700',
     fontSize: 14,
     marginLeft: 6,

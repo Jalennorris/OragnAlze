@@ -8,6 +8,7 @@ import { Easing } from 'react-native';
 import axios from 'axios';
 import Toast from 'react-native-toast-message';
 import { format, parse } from 'date-fns';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // --- Modern Color & Spacing Constants ---
 const COLORS = {
@@ -27,6 +28,20 @@ const COLORS = {
   selectionDark: '#3730A3',
   overlay: 'rgba(0,0,0,0.18)',
 };
+
+const DARK_COLORS = {
+  cardBg: '#23272F',
+  border: '#2D333B',
+  textPrimary: '#f1f5f9',
+  textSecondary: '#a1a1aa',
+  accent: '#8bb4ff',
+  selection: '#3730A3',
+  overlay: 'rgba(0,0,0,0.28)',
+  warning: '#F59E42',
+  error: '#EF4444',
+  success: '#22C55E',
+};
+
 const SPACING = {
   card: 18,
   inner: 14,
@@ -538,12 +553,33 @@ const AITaskItem: React.FC<TaskItemProps> = ({
     );
   };
 
-  // Determine background colors based on selection
+  // Determine background colors based on selection and darkMode
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const fetchDarkMode = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('darkMode');
+        if (stored !== null) {
+          setDarkMode(JSON.parse(stored));
+        }
+      } catch {
+        setDarkMode(false);
+      }
+    };
+    fetchDarkMode();
+    const interval = setInterval(fetchDarkMode, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const isDark = darkMode || colorScheme === 'dark';
+  const mergedColors = isDark
+    ? { ...COLORS, ...DARK_COLORS }
+    : COLORS;
   const backgroundColors = isSelected
-    ? [isDark ? COLORS.selectionDark : COLORS.selection, isDark ? COLORS.selectionDark : COLORS.selection]
-    : [isDark ? COLORS.cardBgDark : COLORS.cardBgLight, isDark ? COLORS.cardBgDark : COLORS.cardBgLight];
+    ? [mergedColors.selection, mergedColors.selection]
+    : [mergedColors.cardBg || mergedColors.cardBgLight, mergedColors.cardBg || mergedColors.cardBgLight];
 
   const handleNameBlur = async () => {
     if (editName.trim() && editName !== task.taskName) {
@@ -657,6 +693,10 @@ const AITaskItem: React.FC<TaskItemProps> = ({
               isOffline && { opacity: 0.6 },
               isSelected && (isDark ? styles.selectedDark : styles.selected),
               pressed && styles.pressed,
+              isDark && {
+                backgroundColor: mergedColors.cardBg,
+                borderColor: mergedColors.border,
+              },
             ]}
             disabled={isOffline}
             onPress={onPress} // <-- Add this line
@@ -686,7 +726,7 @@ const AITaskItem: React.FC<TaskItemProps> = ({
                     <Ionicons
                       name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
                       size={SPACING.icon}
-                      color={isSelected ? COLORS.accent : COLORS.borderLight}
+                      color={isSelected ? mergedColors.accent : mergedColors.borderLight}
                     />
                   </View>
                 )}
@@ -694,13 +734,13 @@ const AITaskItem: React.FC<TaskItemProps> = ({
                 <View style={styles.taskInfo}>
                   {isLoading && (
                     <View style={{ alignItems: 'center', marginBottom: 8 }}>
-                      <ActivityIndicator size="small" color={COLORS.accent} />
+                      <ActivityIndicator size="small" color={mergedColors.accent} />
                     </View>
                   )}
                   {/* Always editable title and description */}
                   <View style={styles.header}>
                     <TextInput
-                      style={[styles.title, { color: isDark ? '#FFF' : COLORS.textPrimary }]} // removed borderBottomWidth and borderColor
+                      style={[styles.title, { color: isDark ? mergedColors.textPrimary : COLORS.textPrimary }]} // removed borderBottomWidth and borderColor
                       value={
                         editName.length > TITLE_MAX_LENGTH
                           ? editName.slice(0, TITLE_MAX_LENGTH) + '...'
@@ -710,7 +750,7 @@ const AITaskItem: React.FC<TaskItemProps> = ({
                       onBlur={handleNameBlur}
                       placeholder="Task Name"
                       editable={!isOffline}
-                      placeholderTextColor={COLORS.textSecondary}
+                      placeholderTextColor={mergedColors.textSecondary}
                     />
                     <Ionicons
                       name={task.priority === 'high' ? 'alert-circle' : task.priority === 'medium' ? 'alert' : 'checkmark-circle'}
@@ -725,12 +765,12 @@ const AITaskItem: React.FC<TaskItemProps> = ({
                         style={{ marginLeft: 8, padding: 2 }}
                         accessibilityLabel="More Options"
                       >
-                        <Ionicons name="ellipsis-horizontal" size={20} color={COLORS.textSecondary} />
+                        <Ionicons name="ellipsis-horizontal" size={20} color={mergedColors.textSecondary} />
                       </TouchableOpacity>
                     )}
                   </View>
                   <TextInput
-                    style={[styles.description, { color: isDark ? '#EEE' : COLORS.textSecondary }]} // removed borderBottomWidth and borderColor
+                    style={[styles.description, { color: isDark ? mergedColors.textSecondary : COLORS.textSecondary }]} // removed borderBottomWidth and borderColor
                     value={
                       editDescription.length > DESCRIPTION_MAX_LENGTH
                         ? editDescription.slice(0, DESCRIPTION_MAX_LENGTH) + '...'
@@ -741,39 +781,45 @@ const AITaskItem: React.FC<TaskItemProps> = ({
                     placeholder="Task Description"
                     multiline
                     editable={!isOffline}
-                    placeholderTextColor={COLORS.textSecondary}
+                    placeholderTextColor={mergedColors.textSecondary}
                   />
-                  <Text style={styles.category} numberOfLines={1} ellipsizeMode="tail">
+                  <Text style={[styles.category, { color: mergedColors.accent }]} numberOfLines={1} ellipsizeMode="tail">
                     {task.category ? `#${task.category}` : ''}
                   </Text>
                   {/* Due date with gray shadow box */}
-                  <View style={styles.dueDateShadowBox}>
+                  <View style={[
+                    styles.dueDateShadowBox,
+                    isDark && { backgroundColor: mergedColors.cardBg }
+                  ]}>
                     <View style={styles.dueDateContainer}>
-                      <Ionicons name="time-outline" size={14} color={isOverdue ? COLORS.error : COLORS.textPrimary} />
+                      <Ionicons name="time-outline" size={14} color={isOverdue ? mergedColors.error : mergedColors.textPrimary} />
                       <TextInput
                         style={[
                           styles.dueDate,
-                          { color: isOverdue ? COLORS.error : (isDark ? '#FFF' : COLORS.textPrimary), minWidth: 160 },
+                          { color: isOverdue ? mergedColors.error : (isDark ? mergedColors.textPrimary : COLORS.textPrimary), minWidth: 160 },
                         ]}
                         value={displayDate}
                         onChangeText={setEditDeadline}
                         onBlur={handleDeadlineBlur}
                         placeholder="Apr 27, 2024 02:30 PM"
                         editable={!isOffline}
-                        placeholderTextColor={COLORS.textSecondary}
+                        placeholderTextColor={mergedColors.textSecondary}
                       />
                     </View>
                   </View>
                   {/* Subtask count only, fetched from API, hidden if 0 */}
                   {subtaskCount > 0 && (
                     <View style={styles.subtasksContainer}>
-                      <Text style={{ fontWeight: 'bold', fontSize: 15, color: isDark ? '#FFF' : COLORS.textPrimary }}>
+                      <Text style={{ fontWeight: 'bold', fontSize: 15, color: isDark ? mergedColors.textPrimary : COLORS.textPrimary }}>
                         {subtaskCount} subtask{subtaskCount === 1 ? '' : 's'}
                       </Text>
                     </View>
                   )}
                   {isOffline && (
-                    <View style={styles.offlineBanner}>
+                    <View style={[
+                      styles.offlineBanner,
+                      isDark && { backgroundColor: mergedColors.warning }
+                    ]}>
                       <Text style={styles.offlineBannerText}>
                         Offline: Actions disabled
                       </Text>

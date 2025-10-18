@@ -38,7 +38,7 @@ interface Credentials {
 
 // --- Constants ---
 const COLORS = {
-  primary: '#7F56D9', // Modern purple
+  primary:  '#4A2A8A', // Modern purple
   secondary: '#38BDF8', // Modern blue
   background: '#F9FAFB', // Light background
   error: '#EF4444', // Red-500
@@ -54,6 +54,25 @@ const COLORS = {
   gradientEnd: '#38BDF8',
 };
 
+const DARK_COLORS = {
+  primary: '#a5b4fc',
+  secondary: '#818cf8',
+  background: '#18181b',
+  error: '#f87171',
+  text: '#f3f4f6',
+  placeholder: '#52525b',
+  modalBackground: 'rgba(36,37,46,0.85)',
+  card: 'rgba(36,37,46,0.85)',
+  border: '#232336',
+  shadow: '#232336',
+  accent: '#818cf8',
+  success: '#34d399',
+  gradientStart: '#818cf8',
+  gradientEnd: '#6366f1',
+};
+
+const LIGHT_COLORS = COLORS;
+
 const SIZES = {
   padding: 24,
   borderRadius: 18,
@@ -64,22 +83,22 @@ const SIZES = {
 
 // Predefined colors for profile picture selection
 const colorBlocks = [
-  '#FF5733', // Existing
-  '#33FF57', // Existing
-  '#3357FF', // Existing
-  '#FF33A1', // Existing
-  '#F1C40F', // Existing
-  '#8E44AD', // Existing
-  '#1ABC9C', // Teal
-  '#3498DB', // Light Blue
-  '#E74C3C', // Red
-  '#2ECC71', // Green
-  '#9B59B6', // Purple
-  '#34495E', // Dark Gray-Blue
-  '#F39C12', // Orange
-  '#D35400', // Dark Orange
-  '#BDC3C7', // Light Gray
-  '#7F8C8D', // Gray
+  '#B71C1C', // Dark Red
+  '#1B5E20', // Dark Green
+  '#0D47A1', // Dark Blue
+  '#880E4F', // Dark Pink
+  '#B8860B', // Dark Gold
+  '#4B0082', // Indigo
+  '#00695C', // Dark Teal
+  '#1565C0', // Darker Blue
+  '#C62828', // Darker Red
+  '#2E7D32', // Darker Green
+  '#6A1B9A', // Dark Purple
+  '#263238', // Blue Gray
+  '#FF8C00', // Dark Orange
+  '#A0522D', // Sienna
+  '#616161', // Dark Gray
+  '#374151', // Slate
 ];
 // --- Validation Schema ---
 const profileSchema = Yup.object().shape({
@@ -89,28 +108,33 @@ const profileSchema = Yup.object().shape({
 });
 
 // --- Reusable Components ---
-const BackButton = ({ onPress }: { onPress: () => void }) => (
-  <TouchableOpacity style={styles.backButton} onPress={onPress}>
-    <Icon name="arrow-back" size={SIZES.iconSize} color={COLORS.primary} />
-    <Text style={styles.backButtonText}>Back</Text>
+const BackButton = ({ onPress, themeColors }: { onPress: () => void; themeColors: typeof COLORS }) => (
+  <TouchableOpacity style={[styles.backButton, { backgroundColor: themeColors.primary + '18' }]} onPress={onPress}>
+    <Icon name="arrow-back" size={SIZES.iconSize} color={themeColors.text} />
+    <Text style={[styles.backButtonText, { color: themeColors.primary }]}>Back</Text>
   </TouchableOpacity>
 );
 
-const ProfileImage = ({ uri, color, onPress }: { uri?: string; color?: string; onPress: () => void }) => (
-  
+const ProfileImage = ({
+  uri,
+  color,
+  onPress,
+  themeColors,
+}: {
+  uri?: string;
+  color?: string;
+  onPress: () => void;
+  themeColors: typeof COLORS;
+}) => (
   <TouchableOpacity
     onPress={onPress}
     style={[
       styles.profileImageContainer,
       {
-        shadowColor: COLORS.primary,
-        shadowOpacity: 0.35,
-        shadowRadius: 32,
-        elevation: 16,
-        backgroundColor: 'rgba(255,255,255,0.6)',
-        borderWidth: 2,
-        borderColor: COLORS.border,
-      }
+        shadowColor: themeColors.primary,
+        backgroundColor: themeColors.card,
+        borderColor: themeColors.border,
+      },
     ]}
     activeOpacity={0.75}
   >
@@ -118,31 +142,31 @@ const ProfileImage = ({ uri, color, onPress }: { uri?: string; color?: string; o
       <>
         <Image
           source={{ uri: uri }}
-          style={styles.profileImage}
-          onError={(e) => console.log("Failed to load image:", e.nativeEvent.error)}
+          style={[styles.profileImage, { backgroundColor: themeColors.placeholder, borderColor: themeColors.background }]}
+          onError={e => console.log('Failed to load image:', e.nativeEvent.error)}
         />
         <LinearGradient
-          colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+          colors={[themeColors.gradientStart, themeColors.gradientEnd]}
           style={styles.profileImageOverlay}
         >
-          <Icon name="photo-camera" size={36} color="#fff" />
+          <Icon name="photo-camera" size={36} color={themeColors.text} />
         </LinearGradient>
       </>
     ) : color ? (
       <>
-        <View style={[styles.colorBlockDisplay, { backgroundColor: color }]}>
-          <Icon name="person" size={62} color="#fff" />
+        <View style={[styles.colorBlockDisplay, { backgroundColor: color, borderColor: themeColors.background }]}>
+          <Icon name="person" size={62} color={themeColors.text} />
         </View>
         <LinearGradient
-          colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+          colors={[themeColors.gradientStart, themeColors.gradientEnd]}
           style={styles.profileImageOverlay}
         >
-          <Icon name="photo-camera" size={36} color="#fff" />
+          <Icon name="photo-camera" size={36} color={themeColors.text} />
         </LinearGradient>
       </>
     ) : (
-      <View style={styles.profileImagePlaceholder}>
-        <Icon name="add-a-photo" size={62} color={COLORS.primary} />
+      <View style={[styles.profileImagePlaceholder, { backgroundColor: themeColors.border, borderColor: themeColors.placeholder }]}>
+        <Icon name="add-a-photo" size={62} color={themeColors.text} />
       </View>
     )}
   </TouchableOpacity>
@@ -169,13 +193,20 @@ const EditProfile: React.FC = () => {
     displayName: '',
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [formKey, setFormKey] = useState(0);
 
   const navigation = useNavigation();
 
   useEffect(() => {
     getUserInfo();
+    AsyncStorage.getItem('darkMode').then(val => {
+      setIsDarkMode(val ? JSON.parse(val) : false);
+    });
     // Optionally loadProfilePreference as fallback if needed
   }, []);
+
+  const themeColors = isDarkMode ? DARK_COLORS : LIGHT_COLORS;
 
   // --- Helper Function ---
   // Checks if a string is a local file URI (used to determine if image needs upload)
@@ -238,6 +269,7 @@ const EditProfile: React.FC = () => {
         // await loadProfilePreference();
       }
       console.log('Fetched user info:', data);
+      setFormKey(prev => prev + 1); // Force Formik to reinitialize
     } catch (error) {
       console.error('Failed to fetch user info:', error);
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to fetch user information. Please try again.');
@@ -258,105 +290,55 @@ const EditProfile: React.FC = () => {
     saveProfilePreference(color);
   }, [setIsModalVisible, setProfileImage, setSelectedColor]);
 
-  // --- Save Profile Picture (color only, using JSON) ---
-  // Handles saving the selected color as the profile picture using JSON
-  const handleSaveProfilePicture = async () => {
-    setIsLoading(true);
-    const userId = await AsyncStorage.getItem('userId');
-    if (!userId) {
-      Alert.alert('Error', 'User ID not found. Please log in again.');
-      return;
-    }
-
-    if (!selectedColor) {
-      Alert.alert('Info', 'Please select a color for your profile picture.');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      // Use the dedicated endpoint for profile picture only
-      const response = await axios.patch(
-        `http://localhost:8080/api/users/${userId}/profile-pic`,
-        { profile_pic: selectedColor },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      console.log('Updated profile picture:', response.data);
-
-      setProfileImage(null); // Ensure image is cleared
-      setCredentials(prev => ({ ...prev, profilePic: selectedColor }));
-    
-      await saveProfilePreference(selectedColor);
-      Alert.alert('Success', 'Profile picture updated successfully!');
-    } catch (error: any) {
-      console.error('Failed to save profile picture:', error);
-      let errorMessage = 'Failed to update profile picture. Please try again.';
-      if (error.response) {
-        errorMessage = `Server error: ${error.response.data?.message || error.response.status}`;
-      } else if (error.request) {
-        errorMessage = 'Network error. Please check your connection.';
-      } else {
-        errorMessage = error.message;
-      }
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // --- Save Profile Info (name, email, etc) ---
-  // Handles saving the user's profile info (first name, last name, email)
-  const handleSaveChanges = async (values: { firstName: string; lastName: string; email: string }) => {
+  // --- Combined Save Handler ---
+  const handleSaveAll = async (values: { firstName: string; lastName: string; email: string }) => {
     setIsLoading(true);
     try {
       const userId = await AsyncStorage.getItem('userId');
       if (!userId) throw new Error('User ID not found. Please log in again.');
 
-      // ** IMPORTANT: Get the *correct* profile picture value **
-      // This should be the public URL or color hex stored in credentials state *after* a successful save/upload.
-      const profilePicValue = credentials.profilePic; // Use the value from the main credentials state
-
-      // If a local image URI is still in profileImage state, it means it hasn't been uploaded yet.
-      // You should prompt the user to save the picture first, or trigger the upload here.
-      if (isLocalFileUri(profileImage)) {
-          Alert.alert("Unsaved Picture", "Please save the profile picture before saving other changes.");
-          setIsLoading(false);
-          return; // Prevent saving other changes until picture is handled
+      // Save profile picture (color) if changed
+      if (selectedColor && selectedColor !== credentials.profilePic) {
+        await axios.patch(
+          `http://localhost:8080/api/users/${userId}/profile-pic`,
+          { profile_pic: selectedColor },
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+        setProfileImage(null);
+        setCredentials(prev => ({ ...prev, profilePic: selectedColor }));
+        await saveProfilePreference(selectedColor);
       }
 
-
-      // Replace with your actual API endpoint for updating user details
+      // Save profile info (name/email)
       await axios.patch(`http://localhost:8080/api/users/${userId}`, {
         firstname: values.firstName,
         lastname: values.lastName,
         email: values.email,
-        // Send the confirmed profile_pic value (URL or color)
-        // If profilePicValue is null, the backend should handle it appropriately (e.g., keep existing or set to null)
-        profile_pic: profilePicValue,
       });
 
-      // Update local credentials state optimistically
       setCredentials(prev => ({
-          ...prev,
-          firstName: values.firstName,
-          lastName: values.lastName,
-          email: values.email,
-          profilePic: profilePicValue
-          // profilePic is already updated if handleSaveProfilePicture was called
+        ...prev,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        email: values.email,
+        profilePic: selectedColor ?? prev.profilePic,
       }));
+      setFormKey(prev => prev + 1);
 
       Alert.alert('Success', 'Profile updated successfully!');
-      // Optionally navigate back or give other feedback
-      // navigation.goBack();
-
-    } catch (error) {
-      console.error('Failed to update profile:', error);
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
+    } catch (error: any) {
+      let errorMessage = 'Failed to update profile. Please try again.';
+      if (error?.response) {
+        errorMessage = `Server error: ${error.response.data?.message || error.response.status}`;
+      } else if (error?.request) {
+        errorMessage = 'Network error. Please check your connection.';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -387,7 +369,7 @@ const EditProfile: React.FC = () => {
       ]} />
       {selectedColor === item && (
         <View style={styles.colorBlockCheckWrapper}>
-          <Icon name="check" size={30} color="#fff" style={styles.colorBlockCheck} />
+          <Icon name="check" size={30} color={themeColors.text} style={styles.colorBlockCheck} />
         </View>
       )}
     </TouchableOpacity>
@@ -395,131 +377,119 @@ const EditProfile: React.FC = () => {
 
   // --- Main JSX Return ---
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
+        style={[styles.container, { backgroundColor: themeColors.background }]}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContainer}
+          contentContainerStyle={[styles.scrollContainer]}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
           }
         >
-          <BackButton onPress={() => navigation.goBack()} />
-          <Text style={styles.title}>Edit Profile</Text>
+          <BackButton onPress={() => navigation.goBack()} themeColors={themeColors} />
+          <Text style={[styles.title, { color: themeColors.text }]}>Edit Profile</Text>
 
-          <View style={styles.card}>
+          {/* Profile Picture Card */}
+          <View style={[styles.card, { backgroundColor: themeColors.card, borderColor: themeColors.border, shadowColor: themeColors.shadow }]}>
             <ProfileImage
               uri={profileImage ?? undefined}
               color={!profileImage ? selectedColor ?? undefined : undefined}
               onPress={() => setIsModalVisible(true)}
+              themeColors={themeColors}
             />
             {credentials.displayName && (
-              <Text style={styles.displayName}>@{credentials.displayName}</Text>
+              <Text style={[styles.displayName, { color: themeColors.text }]}>@{credentials.displayName}</Text>
             )}
-            <TouchableOpacity
-              style={[styles.saveButton, styles.savePictureButton]}
-              onPress={handleSaveProfilePicture}
-              disabled={isLoading || (!isLocalFileUri(profileImage) && !selectedColor)}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={[COLORS.gradientStart, COLORS.gradientEnd]}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              />
-              {isLoading ? (
-                <ActivityIndicator color={COLORS.background} />
-              ) : (
-                <Text style={styles.saveButtonText}>Save Profile Picture</Text>
-              )}
-            </TouchableOpacity>
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: themeColors.border }]} />
 
-          <Formik
-            initialValues={{
-              firstName: credentials.firstName,
-              lastName: credentials.lastName,
-              email: credentials.email
-            }}
-            validationSchema={profileSchema}
-            enableReinitialize
-            onSubmit={handleSaveChanges}
-          >
-            {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
-              <View style={[styles.formContainer, styles.card]}>
-                <View style={styles.inputContainer}>
-                  <Icon name="person-outline" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="First Name"
-                    placeholderTextColor={COLORS.placeholder}
-                    value={values.firstName}
-                    onChangeText={handleChange('firstName')}
-                    onBlur={handleBlur('firstName')}
-                    autoCapitalize="words"
-                    selectionColor={COLORS.primary}
-                  />
+          {/* Profile Info Card */}
+          <View style={[styles.card, { backgroundColor: themeColors.card, borderColor: themeColors.border, shadowColor: themeColors.shadow }]}>
+            <Formik
+              key={formKey}
+              initialValues={{
+                firstName: credentials.firstName,
+                lastName: credentials.lastName,
+                email: credentials.email
+              }}
+              validationSchema={profileSchema}
+              enableReinitialize
+              onSubmit={handleSaveAll}
+            >
+              {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
+                <View style={[styles.formContainer]}>
+                  <View style={styles.inputContainer}>
+                    <Icon name="person-outline" size={SIZES.iconSize} color={themeColors.text} style={styles.icon} />
+                    <TextInput
+                      style={[styles.input, { color: themeColors.text, backgroundColor: 'transparent' }]}
+                      placeholder="First Name"
+                      placeholderTextColor={themeColors.placeholder}
+                      value={values.firstName}
+                      onChangeText={handleChange('firstName')}
+                      onBlur={handleBlur('firstName')}
+                      autoCapitalize="words"
+                      selectionColor={themeColors.primary}
+                    />
+                  </View>
+                  {touched.firstName && errors.firstName && <Text style={[styles.errorText, { color: themeColors.error }]}>{errors.firstName}</Text>}
+
+                  <View style={styles.inputContainer}>
+                    <Icon name="person-outline" size={SIZES.iconSize} color={themeColors.text} style={styles.icon} />
+                    <TextInput
+                      style={[styles.input, { color: themeColors.text, backgroundColor: 'transparent' }]}
+                      placeholder="Last Name"
+                      placeholderTextColor={themeColors.placeholder}
+                      value={values.lastName}
+                      onChangeText={handleChange('lastName')}
+                      onBlur={handleBlur('lastName')}
+                      autoCapitalize="words"
+                      selectionColor={themeColors.primary}
+                    />
+                  </View>
+                  {touched.lastName && errors.lastName && <Text style={[styles.errorText, { color: themeColors.error }]}>{errors.lastName}</Text>}
+
+                  <View style={styles.inputContainer}>
+                    <Icon name="mail-outline" size={SIZES.iconSize} color={themeColors.text} style={styles.icon} />
+                    <TextInput
+                      style={[styles.input, { color: themeColors.text, backgroundColor: 'transparent' }]}
+                      placeholder="Email Address"
+                      placeholderTextColor={themeColors.placeholder}
+                      value={values.email}
+                      onChangeText={handleChange('email')}
+                      onBlur={handleBlur('email')}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      selectionColor={themeColors.primary}
+                    />
+                  </View>
+                  {touched.email && errors.email && <Text style={[styles.errorText, { color: themeColors.error }]}>{errors.email}</Text>}
+
+                  <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={() => handleSubmit()}
+                    disabled={isLoading}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={[themeColors.gradientStart, themeColors.gradientEnd]}
+                      style={StyleSheet.absoluteFill}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    />
+                    {isLoading ? (
+                      <ActivityIndicator color={themeColors.background} />
+                    ) : (
+                      <Text style={styles.saveButtonText}>Save Changes</Text>
+                    )}
+                  </TouchableOpacity>
                 </View>
-                {touched.firstName && errors.firstName && <Text style={styles.errorText}>{errors.firstName}</Text>}
-
-                <View style={styles.inputContainer}>
-                  <Icon name="person-outline" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Last Name"
-                    placeholderTextColor={COLORS.placeholder}
-                    value={values.lastName}
-                    onChangeText={handleChange('lastName')}
-                    onBlur={handleBlur('lastName')}
-                    autoCapitalize="words"
-                    selectionColor={COLORS.primary}
-                  />
-                </View>
-                {touched.lastName && errors.lastName && <Text style={styles.errorText}>{errors.lastName}</Text>}
-
-                <View style={styles.inputContainer}>
-                  <Icon name="mail-outline" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Email Address"
-                    placeholderTextColor={COLORS.placeholder}
-                    value={values.email}
-                    onChangeText={handleChange('email')}
-                    onBlur={handleBlur('email')}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    selectionColor={COLORS.primary}
-                  />
-                </View>
-                {touched.email && errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-
-                <TouchableOpacity
-                  style={styles.saveButton}
-                  onPress={() => handleSubmit()}
-                  disabled={isLoading}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={[COLORS.gradientStart, COLORS.gradientEnd]}
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  />
-                  {isLoading ? (
-                    <ActivityIndicator color={COLORS.background} />
-                  ) : (
-                    <Text style={styles.saveButtonText}>Save Changes</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
-          </Formik>
+              )}
+            </Formik>
+          </View>
 
           {/* Profile Picture Selection Modal */}
           <Modal
@@ -529,13 +499,13 @@ const EditProfile: React.FC = () => {
             onRequestClose={() => setIsModalVisible(false)}
           >
             <View style={styles.modalOverlay}>
-              <View style={styles.modalContainer}>
+              <View style={[styles.modalContainer, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
                 {/* Modal drag indicator */}
                 <View style={styles.dragIndicatorOuter}>
-                  <View style={styles.dragIndicator} />
+                  <View style={[styles.dragIndicator, { backgroundColor: themeColors.border }]} />
                 </View>
-                <Text style={styles.modalTitle}>Choose Profile Picture</Text>
-                <Text style={styles.modalSubtitle}>Select a color for your profile picture</Text>
+                <Text style={[styles.modalTitle, { color: themeColors.text }]}>Choose Profile Picture</Text>
+                <Text style={[styles.modalSubtitle, { color: themeColors.placeholder }]}>Select a color for your profile picture</Text>
                 {/* Color selection grid */}
                 <FlatList
                   data={colorBlocks}
@@ -546,7 +516,7 @@ const EditProfile: React.FC = () => {
                 />
                 {/* Cancel button */}
                 <TouchableOpacity style={styles.closeButton} onPress={() => setIsModalVisible(false)} activeOpacity={0.7}>
-                  <Text style={styles.closeButtonText}>Cancel</Text>
+                  <Text style={[styles.closeButtonText, { color: themeColors.text }]}>Cancel</Text>
                 </TouchableOpacity>
               </View>
             </View>

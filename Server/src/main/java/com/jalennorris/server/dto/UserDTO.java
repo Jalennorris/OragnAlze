@@ -17,10 +17,11 @@ public class UserDTO implements Serializable {
     private String token;
     private String display_name;
     private String profile_pic;
+    private Boolean isDarkMode = false; // Default value
 
 
     // Constructor
-    public UserDTO(Long userId, String firstname, String lastname, String email, String username,  String password,Role role, String token, String display_name, String profile_pic) {
+    public UserDTO(Long userId, String firstname, String lastname, String email, String username,  String password,Role role, String token, String display_name, String profile_pic, Boolean isDarkMode) {
         this.userId = userId;
         this.firstname = firstname;
         this.lastname = lastname;
@@ -31,6 +32,7 @@ public class UserDTO implements Serializable {
         this.token = token;
         this.display_name = display_name;
         this.profile_pic = profile_pic;
+        this.isDarkMode = false; // Default value
     }
 
     // Getters and Setters
@@ -112,5 +114,14 @@ public class UserDTO implements Serializable {
 
     public void setProfile_pic(String profile_pic) {
         this.profile_pic = profile_pic;
+    }
+
+    public Boolean getIsDarkMode(){
+        return isDarkMode;
+    }
+
+    public void setIsDarkMode(Boolean isDarkMode){
+        this.isDarkMode = isDarkMode;
+
     }
 }

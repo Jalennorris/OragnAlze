@@ -9,7 +9,6 @@ import NavBar from '@/components/Navbar';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { debounce } from 'lodash';
-import { useColorScheme } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SwipeListView } from 'react-native-swipe-list-view';
@@ -60,15 +59,13 @@ const CalendarScreen: React.FC = () => {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null); // State for selected task ID
   const modalAnim = useRef(new Animated.Value(0)).current; // For modal fade animation
   const [pendingMonth, setPendingMonth] = useState<string | null>(null);
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [filter, setFilter] = useState<{ priority?: string; status?: string }>({});
   const [isConnected, setIsConnected] = useState(true);
   const [offlineQueue, setOfflineQueue] = useState<any[]>([]);
   const [retryCount, setRetryCount] = useState(0);
-  const effectiveDark = isDark;
   const [refreshing, setRefreshing] = useState(false);
+  const [isDarkModeEnabled, setIsDarkModeEnabled] = useState(false);
 
   // Debounced month change handler
   const debouncedSetCurrentMonth = useRef(
@@ -213,6 +210,17 @@ const CalendarScreen: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      const savedMode = await AsyncStorage.getItem('darkMode');
+      if (savedMode !== null) {
+        setIsDarkModeEnabled(JSON.parse(savedMode));
+      } else {
+        setIsDarkModeEnabled(false);
+      }
+    })();
+  }, []);
+
   const syncOfflineQueue = async () => {
     if (offlineQueue.length === 0) return;
     for (const action of offlineQueue) {
@@ -230,16 +238,16 @@ const CalendarScreen: React.FC = () => {
   };
 
   const getPriorityColor = (priority: string) => {
-    if (effectiveDark) {
+    if (isDarkModeEnabled) {
       switch (priority) {
         case 'low':
-          return '#AED581'; // lighter green
+          return '#34d399'; // Emerald
         case 'medium':
-          return '#FFD54F'; // lighter yellow
+          return '#fbbf24'; // Amber
         case 'high':
-          return '#EF9A9A'; // lighter red
+          return '#f87171'; // Red
         default:
-          return '#90caf9'; // lighter blue
+          return '#a5b4fc'; // Indigo accent
       }
     }
     switch (priority) {
@@ -330,7 +338,7 @@ const CalendarScreen: React.FC = () => {
       <Ionicons
         name={icon as any}
         size={16}
-        color={effectiveDark ? '#FFD54F' : '#6a11cb'}
+        color={isDarkModeEnabled ? '#FFD54F' : '#6a11cb'}
         style={{ marginLeft: 4 }}
         accessibilityLabel={`Recurring: ${recurrence}`}
       />
@@ -341,11 +349,11 @@ const CalendarScreen: React.FC = () => {
   const priorityIcon = (priority: string) => {
     switch (priority) {
       case 'high':
-        return <Ionicons name="alert-circle" size={18} color="#F44336" style={{ marginRight: 4 }} />;
+        return <Ionicons name="alert-circle" size={18} color={isDarkModeEnabled ? "#f87171" : "#F44336"} style={{ marginRight: 4 }} />;
       case 'medium':
-        return <Ionicons name="alert" size={18} color="#FFC107" style={{ marginRight: 4 }} />;
+        return <Ionicons name="alert" size={18} color={isDarkModeEnabled ? "#fbbf24" : "#FFC107"} style={{ marginRight: 4 }} />;
       case 'low':
-        return <Ionicons name="checkmark-circle" size={18} color="#8BC34A" style={{ marginRight: 4 }} />;
+        return <Ionicons name="checkmark-circle" size={18} color={isDarkModeEnabled ? "#34d399" : "#8BC34A"} style={{ marginRight: 4 }} />;
       default:
         return null;
     }
@@ -354,14 +362,16 @@ const CalendarScreen: React.FC = () => {
   // Modern status chip
   const statusChip = (completed: boolean) => (
     <View style={{
-      backgroundColor: completed ? '#8BC34A' : '#FFC107',
+      backgroundColor: completed
+        ? (isDarkModeEnabled ? '#34d399' : '#8BC34A')
+        : (isDarkModeEnabled ? '#fbbf24' : '#FFC107'),
       borderRadius: 12,
       paddingHorizontal: 10,
       paddingVertical: 2,
       marginLeft: 6,
       alignSelf: 'flex-start',
     }}>
-      <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
+      <Text style={{ color: isDarkModeEnabled ? '#18181b' : '#fff', fontSize: 12, fontWeight: 'bold' }}>
         {completed ? 'Completed' : 'Pending'}
       </Text>
     </View>
@@ -370,14 +380,14 @@ const CalendarScreen: React.FC = () => {
   // Modern category chip
   const categoryChip = (category?: string) => category ? (
     <View style={{
-      backgroundColor: '#90caf9',
+      backgroundColor: isDarkModeEnabled ? '#a5b4fc' : '#90caf9',
       borderRadius: 12,
       paddingHorizontal: 10,
       paddingVertical: 2,
       marginLeft: 6,
       alignSelf: 'flex-start',
     }}>
-      <Text style={{ color: '#232323', fontSize: 12, fontWeight: 'bold' }}>
+      <Text style={{ color: isDarkModeEnabled ? '#18181b' : '#232323', fontSize: 12, fontWeight: 'bold' }}>
         {category}
       </Text>
     </View>
@@ -394,10 +404,10 @@ const CalendarScreen: React.FC = () => {
         styles.taskItem,
         {
           borderLeftColor: getPriorityColor(item.priority),
-          backgroundColor: effectiveDark
+          backgroundColor: isDarkModeEnabled
             ? 'rgba(35,35,35,0.98)'
             : 'rgba(255,255,255,0.98)',
-          shadowColor: effectiveDark ? '#000' : '#6a11cb',
+          shadowColor: isDarkModeEnabled ? '#000' : '#6a11cb',
           shadowOpacity: 0.15,
           shadowRadius: 8,
           elevation: 4,
@@ -409,18 +419,18 @@ const CalendarScreen: React.FC = () => {
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
         {priorityIcon(item.priority)}
-        <Text style={[styles.taskTitle, effectiveDark && { color: '#fff' }]} allowFontScaling>
+        <Text style={[styles.taskTitle, isDarkModeEnabled && { color: '#fff' }]} allowFontScaling>
           {item.title}
         </Text>
         {recurrenceIcon(item.recurrence)}
         {categoryChip(item.category)}
         {statusChip(item.completed)}
       </View>
-      <Text style={[styles.taskDescription, effectiveDark && { color: '#ccc' }]} allowFontScaling>
+      <Text style={[styles.taskDescription, isDarkModeEnabled && { color: '#ccc' }]} allowFontScaling>
         {item.description}
       </Text>
-      <Text style={[styles.taskDueDate, effectiveDark && { color: '#bbb' }]} allowFontScaling>
-        <Ionicons name="calendar-outline" size={13} color={effectiveDark ? '#FFD54F' : '#6a11cb'} /> {item.dueDate}
+      <Text style={[styles.taskDueDate, isDarkModeEnabled && { color: '#bbb' }]} allowFontScaling>
+        <Ionicons name="calendar-outline" size={13} color={isDarkModeEnabled ? '#FFD54F' : '#6a11cb'} /> {item.dueDate}
       </Text>
       <View style={styles.taskActionsRow}>
         <TouchableOpacity
@@ -465,8 +475,8 @@ const CalendarScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
       {selectedTaskId === item.id && comments[item.id] && (
-        <Text style={[styles.savedComment, effectiveDark && { color: '#bbb' }]} allowFontScaling>
-          <Ionicons name="chatbubble-ellipses-outline" size={13} color={effectiveDark ? '#FFD54F' : '#6a11cb'} /> {comments[item.id]}
+        <Text style={[styles.savedComment, isDarkModeEnabled && { color: '#bbb' }]} allowFontScaling>
+          <Ionicons name="chatbubble-ellipses-outline" size={13} color={isDarkModeEnabled ? '#FFD54F' : '#6a11cb'} /> {comments[item.id]}
         </Text>
       )}
     </Animated.View>
@@ -499,7 +509,7 @@ const CalendarScreen: React.FC = () => {
     <View style={{ padding: 16 }}>
       {[...Array(3)].map((_, i) => (
         <View key={i} style={{
-          backgroundColor: effectiveDark ? '#232323' : '#f3f3f3',
+          backgroundColor: isDarkModeEnabled ? '#232336' : '#f3f3f3',
           borderRadius: 14,
           marginVertical: 8,
           height: 80,
@@ -508,7 +518,7 @@ const CalendarScreen: React.FC = () => {
           <Animated.View style={{
             width: '100%',
             height: '100%',
-            backgroundColor: effectiveDark ? '#292929' : '#e0e0e0',
+            backgroundColor: isDarkModeEnabled ? '#232336' : '#e0e0e0',
             opacity: 0.5
           }} />
         </View>
@@ -544,9 +554,15 @@ const CalendarScreen: React.FC = () => {
     </View>
   );
 
+  const toggleDarkMode = async () => {
+    const newMode = !isDarkModeEnabled;
+    await AsyncStorage.setItem('darkMode', JSON.stringify(newMode));
+    setIsDarkModeEnabled(newMode);
+  };
+
   return (
     <LinearGradient
-      colors={effectiveDark ? ['#181818', '#232323'] : ['#f8fafc', '#e3e6f3']}
+      colors={isDarkModeEnabled ? ['#18181b', '#232336', '#18181b'] : ['#f8fafc', '#e3e6f3']}
       style={styles.safeArea}
     >
       <SafeAreaView style={{ flex: 1 }}>
@@ -554,14 +570,14 @@ const CalendarScreen: React.FC = () => {
         <View style={[styles.container, { backgroundColor: 'transparent' }]}>
           {/* Filter Button */}
           <TouchableOpacity
-            style={styles.filterFab}
+            style={[styles.filterFab, isDarkModeEnabled && { backgroundColor: '#a5b4fc', shadowColor: '#a5b4fc' }]}
             onPress={() => setFilterModalVisible(true)}
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel="Filter Tasks"
             accessibilityHint="Open filter options for tasks"
           >
-            <Ionicons name="filter" size={22} color="#fff" />
+            <Ionicons name="filter" size={22} color={isDarkModeEnabled ? "#18181b" : "#fff"} />
           </TouchableOpacity>
           {/* Filter Modal */}
           <Modal
@@ -570,10 +586,35 @@ const CalendarScreen: React.FC = () => {
             useNativeDriver
             style={{ margin: 0, justifyContent: 'flex-end' }}
           >
-            <View style={[styles.bottomSheet, effectiveDark && { backgroundColor: '#232323' }]}>
-              <View style={styles.dragIndicator} />
-              <Text style={[styles.modalTitle, effectiveDark && { color: '#FFD54F' }]} allowFontScaling>Filter Tasks</Text>
-              <Text style={{ color: effectiveDark ? '#fff' : '#333', marginTop: 8 }} allowFontScaling>Priority:</Text>
+            <View style={[styles.bottomSheet, isDarkModeEnabled && { backgroundColor: 'rgba(36,37,46,0.85)' }]}>
+              <View style={[styles.dragIndicator, isDarkModeEnabled && { backgroundColor: '#a5b4fc', opacity: 0.5 }]} />
+              <Text style={[styles.modalTitle, isDarkModeEnabled && { color: '#a5b4fc' }]} allowFontScaling>Filter Tasks</Text>
+              {/* Add Dark Mode Toggle */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, marginBottom: 8 }}>
+                <Ionicons name="moon" size={20} color={isDarkModeEnabled ? '#a5b4fc' : '#6a11cb'} />
+                <Text style={{ color: isDarkModeEnabled ? '#a5b4fc' : '#232323', marginLeft: 8, fontWeight: 'bold' }}>Dark Mode</Text>
+                <View style={{ flex: 1 }} />
+                <TouchableOpacity onPress={toggleDarkMode} accessibilityRole="switch" accessibilityLabel="Toggle dark mode">
+                  <View style={{
+                    width: 48,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: isDarkModeEnabled ? '#818cf8' : '#d1d5db',
+                    justifyContent: 'center',
+                  }}>
+                    <Animated.View style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      backgroundColor: isDarkModeEnabled ? '#a5b4fc' : '#fff',
+                      marginLeft: isDarkModeEnabled ? 20 : 2,
+                      marginRight: isDarkModeEnabled ? 2 : 20,
+                      elevation: 2,
+                    }} />
+                  </View>
+                </TouchableOpacity>
+              </View>
+              <Text style={{ color: isDarkModeEnabled ? '#f3f4f6' : '#333', marginTop: 8 }} allowFontScaling>Priority:</Text>
               <View style={{ flexDirection: 'row', marginVertical: 8 }}>
                 {['low', 'medium', 'high'].map(p => (
                   <TouchableOpacity
@@ -581,7 +622,7 @@ const CalendarScreen: React.FC = () => {
                     style={[
                       styles.chip,
                       filter.priority === p && styles.chipSelected,
-                      filter.priority === p && { backgroundColor: effectiveDark ? '#FFD54F' : '#6a11cb' }
+                      filter.priority === p && { backgroundColor: isDarkModeEnabled ? '#fbbf24' : '#6a11cb' }
                     ]}
                     onPress={() => setFilter(f => ({ ...f, priority: f.priority === p ? undefined : p }))}
                     accessible={true}
@@ -590,7 +631,7 @@ const CalendarScreen: React.FC = () => {
                     accessibilityHint={`Show only ${p} priority tasks`}
                   >
                     <Text style={{
-                      color: filter.priority === p ? (effectiveDark ? '#232323' : '#fff') : (effectiveDark ? '#FFD54F' : '#6a11cb'),
+                      color: filter.priority === p ? (isDarkModeEnabled ? '#18181b' : '#fff') : (isDarkModeEnabled ? '#fbbf24' : '#6a11cb'),
                       fontWeight: 'bold'
                     }}>
                       {p.charAt(0).toUpperCase() + p.slice(1)}
@@ -598,7 +639,7 @@ const CalendarScreen: React.FC = () => {
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={{ color: effectiveDark ? '#fff' : '#333', marginTop: 8 }} allowFontScaling>Status:</Text>
+              <Text style={{ color: isDarkModeEnabled ? '#f3f4f6' : '#333', marginTop: 8 }} allowFontScaling>Status:</Text>
               <View style={{ flexDirection: 'row', marginVertical: 8 }}>
                 {['completed', 'pending'].map(s => (
                   <TouchableOpacity
@@ -606,7 +647,7 @@ const CalendarScreen: React.FC = () => {
                     style={[
                       styles.chip,
                       filter.status === s && styles.chipSelected,
-                      filter.status === s && { backgroundColor: effectiveDark ? '#FFD54F' : '#6a11cb' }
+                      filter.status === s && { backgroundColor: isDarkModeEnabled ? '#fbbf24' : '#6a11cb' }
                     ]}
                     onPress={() => setFilter(f => ({ ...f, status: f.status === s ? undefined : s }))}
                     accessible={true}
@@ -615,7 +656,7 @@ const CalendarScreen: React.FC = () => {
                     accessibilityHint={`Show only ${s} tasks`}
                   >
                     <Text style={{
-                      color: filter.status === s ? (effectiveDark ? '#232323' : '#fff') : (effectiveDark ? '#FFD54F' : '#6a11cb'),
+                      color: filter.status === s ? (isDarkModeEnabled ? '#18181b' : '#fff') : (isDarkModeEnabled ? '#fbbf24' : '#6a11cb'),
                       fontWeight: 'bold'
                     }}>
                       {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -625,24 +666,24 @@ const CalendarScreen: React.FC = () => {
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
                 <TouchableOpacity
-                  style={[styles.saveButton, { flex: 1, marginRight: 8 }]}
+                  style={[styles.saveButton, isDarkModeEnabled && { backgroundColor: '#a5b4fc' }, { flex: 1, marginRight: 8 }]}
                   onPress={() => setFilterModalVisible(false)}
                   accessible={true}
                   accessibilityRole="button"
                   accessibilityLabel="Apply Filter"
                   accessibilityHint="Apply selected filters"
                 >
-                  <Text style={styles.saveButtonText} allowFontScaling>Apply</Text>
+                  <Text style={[styles.saveButtonText, isDarkModeEnabled && { color: '#18181b' }]} allowFontScaling>Apply</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.closeButton, { flex: 1, marginLeft: 8 }]}
+                  style={[styles.closeButton, isDarkModeEnabled && { backgroundColor: '#f87171' }, { flex: 1, marginLeft: 8 }]}
                   onPress={() => { setFilter({}); setFilterModalVisible(false); }}
                   accessible={true}
                   accessibilityRole="button"
                   accessibilityLabel="Clear Filter"
                   accessibilityHint="Clear all filters"
                 >
-                  <Text style={styles.closeButtonText} allowFontScaling>Clear</Text>
+                  <Text style={[styles.closeButtonText, isDarkModeEnabled && { color: '#fff' }]} allowFontScaling>Clear</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -650,15 +691,19 @@ const CalendarScreen: React.FC = () => {
           {/* Loading shimmer */}
           {loading && <ShimmerLoader />}
           {/* Calendar */}
-          <Animated.View style={[styles.calendarContainer, effectiveDark && { backgroundColor: 'rgba(35,35,35,0.92)' }, { opacity: fadeAnim }]}>
+          <Animated.View style={[
+            styles.calendarContainer,
+            isDarkModeEnabled && { backgroundColor: 'rgba(36,37,46,0.85)' },
+            { opacity: fadeAnim }
+          ]}>
             {error && (
               <View style={{ alignItems: 'center', marginVertical: 10 }}>
-                <Text style={{ textAlign: 'center', color: effectiveDark ? '#EF9A9A' : '#F44336', marginBottom: 8 }} allowFontScaling>
+                <Text style={{ textAlign: 'center', color: isDarkModeEnabled ? '#f87171' : '#F44336', marginBottom: 8 }} allowFontScaling>
                   {error}
                 </Text>
                 <TouchableOpacity
                   style={{
-                    backgroundColor: effectiveDark ? '#FFD54F' : '#6a11cb',
+                    backgroundColor: isDarkModeEnabled ? '#fbbf24' : '#6a11cb',
                     paddingHorizontal: 16,
                     paddingVertical: 8,
                     borderRadius: 8,
@@ -669,7 +714,7 @@ const CalendarScreen: React.FC = () => {
                   accessibilityLabel="Retry"
                   accessibilityHint="Retry loading tasks"
                 >
-                  <Text style={{ color: effectiveDark ? '#232323' : '#fff', fontWeight: 'bold' }} allowFontScaling>
+                  <Text style={{ color: isDarkModeEnabled ? '#18181b' : '#fff', fontWeight: 'bold' }} allowFontScaling>
                     Retry
                   </Text>
                 </TouchableOpacity>
@@ -685,19 +730,20 @@ const CalendarScreen: React.FC = () => {
                 setPendingMonth(monthStr);
               }}
               theme={{
-                backgroundColor: effectiveDark ? '#181818' : '#ffffff',
-                calendarBackground: effectiveDark ? '#181818' : '#ffffff',
-                textSectionTitleColor: effectiveDark ? '#fff' : '#000',
-                selectedDayBackgroundColor: effectiveDark ? '#90caf9' : '#22223b',
-                selectedDayTextColor: effectiveDark ? '#181818' : '#ffffff',
-                todayTextColor: effectiveDark ? '#90caf9' : '#6a11cb',
-                dayTextColor: effectiveDark ? '#fff' : '#000',
-                textDisabledColor: effectiveDark ? '#757575' : '#6a11cb',
-                dotColor: effectiveDark ? '#90caf9' : '#6a11cb',
-                selectedDotColor: effectiveDark ? '#181818' : '#ffffff',
-                arrowColor: effectiveDark ? '#fff' : '#000',
-                monthTextColor: effectiveDark ? '#fff' : '#000',
-                indicatorColor: effectiveDark ? '#90caf9' : '#6a11cb',
+                backgroundColor: isDarkModeEnabled ? 'rgba(36,37,46,0.85)' : '#ffffff',
+                calendarBackground: isDarkModeEnabled ? 'rgba(36,37,46,0.85)' : '#ffffff',
+                // Set month and days of week to white
+                monthTextColor: '#fff',
+                textSectionTitleColor: '#fff',
+                selectedDayBackgroundColor: isDarkModeEnabled ? '#a5b4fc' : '#22223b',
+                selectedDayTextColor: isDarkModeEnabled ? '#18181b' : '#ffffff',
+                todayTextColor: isDarkModeEnabled ? '#fbbf24' : '#6a11cb',
+                dayTextColor: isDarkModeEnabled ? '#f3f4f6' : '#000',
+                textDisabledColor: isDarkModeEnabled ? '#52525b' : '#6a11cb',
+                dotColor: isDarkModeEnabled ? '#fbbf24' : '#6a11cb',
+                selectedDotColor: isDarkModeEnabled ? '#18181b' : '#ffffff',
+                arrowColor: isDarkModeEnabled ? '#a5b4fc' : '#000',
+                indicatorColor: isDarkModeEnabled ? '#fbbf24' : '#6a11cb',
                 textDayFontWeight: '500',
                 textMonthFontWeight: '600',
                 textDayHeaderFontWeight: '600',
@@ -725,16 +771,16 @@ const CalendarScreen: React.FC = () => {
                     justifyContent: 'center',
                     borderRadius: 8,
                     borderWidth: 1,
-                    borderColor: effectiveDark ? '#333' : '#e0e0e0',
+                    borderColor: isDarkModeEnabled ? '#232336' : '#e0e0e0',
                     margin: 4,
-                    backgroundColor: effectiveDark ? '#232323' : '#fff',
+                    backgroundColor: isDarkModeEnabled ? 'rgba(36,37,46,0.85)' : '#fff',
                   },
                   selected: {
-                    backgroundColor: effectiveDark ? '#90caf9' : '#6a11cb',
+                    backgroundColor: isDarkModeEnabled ? '#a5b4fc' : '#6a11cb',
                     borderRadius: 8,
                   },
                   today: {
-                    backgroundColor: effectiveDark ? '#232323' : '#f0e6ff',
+                    backgroundColor: isDarkModeEnabled ? '#232336' : '#f0e6ff',
                     borderRadius: 8,
                   },
                 },
@@ -765,13 +811,13 @@ const CalendarScreen: React.FC = () => {
                       height: Math.floor(Dimensions.get('window').height / 14),
                       backgroundColor:
                         state === 'today'
-                          ? (effectiveDark ? '#232323' : '#f0e6ff')
+                          ? (isDarkModeEnabled ? '#232336' : '#f0e6ff')
                           : state === 'selected'
-                          ? (effectiveDark ? '#90caf9' : '#6a11cb')
-                          : (effectiveDark ? '#232323' : '#fff'),
+                          ? (isDarkModeEnabled ? '#a5b4fc' : '#6a11cb')
+                          : (isDarkModeEnabled ? 'rgba(36,37,46,0.85)' : '#fff'),
                       borderRadius: 8,
                       borderWidth: overdue ? 2 : 1,
-                      borderColor: overdue ? '#F44336' : (effectiveDark ? '#333' : '#e0e0e0'),
+                      borderColor: overdue ? '#F44336' : (isDarkModeEnabled ? '#232336' : '#e0e0e0'),
                       margin: 4,
                     }}
                   >
@@ -779,8 +825,8 @@ const CalendarScreen: React.FC = () => {
                       style={{
                         color:
                           state === 'disabled'
-                            ? (effectiveDark ? '#757575' : '#6a11cb')
-                            : (effectiveDark ? '#fff' : '#000'),
+                            ? (isDarkModeEnabled ? '#52525b' : '#6a11cb')
+                            : (isDarkModeEnabled ? '#f3f4f6' : '#000'),
                         fontWeight: '500',
                         fontSize: 16,
                       }}
@@ -803,7 +849,7 @@ const CalendarScreen: React.FC = () => {
                                 backgroundColor: dot.color,
                                 marginHorizontal: 1,
                                 borderWidth: (task && task.recurrence && task.recurrence !== 'none') ? 1 : 0,
-                                borderColor: (task && task.recurrence && task.recurrence !== 'none') ? (effectiveDark ? '#FFD54F' : '#6a11cb') : 'transparent',
+                                borderColor: (task && task.recurrence && task.recurrence !== 'none') ? (isDarkModeEnabled ? '#FFD54F' : '#6a11cb') : 'transparent',
                               }}
                               accessible={false}
                             />
@@ -831,7 +877,7 @@ const CalendarScreen: React.FC = () => {
             <Animated.View
               style={[
                 styles.bottomSheet,
-                effectiveDark && { backgroundColor: 'rgba(35,35,35,0.98)' },
+                isDarkModeEnabled && { backgroundColor: 'rgba(36,37,46,0.98)' },
                 {
                   opacity: modalAnim,
                   transform: [
@@ -843,28 +889,28 @@ const CalendarScreen: React.FC = () => {
                     },
                   ],
                   // Glassmorphism effect
-                  shadowColor: effectiveDark ? '#FFD54F' : '#6a11cb',
+                  shadowColor: isDarkModeEnabled ? '#a5b4fc' : '#6a11cb',
                   shadowOpacity: 0.18,
                   shadowRadius: 16,
                   borderWidth: 0.5,
-                  borderColor: effectiveDark ? '#FFD54F33' : '#6a11cb33',
+                  borderColor: isDarkModeEnabled ? '#a5b4fc33' : '#6a11cb33',
                   overflow: 'hidden',
                 },
               ]}
             >
-              <BlurView intensity={40} tint={effectiveDark ? "dark" : "light"} style={{ ...StyleSheet.absoluteFillObject, borderRadius: 22 }} />
+              <BlurView intensity={40} tint={isDarkModeEnabled ? "dark" : "light"} style={{ ...StyleSheet.absoluteFillObject, borderRadius: 22 }} />
               <View style={{ position: 'relative', zIndex: 2 }}>
-                <View style={styles.dragIndicator} />
-                <Text style={[styles.modalTitle, effectiveDark && { color: '#90caf9' }]} allowFontScaling>
+                <View style={[styles.dragIndicator, isDarkModeEnabled && { backgroundColor: '#a5b4fc', opacity: 0.5 }]} />
+                <Text style={[styles.modalTitle, isDarkModeEnabled && { color: '#a5b4fc' }]} allowFontScaling>
                   Tasks for {selectedDate}
                 </Text>
                 {/* Task Summary */}
                 {selectedDate && summary && (
                   <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 8 }}>
-                    <Text style={{ color: effectiveDark ? '#FFD54F' : '#6a11cb', fontWeight: 'bold', marginRight: 12 }} allowFontScaling>
+                    <Text style={{ color: isDarkModeEnabled ? '#fbbf24' : '#6a11cb', fontWeight: 'bold', marginRight: 12 }} allowFontScaling>
                       Total: {summary.total}
                     </Text>
-                    <Text style={{ color: effectiveDark ? '#8BC34A' : '#388e3c', fontWeight: 'bold' }} allowFontScaling>
+                    <Text style={{ color: isDarkModeEnabled ? '#34d399' : '#388e3c', fontWeight: 'bold' }} allowFontScaling>
                       Completed: {summary.completed}
                     </Text>
                   </View>
@@ -873,8 +919,8 @@ const CalendarScreen: React.FC = () => {
                   <>
                     {filteredTasksForDate.length === 0 ? (
                       <View style={{ alignItems: 'center', marginVertical: 24 }}>
-                        <Ionicons name="calendar-outline" size={48} color={effectiveDark ? '#757575' : '#bdbdbd'} style={{ marginBottom: 8 }} />
-                        <Text style={[styles.emptyStateText, effectiveDark && { color: '#bbb' }]} allowFontScaling>
+                        <Ionicons name="calendar-outline" size={48} color={isDarkModeEnabled ? '#757575' : '#bdbdbd'} style={{ marginBottom: 8 }} />
+                        <Text style={[styles.emptyStateText, isDarkModeEnabled && { color: '#bbb' }]} allowFontScaling>
                           No tasks for this date.
                         </Text>
                       </View>
@@ -895,17 +941,17 @@ const CalendarScreen: React.FC = () => {
                     )}
                     {selectedTaskId && (
                       <>
-                        <Text style={[styles.commentLabel, effectiveDark && { color: '#fff' }]} allowFontScaling>
+                        <Text style={[styles.commentLabel, isDarkModeEnabled && { color: '#fff' }]} allowFontScaling>
                           Comment for Task:
                         </Text>
                         <TextInput
                           style={[
                             styles.commentInput,
                             { minHeight: 60, maxHeight: 160 },
-                            effectiveDark && { backgroundColor: '#181818', color: '#fff', borderColor: '#444' }
+                            isDarkModeEnabled && { backgroundColor: '#181818', color: '#fff', borderColor: '#444' }
                           ]}
                           placeholder="Write a comment..."
-                          placeholderTextColor={effectiveDark ? '#888' : '#999'}
+                          placeholderTextColor={isDarkModeEnabled ? '#888' : '#999'}
                           value={commentInput}
                           onChangeText={setCommentInput}
                           multiline
@@ -938,9 +984,9 @@ const CalendarScreen: React.FC = () => {
                       styles.closeButton,
                       {
                         width: 120,
-                        backgroundColor: effectiveDark ? '#FFD54F' : '#6a11cb',
+                        backgroundColor: isDarkModeEnabled ? '#a5b4fc' : '#6a11cb',
                         borderRadius: 24,
-                        shadowColor: effectiveDark ? '#FFD54F' : '#6a11cb',
+                        shadowColor: isDarkModeEnabled ? '#a5b4fc' : '#6a11cb',
                         shadowOffset: { width: 0, height: 2 },
                         shadowOpacity: 0.18,
                         shadowRadius: 6,
@@ -955,7 +1001,7 @@ const CalendarScreen: React.FC = () => {
                   >
                     <Text style={[
                       styles.closeButtonText,
-                      { color: effectiveDark ? '#232323' : '#fff', fontWeight: 'bold', fontSize: 16 }
+                      { color: isDarkModeEnabled ? '#18181b' : '#fff', fontWeight: 'bold', fontSize: 16 }
                     ]} allowFontScaling>
                       Close
                     </Text>

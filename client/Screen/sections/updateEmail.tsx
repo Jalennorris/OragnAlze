@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -48,6 +48,23 @@ const COLORS = {
   gradientEnd: '#38BDF8',
 };
 
+const DARK_COLORS = {
+  primary: '#a5b4fc',
+  secondary: '#818cf8',
+  background: '#18181b',
+  error: '#f87171',
+  text: '#f3f4f6',
+  placeholder: '#52525b',
+  card: 'rgba(36,37,46,0.85)',
+  border: '#232336',
+  shadow: '#232336',
+  notification: '#f87171',
+  gradientStart: '#818cf8',
+  gradientEnd: '#6366f1',
+};
+
+const LIGHT_COLORS = COLORS;
+
 const SIZES = {
   padding: 28,
   borderRadius: 28,
@@ -83,7 +100,7 @@ const EmailInput: React.FC<{
         { borderBottomColor: error ? colors.notification : colors.border },
       ]}
     >
-      <Icon name="email" size={24} color={colors.primary} style={styles.icon} />
+      <Icon name="email" size={24} color={colors.text} style={styles.icon} />
       <TextInput
         style={[
           styles.input,
@@ -115,7 +132,7 @@ const BackButton = React.memo(({ onPress, colors }: { onPress: () => void; color
     accessibilityHint="Navigates to the previous screen"
     accessibilityRole="button"
   >
-    <Icon name="arrow-back" size={24} color={colors.primary} />
+    <Icon name="arrow-back" size={24} color={colors.text} />
     <Text style={[styles.backButtonText, { color: colors.primary }]}>Back</Text>
   </TouchableOpacity>
 ));
@@ -124,9 +141,18 @@ const MAX_RETRIES = 2;
 
 const UpdateEmail: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const navigation = useNavigation();
   const { colors } = useTheme();
   const { t } = useTranslation();
+
+  useEffect(() => {
+    AsyncStorage.getItem('darkMode').then(val => {
+      setIsDarkMode(val ? JSON.parse(val) : false);
+    });
+  }, []);
+
+  const themeColors = isDarkMode ? DARK_COLORS : LIGHT_COLORS;
 
   // Retry logic for PATCH request
   const patchWithRetry = useCallback(async (url: string, data: any, retries = MAX_RETRIES) => {
@@ -168,10 +194,10 @@ const UpdateEmail: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: COLORS.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
+        style={[styles.container, { backgroundColor: themeColors.background }]}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
@@ -185,13 +211,13 @@ const UpdateEmail: React.FC = () => {
             accessibilityHint="Navigates to the previous screen"
             accessibilityRole="button"
           >
-            <Icon name="arrow-back" size={SIZES.iconSize} color={COLORS.primary} />
-            <Text style={[styles.backButtonText, { color: COLORS.primary }]}>Back</Text>
+            <Icon name="arrow-back" size={SIZES.iconSize} color={themeColors.text} />
+            <Text style={[styles.backButtonText, { color: themeColors.primary }]}>Back</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: COLORS.text }]}>{t('Update Email')}</Text>
+          <Text style={[styles.title, { color: themeColors.text }]}>{t('Update Email')}</Text>
 
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: themeColors.card, borderColor: themeColors.border, shadowColor: themeColors.shadow }]}>
             <Formik
               initialValues={{ currentEmail: '', newEmail: '', confirmEmail: '' }}
               validationSchema={emailSchema}
@@ -200,11 +226,11 @@ const UpdateEmail: React.FC = () => {
               {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
                 <View style={styles.formContainer}>
                   <View style={styles.inputContainer}>
-                    <Icon name="email" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
+                    <Icon name="email" size={SIZES.iconSize} color={themeColors.text} style={styles.icon} />
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { color: themeColors.text }]}
                       placeholder={t('Current email')}
-                      placeholderTextColor={COLORS.placeholder}
+                      placeholderTextColor={themeColors.placeholder}
                       value={values.currentEmail}
                       onChangeText={handleChange('currentEmail')}
                       onBlur={handleBlur('currentEmail')}
@@ -216,14 +242,14 @@ const UpdateEmail: React.FC = () => {
                     />
                   </View>
                   {touched.currentEmail && errors.currentEmail && (
-                    <Text style={styles.errorText}>{t(errors.currentEmail)}</Text>
+                    <Text style={[styles.errorText, { color: themeColors.notification }]}>{t(errors.currentEmail)}</Text>
                   )}
                   <View style={styles.inputContainer}>
-                    <Icon name="email" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
+                    <Icon name="email" size={SIZES.iconSize} color={themeColors.text} style={styles.icon} />
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { color: themeColors.text }]}
                       placeholder={t(' New email')}
-                      placeholderTextColor={COLORS.placeholder}
+                      placeholderTextColor={themeColors.placeholder}
                       value={values.newEmail}
                       onChangeText={handleChange('newEmail')}
                       onBlur={handleBlur('newEmail')}
@@ -235,14 +261,14 @@ const UpdateEmail: React.FC = () => {
                     />
                   </View>
                   {touched.newEmail && errors.newEmail && (
-                    <Text style={styles.errorText}>{t(errors.newEmail)}</Text>
+                    <Text style={[styles.errorText, { color: themeColors.notification }]}>{t(errors.newEmail)}</Text>
                   )}
                   <View style={styles.inputContainer}>
-                    <Icon name="email" size={SIZES.iconSize} color={COLORS.primary} style={styles.icon} />
+                    <Icon name="email" size={SIZES.iconSize} color={themeColors.text} style={styles.icon} />
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { color: themeColors.text }]}
                       placeholder={t('Confirm new email')}
-                      placeholderTextColor={COLORS.placeholder}
+                      placeholderTextColor={themeColors.placeholder}
                       value={values.confirmEmail}
                       onChangeText={handleChange('confirmEmail')}
                       onBlur={handleBlur('confirmEmail')}
@@ -254,7 +280,7 @@ const UpdateEmail: React.FC = () => {
                     />
                   </View>
                   {touched.confirmEmail && errors.confirmEmail && (
-                    <Text style={styles.errorText}>{t(errors.confirmEmail)}</Text>
+                    <Text style={[styles.errorText, { color: themeColors.notification }]}>{t(errors.confirmEmail)}</Text>
                   )}
 
                   <TouchableOpacity
@@ -267,7 +293,7 @@ const UpdateEmail: React.FC = () => {
                     accessibilityRole="button"
                   >
                     <LinearGradient
-                      colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                      colors={isDarkMode ? [themeColors.gradientStart, themeColors.gradientEnd] : [COLORS.gradientStart, COLORS.gradientEnd]}
                       style={StyleSheet.absoluteFill}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}

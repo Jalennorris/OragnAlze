@@ -276,6 +276,20 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
     }
   }, [aiQuery, suggestionIdeas, suggestionChipsAnim]);
 
+  // --- Reset to Initial State ---
+  const resetToInitialState = useCallback(() => {
+    setAiQuery('');
+    setNumDays(DEFAULT_DAYS);
+    setIsLoading(false);
+    setSuggestedTasks([]);
+    setErrorMessage('');
+    setEditingTaskId(null);
+    setEditedTaskText('');
+    setShowAdvanced(false);
+    setSurprisePressed(false);
+    resetModalState(false);
+  }, [resetModalState]);
+
   // --- Render ---
   return (
     <>
@@ -323,9 +337,24 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
               />
 
               {/* --- Task Display Area --- */}
+              <AITaskList
+                tasks={suggestedTasks}
+                editingTaskId={editingTaskId}
+                editedTaskText={editedTaskText}
+                onStartEditing={handleStartEditing}
+                onSaveEdit={handleSaveEdit}
+                onCancelEdit={handleCancelEdit}
+                onChangeEditText={setEditedTaskText}
+                onDeleteTask={handleDeleteTask}
+                abortControllerRef={abortControllerRef} // Pass abortControllerRef here
+                setIsLoading={setIsLoading} // Pass setIsLoading
+                resetToInitialState={resetToInitialState} // Pass resetToInitialState
+                styles={styles}
+              />
+
               <ScrollView
                 ref={scrollViewRef}
-                style={{ flex: 1}}
+                style={{ flex: 1 }}
                 contentContainerStyle={{ paddingBottom: 20 }}
                 showsVerticalScrollIndicator={true}
                 keyboardShouldPersistTaps="handled"
@@ -337,19 +366,7 @@ const AskAIButton: React.FC<AskAIButtonProps> = ({ onTaskAccept }) => {
                     errorMessage={errorMessage}
                     styles={styles}
                   />
-                ) : (
-                  <AITaskList
-                    tasks={suggestedTasks}
-                    editingTaskId={editingTaskId}
-                    editedTaskText={editedTaskText}
-                    onStartEditing={handleStartEditing}
-                    onSaveEdit={handleSaveEdit}
-                    onCancelEdit={handleCancelEdit}
-                    onChangeEditText={setEditedTaskText}
-                    onDeleteTask={handleDeleteTask}
-                    styles={styles}
-                  />
-                )}
+                ) : null}
               </ScrollView>
 
               {/* --- Suggestion Chips --- */}

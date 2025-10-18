@@ -1,7 +1,9 @@
-import { Stack } from "expo-router";
+
 import React, { useState, useEffect } from 'react';
 import LoadingPage from "@/Screen/LoadingPage";
-import  AuthStack from  '../navigation/AuthStack';
+import AppNavigator from "@/navigation/AppNavigator";
+import { AuthProvider } from "@/Provider/AuthProvider";
+
 
 export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
@@ -14,12 +16,13 @@ export default function RootLayout() {
     return () => clearTimeout(timer);
   }, []);
 
-  if (isLoading) {
-    return <LoadingPage />;
-  }
-
   return (
-    <AuthStack />
+    <AuthProvider>  
+     {isLoading ? <LoadingPage /> : <AppNavigator/>}
+    </AuthProvider>
+
+
+
    
   );
 }

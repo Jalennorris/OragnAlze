@@ -99,12 +99,17 @@ public class UserControllers {
             @PathVariable long id,
             @RequestBody Map<String, Object> body
     ) {
-        String profilePic = (String) body.get("profile_pic");
-        if (profilePic == null || !profilePic.startsWith("#")) {
-            return CompletableFuture.completedFuture(Map.of("error", "No color hex provided"));
+        Object profilePicObj = body.get("profile_pic");
+        if (!(profilePicObj instanceof String profilePic) || !profilePic.startsWith("#")) {
+            return CompletableFuture.completedFuture(
+                    Map.of("error", "No valid color hex provided")
+            );
         }
-        return userService.patchProfilePicByUserId(id, profilePic)
-                .thenApply(v -> Map.of("profile_pic_url", profilePic));
+
+        return CompletableFuture.supplyAsync(() -> {
+            userService.updateUserProfilePic(id, profilePic); // sync call
+            return Map.of("profile_pic_url", profilePic);
+        });
     }
 
     }

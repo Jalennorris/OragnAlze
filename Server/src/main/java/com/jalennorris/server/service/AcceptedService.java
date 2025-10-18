@@ -6,6 +6,7 @@ import com.jalennorris.server.dto.AcceptedDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -27,8 +28,8 @@ public class AcceptedService {
         entity.setUser(dto.getUser());
         entity.setTaskTitle(dto.getTaskTitle());
         entity.setTaskDescription(dto.getTaskDescription());
-        entity.setDeadline(dto.getDeadline());
-        entity.setAcceptedAt(dto.getAcceptedAt());
+        entity.setDeadline(dto.getDeadline() != null ? dto.getDeadline().atOffset(ZoneOffset.UTC) : null);
+        entity.setAcceptedAt(dto.getAcceptedAt() != null ? dto.getAcceptedAt().atOffset(ZoneOffset.UTC) : null);
         return entity;
     }
 
@@ -39,10 +40,8 @@ public class AcceptedService {
         dto.setUser(entity.getUser());
         dto.setTaskTitle(entity.getTaskTitle());
         dto.setTaskDescription(entity.getTaskDescription());
-        dto.setDeadline(entity.getDeadline());
-        dto.setAcceptedAt(entity.getAcceptedAt());
-
-
+        dto.setDeadline(entity.getDeadline() != null ? entity.getDeadline().toLocalDateTime() : null);
+        dto.setAcceptedAt(entity.getAcceptedAt() != null ? entity.getAcceptedAt().toLocalDateTime() : null);
         return dto;
     }
 
@@ -90,8 +89,8 @@ public class AcceptedService {
             accepted.setUser(updatedDTO.getUser());
             accepted.setTaskTitle(updatedDTO.getTaskTitle());
             accepted.setTaskDescription(updatedDTO.getTaskDescription());
-            accepted.setDeadline(updatedDTO.getDeadline());
-            accepted.setAcceptedAt(updatedDTO.getAcceptedAt());
+            accepted.setDeadline(updatedDTO.getDeadline() != null ? updatedDTO.getDeadline().atOffset(ZoneOffset.UTC) : null);
+            accepted.setAcceptedAt(updatedDTO.getAcceptedAt() != null ? updatedDTO.getAcceptedAt().atOffset(ZoneOffset.UTC) : null);
             return toDTO(acceptedRepository.save(accepted));
         });
     }
@@ -109,10 +108,10 @@ public class AcceptedService {
                 accepted.setTaskDescription(patchDTO.getTaskDescription());
             }
             if (patchDTO.getDeadline() != null) {
-                accepted.setDeadline(patchDTO.getDeadline());
+                accepted.setDeadline(patchDTO.getDeadline().atOffset(ZoneOffset.UTC));
             }
             if (patchDTO.getAcceptedAt() != null) {
-                accepted.setAcceptedAt(patchDTO.getAcceptedAt());
+                accepted.setAcceptedAt(patchDTO.getAcceptedAt().atOffset(ZoneOffset.UTC));
             }
             // Save only if at least one field was patched
             return toDTO(acceptedRepository.save(accepted));

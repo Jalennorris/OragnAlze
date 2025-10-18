@@ -57,6 +57,22 @@ const getCategoryColor = (category?: string) => {
   return found ? found.color : '#888';
 };
 
+const DARK_COLORS = {
+  background: ['#232526', '#414345'],
+  card: '#18191a',
+  accent: '#F44336',
+  accent2: '#FF9800',
+  accent3: '#43cea2',
+  danger: '#F44336',
+  success: '#4CAF50',
+  warning: '#FFC107',
+  text: '#feefe9',
+  muted: '#888',
+  border: '#333',
+  shadow: '#000',
+  fab: '#F44336',
+};
+
 const MODERN_COLORS = {
   background: ['#e0eafc', '#cfdef3'], // softer blue gradient
   card: '#fff',
@@ -107,6 +123,7 @@ const TaskDetail: React.FC = () => {
   const [editedStatus, setEditedStatus] = useState<Task['status']>('not started');
   const [editedCategory, setEditedCategory] = useState<string>('Other');
   const [customCategory, setCustomCategory] = useState<string>('');
+  const [darkMode, setDarkMode] = useState(false);
 
   // Progress bar for subtasks
   const completedCount = subtasks.filter(s => s.completed).length;
@@ -204,6 +221,20 @@ const TaskDetail: React.FC = () => {
   useEffect(() => {
     fetchSubtasks();
   }, [taskId]);
+
+  useEffect(() => {
+    const getDarkMode = async () => {
+      try {
+        const storedDarkMode = await AsyncStorage.getItem('darkMode');
+        setDarkMode(storedDarkMode ? JSON.parse(storedDarkMode) : false);
+      } catch {
+        setDarkMode(false);
+      }
+    };
+    getDarkMode();
+  }, []);
+
+  const COLORS = darkMode ? DARK_COLORS : MODERN_COLORS;
 
   const handleSaveEdit = async () => {
     if (task) {
@@ -488,18 +519,18 @@ const TaskDetail: React.FC = () => {
 
   if (loading) {
     return (
-      <LinearGradient colors={MODERN_COLORS.background} style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={MODERN_COLORS.accent} />
+      <LinearGradient colors={COLORS.background} style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.accent} />
       </LinearGradient>
     );
   }
 
   if (!task) {
     return (
-      <LinearGradient colors={MODERN_COLORS.background} style={styles.container}>
+      <LinearGradient colors={COLORS.background} style={styles.container}>
         <Header />
         <View style={styles.taskContainer}>
-          <Text style={styles.errorText}>Task not found!</Text>
+          <Text style={[styles.errorText, { color: COLORS.danger } ]}>Task not found!</Text>
         </View>
         <NavBar />
       </LinearGradient>
@@ -508,7 +539,7 @@ const TaskDetail: React.FC = () => {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <LinearGradient colors={MODERN_COLORS.background} style={styles.safeArea}>
+      <LinearGradient colors={COLORS.background} style={styles.safeArea}>
         <SafeAreaView style={{ flex: 1 }}>
           <Header />
           <Animated.View 
@@ -518,17 +549,23 @@ const TaskDetail: React.FC = () => {
             ]}
           >
             <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-              <Animated.View style={styles.modernCard}>
+              <Animated.View style={[
+                styles.modernCard,
+                { backgroundColor: COLORS.card, borderColor: COLORS.border, shadowColor: COLORS.shadow }
+              ]}>
                 {/* Header with back button */}
                 <View style={styles.header}>
                   <TouchableOpacity
-                    style={styles.backButton}
+                    style={[styles.backButton, { backgroundColor: darkMode ? '#232526' : '#f3f6fa' }]}
                     onPress={() => navigation.goBack()}
                   >
-                    <Ionicons name="arrow-back" size={24} color={MODERN_COLORS.accent} />
-                    <Text style={styles.backButtonText}>Back</Text>
+                    <Ionicons name="arrow-back" size={24} color={COLORS.accent} />
+                    <Text style={[styles.backButtonText, { color: COLORS.accent }]}>Back</Text>
                   </TouchableOpacity>
-                  <View style={[styles.priorityBadge, { backgroundColor: MODERN_COLORS.card, borderColor: priorityColors[task.priority], borderWidth: 1 }]}>
+                  <View style={[
+                    styles.priorityBadge,
+                    { backgroundColor: COLORS.card, borderColor: priorityColors[task.priority], borderWidth: 1 }
+                  ]}>
                     <Ionicons 
                       name={priorityIcons[task.priority]} 
                       size={18} 
@@ -547,16 +584,16 @@ const TaskDetail: React.FC = () => {
                     value={editedTitle}
                     onChangeText={setEditedTitle}
                     placeholder="Task Title"
-                    placeholderTextColor={MODERN_COLORS.muted}
+                    placeholderTextColor={COLORS.muted}
                   />
                 ) : (
-                  <Text style={styles.title}>{task.title}</Text>
+                  <Text style={[styles.title, { color: COLORS.text }]}>{task.title}</Text>
                 )}
 
                 {/* Category Picker in edit mode */}
                 {isEditing && (
                   <View style={{ marginBottom: 16 }}>
-                    <Text style={styles.modernLabel}>Category:</Text>
+                    <Text style={[styles.modernLabel, { color: COLORS.text }]}>Category:</Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
                       {CATEGORY_OPTIONS.map(opt => (
                         <TouchableOpacity
@@ -613,7 +650,7 @@ const TaskDetail: React.FC = () => {
                         fontSize: 14,
                         marginRight: 8,
                         ...MODERN_FONT,
-                        shadowColor: MODERN_COLORS.shadow,
+                        shadowColor: COLORS.shadow,
                         shadowOpacity: 0.13,
                         shadowOffset: { width: 0, height: 2 },
                         shadowRadius: 4,
@@ -628,7 +665,7 @@ const TaskDetail: React.FC = () => {
                 {/* Status Picker in edit mode */}
                 {isEditing && (
                   <View style={{ marginBottom: 16 }}>
-                    <Text style={styles.modernLabel}>Status:</Text>
+                    <Text style={[styles.modernLabel, { color: COLORS.text }]}>Status:</Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                       {(['not started', 'in progress', 'completed'] as Task['status'][]).map((status) => (
                         <TouchableOpacity
@@ -638,14 +675,14 @@ const TaskDetail: React.FC = () => {
                             marginHorizontal: 4,
                             paddingVertical: 12,
                             borderRadius: 8,
-                            backgroundColor: editedStatus === status ? MODERN_COLORS.accent2 : '#f0f0f0',
+                            backgroundColor: editedStatus === status ? COLORS.accent2 : '#f0f0f0',
                             alignItems: 'center',
                             justifyContent: 'center',
                           }}
                           onPress={() => setEditedStatus(status)}
                         >
                           <Text style={{
-                            color: editedStatus === status ? '#fff' : MODERN_COLORS.accent2,
+                            color: editedStatus === status ? '#fff' : COLORS.accent2,
                             fontWeight: '600',
                             fontSize: 15,
                             textTransform: 'capitalize',
@@ -661,7 +698,7 @@ const TaskDetail: React.FC = () => {
                 {/* Priority Picker in edit mode */}
                 {isEditing && (
                   <View style={{ marginBottom: 16 }}>
-                    <Text style={styles.modernLabel}>Priority:</Text>
+                    <Text style={[styles.modernLabel, { color: COLORS.text }]}>Priority:</Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                       {(['low', 'medium', 'high'] as Task['priority'][]).map((level) => (
                         <TouchableOpacity
@@ -698,7 +735,7 @@ const TaskDetail: React.FC = () => {
                 )}
 
                 {/* Divider */}
-                <View style={styles.divider} />
+                <View style={[styles.divider, { backgroundColor: COLORS.border }]} />
 
                 {/* Task Description */}
                 {isEditing ? (
@@ -708,23 +745,23 @@ const TaskDetail: React.FC = () => {
                     onChangeText={setEditedDescription}
                     placeholder="Task Description"
                     multiline
-                    placeholderTextColor={MODERN_COLORS.muted}
+                    placeholderTextColor={COLORS.muted}
                   />
                 ) : (
-                  <Text style={styles.description}>{task.description}</Text>
+                  <Text style={[styles.description, { color: COLORS.text }]}>{task.description}</Text>
                 )}
 
                 {/* Due Date Edit */}
                 {isEditing && (
                   <View style={{ marginBottom: 16 }}>
                     <TouchableOpacity
-                      style={[styles.button, { backgroundColor: MODERN_COLORS.accent2, marginBottom: 0 }]}
+                      style={[styles.button, { backgroundColor: COLORS.accent2, marginBottom: 0 }]}
                       onPress={() => setShowDatePicker(true)}
                     >
                       <Ionicons name="calendar-outline" size={20} color="#fff" />
                       <Text style={styles.buttonText}>Edit Due Date</Text>
                     </TouchableOpacity>
-                    <Text style={{ marginTop: 8, color: MODERN_COLORS.text, textAlign: 'center' }}>
+                    <Text style={{ marginTop: 8, color: COLORS.text, textAlign: 'center' }}>
                       {editedDueDate
                         ? format(editedDueDate, 'MMM dd, yyyy hh:mm a')
                         : ''}
@@ -746,8 +783,8 @@ const TaskDetail: React.FC = () => {
                 {/* Task Details */}
                 <View style={styles.detailsContainer}>
                   <View style={styles.detailRow}>
-                    <Ionicons name="calendar-outline" size={20} color={MODERN_COLORS.accent} />
-                    <Text style={styles.detailText}>
+                    <Ionicons name="calendar-outline" size={20} color={COLORS.accent} />
+                    <Text style={[styles.detailText, { color: COLORS.text }]}>
                       Due: {isEditing && editedDueDate
                         ? format(editedDueDate, 'MMM dd, yyyy hh:mm a')
                         : task.dueDate}
@@ -765,13 +802,13 @@ const TaskDetail: React.FC = () => {
                       size={20}
                       color={
                         (task.status === 'completed' || task.completed)
-                          ? MODERN_COLORS.success
+                          ? COLORS.success
                           : task.status === 'in progress'
-                          ? MODERN_COLORS.warning
-                          : MODERN_COLORS.muted
+                          ? COLORS.warning
+                          : COLORS.muted
                       }
                     />
-                    <Text style={styles.detailText}>
+                    <Text style={[styles.detailText, { color: COLORS.text }]}>
                       Status: {task.status ? task.status.charAt(0).toUpperCase() + task.status.slice(1) : (task.completed ? 'Completed' : 'Not Started')}
                     </Text>
                   </View>
@@ -788,13 +825,13 @@ const TaskDetail: React.FC = () => {
                     <Animated.View style={{
                       width: `${progress * 100}%`,
                       height: 8,
-                      backgroundColor: MODERN_COLORS.accent3,
+                      backgroundColor: COLORS.accent3,
                       borderRadius: 8,
                     }} />
                   </View>
                   <Text style={{
                     fontSize: 13,
-                    color: MODERN_COLORS.muted,
+                    color: COLORS.muted,
                     marginTop: 4,
                     textAlign: 'right',
                   }}>
@@ -803,11 +840,11 @@ const TaskDetail: React.FC = () => {
                 </View>
 
                 {/* Subtasks Section */}
-                <View style={styles.subtasksCard}>
-                  <Text style={styles.subtasksTitle}>Subtasks</Text>
+                <View style={[styles.subtasksCard, { backgroundColor: COLORS.card, borderColor: COLORS.border, shadowColor: COLORS.shadow }]}>
+                  <Text style={[styles.subtasksTitle, { color: COLORS.text }]}>Subtasks</Text>
                   {/* Move FAB here for visibility */}
                   <TouchableOpacity
-                    style={styles.fabInline}
+                    style={[styles.fabInline, { backgroundColor: COLORS.fab }]}
                     onPress={() => setSubtaskModalVisible(true)}
                     activeOpacity={0.85}
                   >
@@ -815,9 +852,9 @@ const TaskDetail: React.FC = () => {
                    
                   </TouchableOpacity>
                   {subtasksLoading ? (
-                    <ActivityIndicator size="small" color={MODERN_COLORS.accent} style={{ marginTop: 24 }} />
+                    <ActivityIndicator size="small" color={COLORS.accent} style={{ marginTop: 24 }} />
                   ) : subtasks.length === 0 ? (
-                    <Text style={{ color: MODERN_COLORS.muted, textAlign: 'center', marginTop: 24 }}>No subtasks found.</Text>
+                    <Text style={{ color: COLORS.muted, textAlign: 'center', marginTop: 24 }}>No subtasks found.</Text>
                   ) : (
                     <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
                       {subtasks.map((s, i) => (
@@ -829,7 +866,7 @@ const TaskDetail: React.FC = () => {
                           overshootLeft={false}
                         >
                           <TouchableOpacity
-                            style={styles.subtaskItem}
+                            style={[styles.subtaskItem, { backgroundColor: darkMode ? '#232526' : '#f7f7fa', borderColor: COLORS.border, shadowColor: COLORS.shadow }]}
                             onPress={() => handleSubtaskItemPress(s)}
                             activeOpacity={0.7}
                           >
@@ -837,14 +874,14 @@ const TaskDetail: React.FC = () => {
                               <Ionicons
                                 name={s.completed ? 'checkmark-circle' : 'ellipse-outline'}
                                 size={22}
-                                color={s.completed ? MODERN_COLORS.success : MODERN_COLORS.muted}
+                                color={s.completed ? COLORS.success : COLORS.muted}
                               />
                             </View>
                             <View style={{ marginLeft: 14, flex: 1 }}>
                               <Text style={{
                                 fontSize: 16,
                                 fontWeight: '600',
-                                color: s.completed ? MODERN_COLORS.muted : MODERN_COLORS.text,
+                                color: s.completed ? COLORS.muted : COLORS.text,
                                 textDecorationLine: s.completed ? 'line-through' : 'none',
                                 ...MODERN_FONT,
                               }}>
@@ -853,7 +890,7 @@ const TaskDetail: React.FC = () => {
                               {s.description ? (
                                 <Text style={{
                                   fontSize: 13,
-                                  color: MODERN_COLORS.muted,
+                                  color: COLORS.muted,
                                   marginTop: 2,
                                 }}>
                                   {s.description}
@@ -875,8 +912,8 @@ const TaskDetail: React.FC = () => {
                   onRequestClose={() => setSubtaskModalVisible(false)}
                 >
                   <BlurView intensity={60} tint="light" style={styles.blurOverlay}>
-                    <Animated.View style={styles.bottomSheet}>
-                      <Text style={styles.bottomSheetTitle}>New Subtask</Text>
+                    <Animated.View style={[styles.bottomSheet, { backgroundColor: COLORS.card, borderColor: COLORS.border, shadowColor: COLORS.shadow }]}>
+                      <Text style={[styles.bottomSheetTitle, { color: COLORS.text }]}>New Subtask</Text>
                       <TextInput
                         style={[styles.modernInput, { marginBottom: 16 }]}
                         placeholder="Subtask title..."
@@ -886,7 +923,7 @@ const TaskDetail: React.FC = () => {
                       />
                       <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
                         <TouchableOpacity
-                          style={styles.bottomSheetCancel}
+                          style={[styles.bottomSheetCancel, { backgroundColor: COLORS.muted }]}
                           onPress={() => {
                             setSubtaskModalVisible(false);
                             setNewSubtaskTitle('');
@@ -896,7 +933,7 @@ const TaskDetail: React.FC = () => {
                           <Text style={{ color: '#fff', fontWeight: '600' }}>Cancel</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={[styles.bottomSheetCreate, { opacity: addingSubtask || !newSubtaskTitle.trim() ? 0.7 : 1 }]}
+                          style={[styles.bottomSheetCreate, { backgroundColor: COLORS.accent, opacity: addingSubtask || !newSubtaskTitle.trim() ? 0.7 : 1 }]}
                           onPress={handleAddSubtask}
                           disabled={addingSubtask || !newSubtaskTitle.trim()}
                         >
@@ -918,13 +955,13 @@ const TaskDetail: React.FC = () => {
                   }}
                 >
                   <BlurView intensity={60} tint="light" style={styles.blurOverlay}>
-                    <View style={styles.subtaskModalCard}>
+                    <View style={[styles.subtaskModalCard, { backgroundColor: COLORS.card, borderColor: COLORS.border, shadowColor: COLORS.shadow }]}>
                       {selectedSubtask && (
                         <>
                           <Ionicons
                             name={selectedSubtask.completed ? 'checkmark-circle' : 'ellipse-outline'}
                             size={32}
-                            color={selectedSubtask.completed ? MODERN_COLORS.success : MODERN_COLORS.muted}
+                            color={selectedSubtask.completed ? COLORS.success : COLORS.muted}
                             style={{ marginBottom: 12 }}
                           />
                           {editingSubtask ? (
@@ -943,13 +980,13 @@ const TaskDetail: React.FC = () => {
                                 multiline
                               />
                               <TouchableOpacity
-                                style={styles.subtaskModalSave}
+                                style={[styles.subtaskModalSave, { backgroundColor: COLORS.success }]}
                                 onPress={handleSaveSubtaskEdit}
                               >
                                 <Text style={styles.subtaskModalSaveText}>Save</Text>
                               </TouchableOpacity>
                               <TouchableOpacity
-                                style={styles.subtaskModalCancel}
+                                style={[styles.subtaskModalCancel, { backgroundColor: COLORS.muted }]}
                                 onPress={() => setEditingSubtask(false)}
                               >
                                 <Text style={styles.subtaskModalCancelText}>Cancel</Text>
@@ -957,20 +994,20 @@ const TaskDetail: React.FC = () => {
                             </>
                           ) : (
                             <>
-                              <Text style={styles.subtaskModalTitle}>
+                              <Text style={[styles.subtaskModalTitle, { color: COLORS.text }]}>
                                 {selectedSubtask.title}
                               </Text>
-                              <Text style={styles.subtaskModalDesc}>
+                              <Text style={[styles.subtaskModalDesc, { color: COLORS.muted }]}>
                                 {selectedSubtask.description || 'No description.'}
                               </Text>
                               <TouchableOpacity
-                                style={styles.subtaskModalEdit}
+                                style={[styles.subtaskModalEdit, { backgroundColor: COLORS.accent }]}
                                 onPress={handleEditSubtask}
                               >
                                 <Text style={styles.subtaskModalEditText}>Edit</Text>
                               </TouchableOpacity>
                               <TouchableOpacity
-                                style={styles.subtaskModalCancel}
+                                style={[styles.subtaskModalCancel, { backgroundColor: COLORS.muted }]}
                                 onPress={() => setSelectedSubtask(null)}
                               >
                                 <Text style={styles.subtaskModalCancelText}>Close</Text>
@@ -988,14 +1025,14 @@ const TaskDetail: React.FC = () => {
                   {isEditing ? (
                     <>
                       <TouchableOpacity
-                        style={[styles.button, styles.saveButton]}
+                        style={[styles.button, styles.saveButton, { backgroundColor: COLORS.success }]}
                         onPress={handleSaveEdit}
                       >
                         <Ionicons name="checkmark" size={20} color="#fff" />
                         <Text style={styles.buttonText}>Save Changes</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.button, styles.cancelButton]}
+                        style={[styles.button, styles.cancelButton, { backgroundColor: COLORS.muted }]}
                         onPress={() => setIsEditing(false)}
                       >
                         <Ionicons name="close" size={20} color="#fff" />
@@ -1005,14 +1042,14 @@ const TaskDetail: React.FC = () => {
                   ) : (
                     <>
                       <TouchableOpacity
-                        style={[styles.button, styles.editButton]}
+                        style={[styles.button, styles.editButton, { backgroundColor: COLORS.accent }]}
                         onPress={() => setIsEditing(true)}
                       >
                         <Ionicons name="create-outline" size={20} color="#fff" />
                         <Text style={styles.buttonText}>Edit Task</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.button, styles.completeButton]}
+                        style={[styles.button, styles.completeButton, { backgroundColor: COLORS.success }]}
                         onPress={handleToggleCompletion}
                       >
                         <Ionicons 
@@ -1025,7 +1062,7 @@ const TaskDetail: React.FC = () => {
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.button, styles.deleteButton]}
+                        style={[styles.button, styles.deleteButton, { backgroundColor: COLORS.danger }]}
                         onPress={handleDelete}
                       >
                         <Ionicons name="trash-outline" size={20} color="#fff" />

@@ -6,6 +6,7 @@ import * as Font from "expo-font";
 import axios from "axios";
 import { useNavigation } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/Provider/AuthProvider";
 
 // Load custom fonts
 const loadFonts = async () => {
@@ -36,10 +37,13 @@ const Header: React.FC = () => {
   const scaleValue = useRef(new Animated.Value(1)).current;
   const navigation = useNavigation();
   const [credentials, setCredentials] = useState<Credentials>({ profile_pic: '' });
-  const [loading, setLoading] = useState(true);
+  const { userId, loading: authLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const logoAnim = useRef(new Animated.Value(0)).current;
+  const [darkMode, setDarkMode] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const { signOut } = useAuth();
 
   useEffect(() => {
     const prepare = async () => {
@@ -64,24 +68,21 @@ const Header: React.FC = () => {
   }, []);
 
   const fetchUserInfo = useCallback(async () => {
-    setLoading(true);
+    if (!userId) {
+      await signOut();
+      navigation.replace('login');
+      return;
+    }
     setError(null);
     try {
-      const userId = await AsyncStorage.getItem('userId');
-      if (!userId) {
-        setError('No userId found in storage');
-        setLoading(false);
-        return;
-      }
       const response = await axios.get(`http://localhost:8080/api/users/${userId}`);
       const data = response.data;
       setCredentials({ profile_pic: data.profile_pic });
-      setLoading(false);
+      console.log('Fetched user info:', credentials);
     } catch (err) {
       setError('Failed to fetch user info');
-      setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     fetchUserInfo();
@@ -95,7 +96,19 @@ const Header: React.FC = () => {
     return () => clearInterval(intervalId);
   }, [fetchUserInfo]);
 
-  const handleRetry = () => setRetryCount((c) => c + 1);
+  const handleRetry = () => {
+    setRetrying(true);
+    setError(null);
+    setRetryCount((c) => c + 1);
+    fetchUserInfo().finally(() => setRetrying(false));
+  }
+
+
+  useEffect(() => {
+    if(retrying){
+      setRetrying(false);
+    }
+  }, [credentials, error])
 
   const handleProfilePress = () => {
     Animated.sequence([
@@ -114,55 +127,65 @@ const Header: React.FC = () => {
     });
   };
 
-  if (!fontsLoaded || loading) {
+  useEffect(() => {
+    const fetchDarkMode = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('darkMode');
+        if (stored !== null) {
+          setDarkMode(JSON.parse(stored));
+        }
+      } catch (e) {
+        // fallback to false
+        setDarkMode(false);
+      }
+    };
+    fetchDarkMode();
+
+    // Listen for changes to darkMode in AsyncStorage
+    const interval = setInterval(fetchDarkMode, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (!fontsLoaded || authLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#333" />
+      <View style={[styles.loadingContainer, darkMode && stylesDark.loadingContainer]}>
+        <ActivityIndicator size="small" color={darkMode ? "#fff" : "#333"} />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorText} allowFontScaling>
-          {error}
-        </Text>
-        <Pressable
-          onPress={handleRetry}
-          accessibilityLabel="Retry loading profile"
-          accessibilityRole="button"
-          style={styles.retryButton}
-        >
-          <Text style={styles.retryButtonText} allowFontScaling>Retry</Text>
-        </Pressable>
+      <View style={[styles.loadingContainer, darkMode && stylesDark.loadingContainer]}>
+        {retrying ? (
+          <ActivityIndicator size="small" color={darkMode ? "#fff" : "#333"} />
+        ) : (
+          <>
+            <Text style={[styles.errorText, darkMode && stylesDark.errorText]} allowFontScaling>
+              {error}
+            </Text>
+            <Pressable
+              onPress={handleRetry}
+              accessibilityLabel="Retry loading profile"
+              accessibilityRole="button"
+              style={[styles.retryButton, darkMode && stylesDark.retryButton]}
+            >
+              <Text style={[styles.retryButtonText, darkMode && stylesDark.retryButtonText]} allowFontScaling>Retry</Text>
+            </Pressable>
+          </>
+        )}
       </View>
     );
   }
 
-  if (!credentials.profile_pic) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorText} allowFontScaling>
-          Failed to load profile picture
-        </Text>
-        <Pressable
-          onPress={handleRetry}
-          accessibilityLabel="Retry loading profile"
-          accessibilityRole="button"
-          style={styles.retryButton}
-        >
-          <Text style={styles.retryButtonText} allowFontScaling>Retry</Text>
-        </Pressable>
-      </View>
-    );
-  }
+  
 
   return (
-    <View style={styles.headerContainer}>
+    <View style={[styles.headerContainer, darkMode && stylesDark.headerContainer]}>
       <Animated.Text
         style={[
           styles.logo,
+          darkMode && stylesDark.logo,
           {
             opacity: logoAnim,
             transform: [
@@ -187,16 +210,19 @@ const Header: React.FC = () => {
         style={({ pressed }) => [
           styles.profileButton,
           pressed && styles.profileButtonPressed,
+          darkMode && stylesDark.profileButton,
+          pressed && darkMode && stylesDark.profileButtonPressed,
         ]}
       >
-        {colorBlocks.includes(credentials.profile_pic) ? (
+        {credentials.profile_pic && credentials.profile_pic.trim().startsWith('#') ? (
           <Animated.View
             style={[
               styles.profilePic,
+              darkMode && stylesDark.profilePic,
               {
-                backgroundColor: credentials.profile_pic,
+                backgroundColor: credentials.profile_pic.trim(),
                 transform: [{ scale: scaleValue }],
-                shadowColor: credentials.profile_pic,
+                shadowColor: credentials.profile_pic.trim(),
                 shadowOpacity: 0.18,
                 shadowRadius: 8,
                 shadowOffset: { width: 0, height: 4 },
@@ -206,7 +232,7 @@ const Header: React.FC = () => {
           />
         ) : (
           <Animated.View style={{ transform: [{ scale: scaleValue }] }}>
-            <Ionicons name="person-circle" size={44} color="#6366f1" style={styles.profileIcon} />
+            <Ionicons name="person-circle" size={44} color={darkMode ? "#fff" : "#6366f1"} style={styles.profileIcon} />
           </Animated.View>
         )}
       </Pressable>
@@ -227,14 +253,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingVertical: 18,
     backgroundColor: "#f8fafc", // solid background color
-    borderRadius: 20,
-    marginTop: 0,
-    marginBottom: 8,
-    shadowColor: "#6366f1",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.10,
-    shadowRadius: 16,
-    elevation: 8,
     minHeight: 72,
   },
   logo: {
@@ -254,8 +272,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#f8fafc",
-    borderBottomColor: "#e0e7ef",
-    borderBottomWidth: 1,
+    paddingVertical: 18,
   },
   errorText: {
     color: "#e63946",
@@ -299,5 +316,39 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
+  },
+});
+
+// Dark mode styles
+const stylesDark = StyleSheet.create({
+  headerContainer: {
+    backgroundColor: "#18181b",
+    borderBottomColor: "#23232b",
+  },
+  logo: {
+    color: "#f1f5f9",
+    textShadowColor: "rgba(0,0,0,0.25)",
+  },
+  loadingContainer: {
+    backgroundColor: "#18181b",
+    borderBottomColor: "#23232b",
+  },
+  errorText: {
+    color: "#f87171",
+  },
+  retryButton: {
+    backgroundColor: "#23232b",
+  },
+  retryButtonText: {
+    color: "#60a5fa",
+  },
+  profileButton: {
+    backgroundColor: "transparent",
+  },
+  profileButtonPressed: {
+    backgroundColor: "#23232b",
+  },
+  profilePic: {
+    borderColor: "#23232b",
   },
 });

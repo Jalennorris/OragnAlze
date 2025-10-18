@@ -10,8 +10,93 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import GoalSuggestionAlgorithm from './GoalSuggestionAlgorithm';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios'; // Add axios import
 
-const TaskInputArea = ({
+
+// Helper to format date as 'YYYY-MM-DDTHH:mm:ss' (no ms, no Z, local time)
+const formatLocalDateTime = (date: string | Date | null) => {
+  if (!date) return "";
+  if (typeof date === "string") {
+    // If already in 'YYYY-MM-DDTHH:mm:ss' format, return as-is
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(date)) {
+      return date;
+    }
+    // Remove ms and 'Z' or timezone offset if present, then parse
+    const clean = date.replace(/\.\d{3,}Z?$/, '').replace(/Z$/, '').replace(/([+-]\d{2}:?\d{2})$/, '');
+    // Try to parse as local time
+    const parts = clean.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/);
+    if (parts) {
+      // Already correct format, return
+      return clean;
+    }
+    // Fallback: parse as Date and format as local time
+    const d = new Date(clean);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return (
+      d.getFullYear() +
+      "-" +
+      pad(d.getMonth() + 1) +
+      "-" +
+      pad(d.getDate()) +
+      "T" +
+      pad(d.getHours()) +
+      ":" +
+      pad(d.getMinutes()) +
+      ":" +
+      pad(d.getSeconds())
+    );
+  } else {
+    // Date object: format as local time
+    const d = date;
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return (
+      d.getFullYear() +
+      "-" +
+      pad(d.getMonth() + 1) +
+      "-" +
+      pad(d.getDate()) +
+      "T" +
+      pad(d.getHours()) +
+      ":" +
+      pad(d.getMinutes()) +
+      ":" +
+      pad(d.getSeconds())
+    );
+  }
+};
+
+interface TaskInputAreaProps {
+  aiQuery: string;
+  setAiQuery: (query: string) => void;
+  numDays: number;
+  setNumDays: (days: number) => void;
+  isLoading: boolean;
+  errorMessage: string;
+  inputRef: React.RefObject<TextInput>;
+  showAdvanced: boolean;
+  setShowAdvanced: (show: boolean) => void;
+  smartDefault: string;
+  handleSmartDefaultPress: () => void;
+  SHORTCUTS: Array<{label: string, days: number, prompt?: string}>;
+  dayOptions: number[];
+  userHistory: {goals: any[]};
+  allGoals: any[];
+  handleGoalSuggestionSelect: (suggestion: any) => void;
+  SURPRISE_GRADIENT: string[];
+  handleSurpriseMe: () => void;
+  surprisePressed: boolean;
+  setSurprisePressed: (pressed: boolean) => void;
+  styles: any;
+  handleStopGeneration: () => void;
+  fetchAIResponse: () => void;
+  resetModalState: (keepQuery?: boolean) => void;
+  handleAcceptAllTasks: () => void;
+  suggestedTasks: any[];
+}
+
+const TaskInputArea: React.FC<Omit<TaskInputAreaProps, 'userId'>> = ({
   aiQuery,
   setAiQuery,
   numDays,
@@ -38,10 +123,13 @@ const TaskInputArea = ({
   suggestedTasks,
   resetModalState,
   handleAcceptAllTasks,
-  
-}: any) => {
-
+}) => {
   const [minHeight, setMinHeight] = useState(50);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    AsyncStorage.getItem('userId').then(setUserId);
+  }, []);
 
   const handleTextChange = (text: string) => {
     setAiQuery(text);
@@ -53,46 +141,49 @@ const TaskInputArea = ({
     const newHeight = Math.min(max, base + Math.floor(extra / 2));
     setMinHeight(newHeight);
   };
- 
+
   return (
     <View style={styles.inputArea}>
-       {/* --- Goal Suggestions --- */}
-        <GoalSuggestionAlgorithm
+    
+     
+      
+      {/* --- Goal Suggestions --- */}
+      <GoalSuggestionAlgorithm
         userGoals={Array.isArray(userHistory.goals) ? userHistory.goals : []}
         allGoals={Array.isArray(allGoals) ? allGoals : []}
         query={aiQuery}
         onSuggestionPress={handleGoalSuggestionSelect}
       />
-      {/* --- Goal Suggestions --- */}
-    
-      {/*
-{aiQuery.trim().length > 0 && (
-  <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 }}>
-    <Animated.View style={{ transform: [{ scale: surprisePressed ? 0.96 : 1 }] }}>
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={handleSurpriseMe}
-        onPressIn={() => setSurprisePressed(true)}
-        onPressOut={() => setSurprisePressed(false)}
-        style={{ borderRadius: 24, overflow: 'hidden' }}
-      >
-        <LinearGradient
-          colors={SURPRISE_GRADIENT}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.surpriseBubble}
-        >
-          <Ionicons name="sparkles" size={18} color="#BB86FC" style={{ marginRight: 6 }} />
-          <Text style={styles.surpriseBubbleText}>Surprise Me!</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-    </Animated.View>
-  </View>
-)}
-*/}
+      
+      {/* --- Surprise Me Button (commented out) --- */}
+      {/* {aiQuery.trim().length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 }}>
+          <Animated.View style={{ transform: [{ scale: surprisePressed ? 0.96 : 1 }] }}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={handleSurpriseMe}
+              onPressIn={() => setSurprisePressed(true)}
+              onPressOut={() => setSurprisePressed(false)}
+              style={{ borderRadius: 24, overflow: 'hidden' }}
+            >
+              <LinearGradient
+                colors={SURPRISE_GRADIENT}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.surpriseBubble}
+              >
+                <Ionicons name="sparkles" size={18} color="#BB86FC" style={{ marginRight: 6 }} />
+                <Text style={styles.surpriseBubbleText}>Surprise Me!</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      )} */}
+
       {errorMessage && !isLoading && suggestedTasks.length > 0 && (
         <Text style={styles.errorTextInline}>{errorMessage}</Text>
       )}
+
       <View style={styles.compactChipsRow}>
         <ScrollView
           horizontal
@@ -205,20 +296,23 @@ const TaskInputArea = ({
       )}
 
       {/* Query Input and Submit Button */}
-      <View style={[styles.inputWrapper, {height: minHeight}]}>
+      <View style={[styles.inputWrapper, {minHeight}]}>
         <View style={{ flex: 1, position: 'relative', justifyContent: 'center' }}>
           <TextInput
             style={[
               styles.inputFieldQuery,
               { 
-     
-                paddingHorizontal:12, paddingVertical: 8, paddingRight: 40, minHeight, fontSize: 14 }, // minHeight must come after any style with height
+                paddingHorizontal: 12, 
+                paddingVertical: 8, 
+                paddingRight: 40, 
+                minHeight, 
+                fontSize: 14 
+              },
             ]}
             autoCorrect={false}
             placeholder="What's your goal?"
             placeholderTextColor="#888"
             value={aiQuery}
-
             onChangeText={handleTextChange}
             multiline
             scrollEnabled={true}
@@ -226,8 +320,8 @@ const TaskInputArea = ({
             blurOnSubmit={true}
             ref={inputRef}
           />
-          {/* --- Clear Button inside TextInput --- */}
-         {/* {aiQuery.length > 0 && !isLoading && (
+          {/* --- Clear Button inside TextInput (commented out) --- */}
+          {/* {aiQuery.length > 0 && !isLoading && (
             <TouchableOpacity
               style={styles.clearInputButton}
               onPress={() => resetModalState(false)}
@@ -238,10 +332,10 @@ const TaskInputArea = ({
             </TouchableOpacity>
           )} */}
         </View>
-        {/* ...existing code for stop/generate button... */}
+        
         {isLoading ? (
           <TouchableOpacity
-            style={[styles.controlButtonInInput, styles.stopButton]} // removed {marginBottom: 20}
+            style={[styles.controlButtonInInput, styles.stopButton]}
             onPress={handleStopGeneration}
             accessibilityLabel="Stop AI generation"
           >
@@ -260,7 +354,7 @@ const TaskInputArea = ({
               styles.controlButtonInInput,
               styles.generateButton,
               !aiQuery.trim() ? styles.generateButtonDisabled : null
-            ]} // removed {marginBottom: 20}
+            ]}
             onPress={fetchAIResponse}
             disabled={!aiQuery.trim()}
             accessibilityLabel="Generate tasks"
@@ -270,25 +364,8 @@ const TaskInputArea = ({
         )}
       </View>
       
-      <View style={styles.actionButtonsContainer}>
-        {suggestedTasks.length > 0 && !isLoading ? (
-          // Only show "Accept All" after tasks are generated and reviewed
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              styles.acceptAllButton,
-              
-            ]}
-            onPress={handleAcceptAllTasks}
-            accessibilityLabel="Accept all tasks"
-          >
-            <Ionicons name="checkmark-done-outline" size={18} color="#FFF" style={{ marginRight: 5 }} />
-          </TouchableOpacity>
-        ) : null}
-      </View>
     </View>
   );
 };
-
 
 export default TaskInputArea;

@@ -4,9 +4,10 @@ import { useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Google from 'expo-auth-session/providers/google';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SecureStore from 'expo-secure-store';
+import AppleSignInButton from './AppleSignInButton';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
 const COLORS = {
   primary: '#6a11cb',
@@ -40,23 +41,11 @@ const Signup: React.FC = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: 'YOUR_GOOGLE_CLIENT_ID', // Replace with your actual Google Client ID
-  });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(300)).current;
-
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { authentication } = response;
-      console.log('Google Authentication Successful: ', authentication);
-      // Handle successful signup with Google
-      handleGoogleSignUp(authentication?.accessToken);
-    }
-  }, [response]);
 
   useEffect(() => {
     Animated.parallel([
@@ -75,26 +64,16 @@ const Signup: React.FC = () => {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  const handleGoogleSignUp = async (token: string | undefined) => {
-    if (!token) {
-      setError('Google Sign-In failed. Please try again.');
-      return;
-    }
-
-    setLoading(true);
-
+  const handleAppleLogin = async (credential: AppleAuthentication.AppleAuthenticationCredential) => {
     try {
-      // Send the Google token to your backend for user creation
-      const response = await axios.post('http://localhost:8080/api/users/google-signup', {
-        token,
+      // Send credential.identityToken to your backend for verification and signup
+      const backendResponse = await axios.post('http://localhost:8080/api/auth/apple', {
+        token: credential.identityToken,
       });
-      console.log('Successfully signed up with Google:', response.data);
-      setLoading(false);
-      navigation.navigate('/'); // Redirect to home or dashboard after signup
-    } catch (error) {
-      console.error('Google Sign-Up failed:', error);
-      setError('Google Sign-Up failed. Please try again.');
-      setLoading(false);
+      // Optionally store user data or navigate as needed
+      navigation.navigate('/');
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Apple signup failed. Please try again.');
     }
   };
 
@@ -147,160 +126,151 @@ const Signup: React.FC = () => {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={60}
         >
-          {/* Back Button */}
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.navigate('welcome')}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            accessibilityHint="Navigates to the welcome screen"
-          >
-            <Ionicons name="arrow-back" size={28} color={COLORS.white} />
-          </TouchableOpacity>
-          {/* Logo/Title Section */}
-          <View style={styles.logoContainer}>
-            <Ionicons name="rocket-outline" size={40} color={COLORS.white} style={{ marginBottom: 8 }} />
-            <Text style={styles.brandTitle}>OrganAIze</Text>
-          </View>
-          {/* Card */}
-          <Animated.View style={[
-            styles.card,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
-          ]}>
-            <Text style={styles.title}>Create Your Account</Text>
-            <View style={styles.inputContainer}>
-              {/* First Name */}
-              <TextInput
-                placeholder="First Name"
-                placeholderTextColor="#bbb"
-                style={styles.input}
-                value={credentials.firstname}
-                onChangeText={(text) => handleChange('firstname', text)}
-                accessibilityLabel="First Name input"
-                returnKeyType="next"
-              />
-              {/* Last Name */}
-              <TextInput
-                placeholder="Last Name"
-                placeholderTextColor="#bbb"
-                style={styles.input}
-                value={credentials.lastname}
-                onChangeText={(text) => handleChange('lastname', text)}
-                accessibilityLabel="Last Name input"
-                returnKeyType="next"
-              />
-              {/* Username */}
-              <TextInput
-                placeholder="Username"
-                placeholderTextColor="#bbb"
-                style={styles.input}
-                value={credentials.username}
-                onChangeText={(text) => handleChange('username', text)}
-                accessibilityLabel="Username input"
-                autoCapitalize="none"
-                returnKeyType="next"
-              />
-              {/* Email */}
-              <TextInput
-                placeholder="Email"
-                placeholderTextColor="#bbb"
-                style={styles.input}
-                value={credentials.email}
-                onChangeText={(text) => handleChange('email', text)}
-                keyboardType="email-address"
-                accessibilityLabel="Email input"
-                autoCapitalize="none"
-                returnKeyType="next"
-              />
-              {/* Password */}
-              <View style={{ position: 'relative' }}>
+          <View style={styles.topContainer}>
+            {/* Back Button */}
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.navigate('welcome')}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              accessibilityHint="Navigates to the welcome screen"
+            >
+              <Ionicons name="arrow-back" size={28} color={COLORS.white} />
+            </TouchableOpacity>
+            {/* Logo/Title Section */}
+            <View style={styles.logoContainer}>
+              <Ionicons name="rocket-outline" size={40} color={COLORS.white} style={{ marginBottom: 8 }} />
+              <Text style={styles.brandTitle}>OrganAIze</Text>
+            </View>
+            {/* Card */}
+            <Animated.View style={[
+              styles.card,
+              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+            ]}>
+              <Text style={styles.title}>Create Your Account</Text>
+              <View style={styles.inputContainer}>
+                {/* First Name */}
                 <TextInput
-                  placeholder="Password"
+                  placeholder="First Name"
                   placeholderTextColor="#bbb"
-                  secureTextEntry={!showPassword}
                   style={styles.input}
-                  value={credentials.password}
-                  onChangeText={(text) => handleChange('password', text)}
-                  accessibilityLabel="Password input"
+                  value={credentials.firstname}
+                  onChangeText={(text) => handleChange('firstname', text)}
+                  accessibilityLabel="First Name input"
+                  returnKeyType="next"
+                />
+                {/* Last Name */}
+                <TextInput
+                  placeholder="Last Name"
+                  placeholderTextColor="#bbb"
+                  style={styles.input}
+                  value={credentials.lastname}
+                  onChangeText={(text) => handleChange('lastname', text)}
+                  accessibilityLabel="Last Name input"
+                  returnKeyType="next"
+                />
+                {/* Username */}
+                <TextInput
+                  placeholder="Username"
+                  placeholderTextColor="#bbb"
+                  style={styles.input}
+                  value={credentials.username}
+                  onChangeText={(text) => handleChange('username', text)}
+                  accessibilityLabel="Username input"
                   autoCapitalize="none"
                   returnKeyType="next"
                 />
-                <TouchableOpacity
-                  style={styles.eyeIcon}
-                  onPress={() => setShowPassword((prev) => !prev)}
-                  accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-                >
-                  <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} color={COLORS.primary} />
-                </TouchableOpacity>
-              </View>
-              {/* Confirm Password */}
-              <View style={{ position: 'relative' }}>
+                {/* Email */}
                 <TextInput
-                  placeholder="Confirm Password"
+                  placeholder="Email"
                   placeholderTextColor="#bbb"
-                  secureTextEntry={!showConfirmPassword}
                   style={styles.input}
-                  value={credentials.confirmPassword}
-                  onChangeText={(text) => handleChange('confirmPassword', text)}
-                  accessibilityLabel="Confirm Password input"
+                  value={credentials.email}
+                  onChangeText={(text) => handleChange('email', text)}
+                  keyboardType="email-address"
+                  accessibilityLabel="Email input"
                   autoCapitalize="none"
-                  returnKeyType="done"
+                  returnKeyType="next"
                 />
-                <TouchableOpacity
-                  style={styles.eyeIcon}
-                  onPress={() => setShowConfirmPassword((prev) => !prev)}
-                  accessibilityLabel={showConfirmPassword ? "Hide password" : "Show password"}
-                >
-                  <Ionicons name={showConfirmPassword ? "eye-off" : "eye"} size={22} color={COLORS.primary} />
-                </TouchableOpacity>
+                {/* Password */}
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    placeholder="Password"
+                    placeholderTextColor="#bbb"
+                    secureTextEntry={!showPassword}
+                    style={styles.input}
+                    value={credentials.password}
+                    onChangeText={(text) => handleChange('password', text)}
+                    accessibilityLabel="Password input"
+                    autoCapitalize="none"
+                    returnKeyType="next"
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIcon}
+                    onPress={() => setShowPassword((prev) => !prev)}
+                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                  >
+                    <Ionicons name={showPassword ? "eye-off" : "eye"} size={22} color={COLORS.primary} />
+                  </TouchableOpacity>
+                </View>
+                {/* Confirm Password */}
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    placeholder="Confirm Password"
+                    placeholderTextColor="#bbb"
+                    secureTextEntry={!showConfirmPassword}
+                    style={styles.input}
+                    value={credentials.confirmPassword}
+                    onChangeText={(text) => handleChange('confirmPassword', text)}
+                    accessibilityLabel="Confirm Password input"
+                    autoCapitalize="none"
+                    returnKeyType="done"
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIcon}
+                    onPress={() => setShowConfirmPassword((prev) => !prev)}
+                    accessibilityLabel={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    <Ionicons name={showConfirmPassword ? "eye-off" : "eye"} size={22} color={COLORS.primary} />
+                  </TouchableOpacity>
+                </View>
+                {/* Error */}
+                {error && (
+                  <Text style={styles.errorText} accessibilityLiveRegion="polite">{error}</Text>
+                )}
+                {/* Sign Up Button */}
+                {loading ? (
+                  <ActivityIndicator size="large" color={COLORS.primary} accessibilityLabel="Loading" style={{ marginTop: 10 }} />
+                ) : (
+                  <TouchableOpacity
+                    style={styles.button}
+                    onPress={handleSignup}
+                    accessibilityRole="button"
+                    accessibilityLabel="Sign Up"
+                    accessibilityHint="Sign up for a new account"
+                    disabled={loading}
+                  >
+                    <Text style={styles.buttonText}>Sign Up</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-              {/* Error */}
-              {error && (
-                <Text style={styles.errorText} accessibilityLiveRegion="polite">{error}</Text>
-              )}
-              {/* Sign Up Button */}
-              {loading ? (
-                <ActivityIndicator size="large" color={COLORS.primary} accessibilityLabel="Loading" style={{ marginTop: 10 }} />
-              ) : (
-                <TouchableOpacity
-                  style={styles.button}
-                  onPress={handleSignup}
-                  accessibilityRole="button"
-                  accessibilityLabel="Sign Up"
-                  accessibilityHint="Sign up for a new account"
-                  disabled={loading}
+              {/* Divider */}
+              <Text style={styles.orText}>or continue with</Text>
+              <AppleSignInButton onLogin={handleAppleLogin} disabled={loading} />
+              {/* Login Link */}
+              <Text style={styles.signupText}>
+                Already have an account?{' '}
+                <Text
+                  style={styles.linkText}
+                  onPress={() => navigation.navigate('login')}
+                  accessibilityRole="link"
+                  accessibilityHint="Go to login screen"
                 >
-                  <Text style={styles.buttonText}>Sign Up</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            {/* Divider */}
-            <Text style={styles.orText}>or continue with</Text>
-            {/* Google Button */}
-            <TouchableOpacity
-              style={styles.googleButton}
-              onPress={() => promptAsync()}
-              disabled={!request || loading}
-              accessibilityRole="button"
-              accessibilityLabel="Sign Up with Google"
-              accessibilityHint="Sign up with your Google account"
-            >
-              <Ionicons name="logo-google" size={22} color={COLORS.primary} />
-              <Text style={styles.googleButtonText}>Sign Up with Google</Text>
-            </TouchableOpacity>
-            {/* Login Link */}
-            <Text style={styles.signupText}>
-              Already have an account?{' '}
-              <Text
-                style={styles.linkText}
-                onPress={() => navigation.navigate('login')}
-                accessibilityRole="link"
-                accessibilityHint="Go to login screen"
-              >
-                Log In
+                  Log In
+                </Text>
               </Text>
-            </Text>
-          </Animated.View>
+            </Animated.View>
+          </View>
         </KeyboardAvoidingView>
       </LinearGradient>
     </SafeAreaView>
@@ -315,12 +285,16 @@ const styles = StyleSheet.create({
   gradient: {
     flex: 1,
     width: '100%',
-    justifyContent: 'center',
+    alignItems: 'stretch',
+  },
+  topContainer: {
+    width: '100%',
     alignItems: 'center',
+    marginTop: 4, // previously 24, now 24 - 20 = 4
   },
   backButton: {
     position: 'absolute',
-    top: 50,
+    top: 10, // previously 0, now moved up by 20px
     left: 24,
     zIndex: 10,
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -329,8 +303,8 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginTop: 90,
-    marginBottom: 18,
+    marginTop: 28, // previously 48, now 48 - 20 = 28
+    marginBottom: 8,
   },
   brandTitle: {
     fontSize: 28,
@@ -343,107 +317,84 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     backgroundColor: COLORS.glass,
     borderRadius: 24,
-    padding: 28,
-    shadowColor: COLORS.primary,
+    padding: 24,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.13,
-    shadowRadius: 24,
-    elevation: 6,
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
     marginBottom: 24,
+    marginTop: 8,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.textDark,
     marginBottom: 18,
     textAlign: 'center',
-    letterSpacing: 1,
   },
   inputContainer: {
-    width: '100%',
     marginBottom: 12,
   },
   input: {
-    height: 44,
-    borderColor: COLORS.primary,
-    borderWidth: 1,
-    marginBottom: 12,
-    paddingHorizontal: 14,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    color: COLORS.textDark,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 18,
-    width: '100%',
-    alignItems: 'center',
-    marginTop: 6,
-    marginBottom: 2,
-  },
-  buttonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  orText: {
-    color: COLORS.textDark,
-    marginTop: 16,
-    marginBottom: 10,
-    fontSize: 14,
-    textAlign: 'center',
-    opacity: 0.8,
-  },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: COLORS.white,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 18,
-    marginTop: 2,
-    marginBottom: 18,
-    alignSelf: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  googleButtonText: {
-    color: COLORS.primary,
-    fontSize: 15,
-    marginLeft: 10,
-    fontWeight: 'bold',
-  },
-  signupText: {
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     color: COLORS.textDark,
-    marginTop: 8,
-    fontSize: 14,
-    textAlign: 'center',
-    opacity: 0.9,
-  },
-  linkText: {
-    color: COLORS.primary,
-    fontWeight: 'bold',
-    textDecorationLine: 'underline',
-  },
-  errorText: {
-    color: COLORS.error,
-    marginTop: 2,
-    marginBottom: 6,
-    fontSize: 14,
-    textAlign: 'center',
   },
   eyeIcon: {
     position: 'absolute',
     right: 16,
-    top: 12,
-    zIndex: 1,
+    top: 14,
+    zIndex: 2,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 14,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  button: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 6,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+  },
+  buttonText: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+    fontSize: 16,
+    letterSpacing: 1,
+  },
+  orText: {
+    textAlign: 'center',
+    color: COLORS.textDark,
+    marginVertical: 14,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  signupText: {
+    textAlign: 'center',
+    color: COLORS.textDark,
+    marginTop: 18,
+    fontSize: 15,
+  },
+  linkText: {
+    color: COLORS.secondary,
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
   },
 });
 

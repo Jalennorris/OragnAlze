@@ -30,6 +30,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import axios from 'axios';
+import {router} from 'expo-router';
+import {useAuth} from '../Provider/AuthProvider'
 
 const AVATAR_PLACEHOLDER = 'https://ui-avatars.com/api/?name=User&background=bbb&color=fff&size=128';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -113,7 +115,15 @@ const SettingRow: React.FC<{
     accessibilityLabel={accessibilityLabel || label}
   >
     <View style={modernStyles.settingLeft}>
-      <Icon name={icon} size={26} color={color || (dark ? '#a5b4fc' : '#6366f1')} style={{ opacity: 0.92 }} />
+      <Icon
+        name={icon}
+        size={26}
+        color={
+          color ||
+          (dark ? '#f3f4f6' : '#6366f1') // Use white in dark mode for better contrast
+        }
+        style={{ opacity: 0.92 }}
+      />
       <Text
         style={[
           modernStyles.settingText,
@@ -130,6 +140,7 @@ const SettingRow: React.FC<{
 const Settings: React.FC = () => {
   const [isNotificationsEnabled, setIsNotificationsEnabled] = React.useState(false);
   const [isDarkModeEnabled, setIsDarkModeEnabled] = React.useState(false);
+
   const [avatarModalVisible, setAvatarModalVisible] = React.useState(false);
   const [avatarScale] = React.useState(new Animated.Value(1));
   const [search, setSearch] = React.useState('');
@@ -140,7 +151,7 @@ const Settings: React.FC = () => {
   const [lastname, setLastname] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [profilePicColor, setProfilePicColor] = React.useState<string | undefined>(undefined);
-
+const {signOut} = useAuth();
 
   // Parallax for profile header
   const scrollY = React.useRef(new Animated.Value(0)).current;
@@ -167,6 +178,7 @@ const Settings: React.FC = () => {
     ]).start();
     setAvatarModalVisible(true);
   };
+  
 
   const toggleNotifications = async () => {
     if (!isNotificationsEnabled) {
@@ -180,9 +192,15 @@ const Settings: React.FC = () => {
   };
 
   const toggleDarkMode = async () => {
+    const userId = await AsyncStorage.getItem('userId');
     const newMode = !isDarkModeEnabled;
-    setIsDarkModeEnabled(newMode);
-    await AsyncStorage.setItem('darkMode', JSON.stringify(newMode));
+    try {
+      await AsyncStorage.setItem('darkMode', JSON.stringify(newMode));
+      await axios.patch(`http://localhost:8080/api/users/${userId}`, { isDarkMode: newMode });
+      setIsDarkModeEnabled(newMode);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update dark mode setting.');
+    }
   };
 
   const handleLogout = async () => {
@@ -196,8 +214,9 @@ const Settings: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.removeItem('userId');
-              navigation.navigate('login');
+              await AsyncStorage.multiRemove(['userId', 'token', 'username', 'firstname', 'lastname', 'email']);
+              await signOut();
+              navigation.replace('welcome');
             } catch (error) {
               console.error('Failed to logout:', error);
             }
@@ -273,6 +292,8 @@ const Settings: React.FC = () => {
       const savedMode = await AsyncStorage.getItem('darkMode');
       if (savedMode !== null) {
         setIsDarkModeEnabled(JSON.parse(savedMode));
+      } else {
+        setIsDarkModeEnabled(false);
       }
     };
     loadDarkModePreference();
@@ -312,16 +333,35 @@ const Settings: React.FC = () => {
           setLastname(res.data.lastname || '');
           setEmail(res.data.email || '');
           setProfilePicColor(res.data.profile_pic || undefined);
+      
         })
         .catch(err => {
           console.error('Failed to fetch user info', err);
         });
     })();
 
+    // Listen for navigation focus to refresh user info
+    const unsubscribe = navigation.addListener('focus', () => {
+      (async () => {
+        const userId = await AsyncStorage.getItem('userId');
+        axios.get(`http://localhost:8080/api/users/${userId}`)
+          .then(res => {
+            setFirstname(res.data.firstname || '');
+            setLastname(res.data.lastname || '');
+            setEmail(res.data.email || '');
+            setProfilePicColor(res.data.profile_pic || undefined);
+          })
+          .catch(err => {
+            console.error('Failed to fetch user info', err);
+          });
+      })();
+    });
+
     return () => {
       subscription.remove();
+      unsubscribe();
     };
-  }, []);
+  }, [navigation]);
 
   // Demo: Send a local notification
   const sendTestNotification = async () => {
@@ -394,17 +434,7 @@ const Settings: React.FC = () => {
         />
       ),
     },
-    {
-      icon: "fingerprint",
-      label: "Secure Settings",
-      onPress: handleSecureSettings,
-      right: <Icon name="chevron-right" size={22} color={isDarkModeEnabled ? '#52525b' : '#bdbdbd'} />,
-    },
-    {
-      icon: "notifications-active",
-      label: "Send Test Notification",
-      onPress: sendTestNotification,
-    },
+    // Removed Secure Settings and Send Test Notification rows
   ];
 
   const privacyRows = [
@@ -412,7 +442,7 @@ const Settings: React.FC = () => {
       icon: "privacy-tip",
       label: "Privacy Policy",
       onPress: handlePrivacyPolicy,
-      right: <Icon name="chevron-right" size={22} color={isDarkModeEnabled ? '#52525b' : '#bdbdbd'} />,
+      right: <Icon name="chevron-right" size={22} color={isDarkModeEnabled ? '#f3f4f6' : '#bdbdbd'} />,
     },
   ];
 
@@ -421,13 +451,13 @@ const Settings: React.FC = () => {
       icon: "help",
       label: "Help & Support",
       onPress: () => navigation.navigate('helpSupport'),
-      right: <Icon name="chevron-right" size={22} color={isDarkModeEnabled ? '#52525b' : '#bdbdbd'} />,
+      right: <Icon name="chevron-right" size={22} color={isDarkModeEnabled ? '#f3f4f6' : '#bdbdbd'} />,
     },
     {
       icon: "feedback",
       label: "Send Feedback",
       onPress: () => navigation.navigate('sendFeedback'),
-      right: <Icon name="chevron-right" size={22} color={isDarkModeEnabled ? '#52525b' : '#bdbdbd'} />,
+      right: <Icon name="chevron-right" size={22} color={isDarkModeEnabled ? '#f3f4f6' : '#bdbdbd'} />,
     },
   ];
 

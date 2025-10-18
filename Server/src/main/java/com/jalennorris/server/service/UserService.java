@@ -54,7 +54,8 @@ public class UserService {
 
                 token, // Ensure token is passed correctly
                 userModel.getDisplay_name(),// Set display_name as a concatenation of first and last name
-                userModel.getProfile_pic() // Ensure this field is correctly mapped
+                userModel.getProfile_pic() ,// Ensure this field is correctly mapped
+                userModel.getIsDarkMode()
         );
     }
 
@@ -142,6 +143,10 @@ public class UserService {
                         break;
                     case "profile_pic":
                         existingUser.setProfile_pic((String) value);
+                        break;
+
+                    case "isDarkMode":
+                        existingUser.setIsDarkMode((Boolean) value);
                         break;
                     default:
                         throw new IllegalArgumentException("Invalid field: " + key);

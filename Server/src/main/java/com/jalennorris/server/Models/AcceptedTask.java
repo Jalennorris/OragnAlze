@@ -1,7 +1,8 @@
 package com.jalennorris.server.Models;
 
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "accepted_tasks")
@@ -21,14 +22,16 @@ public class AcceptedTask {
     private String taskDescription;
 
     @Column(name = "deadline")
-    private LocalDateTime deadline;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private OffsetDateTime deadline;
 
     @Column(name = "accepted_at")
-    private LocalDateTime acceptedAt;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private OffsetDateTime acceptedAt;
 
     public AcceptedTask() {}
 
-    public AcceptedTask(Long user, String taskTitle, String taskDescription, LocalDateTime deadline, LocalDateTime acceptedAt) {
+    public AcceptedTask(Long user, String taskTitle, String taskDescription, OffsetDateTime deadline, OffsetDateTime acceptedAt) {
         this.user = user;
         this.taskTitle = taskTitle;
         this.taskDescription = taskDescription;
@@ -48,9 +51,9 @@ public class AcceptedTask {
     public String getTaskDescription() { return taskDescription; }
     public void setTaskDescription(String taskDescription) { this.taskDescription = taskDescription; }
 
-    public LocalDateTime getDeadline() { return deadline; }
-    public void setDeadline(LocalDateTime deadline) { this.deadline = deadline; }
+    public OffsetDateTime getDeadline() { return deadline; }
+    public void setDeadline(OffsetDateTime deadline) { this.deadline = deadline; }
 
-    public LocalDateTime getAcceptedAt() { return acceptedAt; }
-    public void setAcceptedAt(LocalDateTime acceptedAt) { this.acceptedAt = acceptedAt; }
+    public OffsetDateTime getAcceptedAt() { return acceptedAt; }
+    public void setAcceptedAt(OffsetDateTime acceptedAt) { this.acceptedAt = acceptedAt; }
 }

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   GestureResponderEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons'; // Optional: Remove if not using Expo
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface TaskSummaryThemeColors {
   text: string;
@@ -46,6 +47,14 @@ const DEFAULT_THEME: TaskSummaryThemeColors = {
   cardShadow: '#000',
 };
 
+const DARK_THEME: TaskSummaryThemeColors = {
+  text: '#f1f5f9',
+  progressFill: '#8bb4ff',
+  progressBackground: '#23272f',
+  containerBackground: '#181c22',
+  cardShadow: '#23232b',
+};
+
 const TaskSummary: React.FC<TaskSummaryProps> = ({
   totalTasks,
   completedTasks,
@@ -63,7 +72,28 @@ const TaskSummary: React.FC<TaskSummaryProps> = ({
   iconColor,
   iconSize = 22,
 }) => {
-  const mergedColors = { ...DEFAULT_THEME, ...theme };
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const fetchDarkMode = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('darkMode');
+        if (stored !== null) {
+          setDarkMode(JSON.parse(stored));
+        }
+      } catch {
+        setDarkMode(false);
+      }
+    };
+    fetchDarkMode();
+    const interval = setInterval(fetchDarkMode, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const mergedColors = {
+    ...(darkMode ? DARK_THEME : DEFAULT_THEME),
+    ...theme,
+  };
 
   // Memoize derived values
   const { validTotalTasks, validCompletedTasks, completionRate, percentage, summaryText, accessibilitySummary } = useMemo(() => {
@@ -180,7 +210,7 @@ const TaskSummary: React.FC<TaskSummaryProps> = ({
                 color: mergedColors.text,
                 fontSize: textSize * 0.95,
                 fontWeight: 'bold',
-                textShadowColor: 'rgba(255,255,255,0.7)',
+                textShadowColor: darkMode ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.7)',
                 textShadowOffset: { width: 0, height: 1 },
                 textShadowRadius: 2,
               },
