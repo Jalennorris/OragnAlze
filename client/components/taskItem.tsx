@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, useState, memo, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert, TextInput, Modal, Pressable, ActivityIndicator, useColorScheme, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert, TextInput, Modal, Pressable, ActivityIndicator, useColorScheme, Platform , Share} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
@@ -87,6 +87,9 @@ interface TaskItemProps {
   onRefresh?: () => void; // Add onRefresh prop for auto refresh
   isOffline?: boolean; // Add isOffline prop
   onPress?: () => void; // <-- Add this line
+  isMoreMenuVisible?: boolean; // Controlled More menu (optional)
+  onMoreMenuOpen?: (taskId: number) => void;
+  onMoreMenuClose?: (taskId: number) => void;
 }
 
 const getPriorityColor = (priority: 'low' | 'medium' | 'high') => {
@@ -158,6 +161,9 @@ const AITaskItem: React.FC<TaskItemProps> = ({
   onRefresh, // Destructure new prop
   isOffline = false, // Destructure isOffline, default to false
   onPress, // <-- Add this line
+  isMoreMenuVisible, // controlled More menu props
+  onMoreMenuOpen,
+  onMoreMenuClose,
 }) => {
   // Animation values
   const animatedOpacity = useRef(new Animated.Value(1)).current;
@@ -231,7 +237,7 @@ const AITaskItem: React.FC<TaskItemProps> = ({
     try {
       animateDelete(async () => {
         try {
-          await axios.delete(`http://localhost:8080/api/tasks/${task.taskId}`);
+          await axios.delete(`${task.taskId}`);
           onDelete(task.taskId);
           Toast.show({
             type: 'success',
@@ -299,6 +305,7 @@ const AITaskItem: React.FC<TaskItemProps> = ({
   const [editDescription, setEditDescription] = useState(task.taskDescription);
   const [editDeadline, setEditDeadline] = useState(task.deadline);
 
+const [notes, setNotes] = useState([]);
   // Format for display and editing (date and time)
   const displayDate = editDeadline
     ? format(new Date(editDeadline), 'MMM dd, yyyy hh:mm a')
@@ -424,8 +431,24 @@ const AITaskItem: React.FC<TaskItemProps> = ({
     }
   };
 
-  // State for More menu
-  const [isMoreMenuVisible, setIsMoreMenuVisible] = useState(false);
+  // State for More menu (supports controlled/uncontrolled)
+  const [internalMoreMenuVisible, setInternalMoreMenuVisible] = useState(false);
+  const moreMenuVisible = isMoreMenuVisible ?? internalMoreMenuVisible;
+
+  const openMoreMenu = () => {
+    onMoreMenuOpen?.(task.taskId);
+    if (isMoreMenuVisible === undefined) setInternalMoreMenuVisible(true);
+  };
+  const closeMoreMenu = () => {
+    onMoreMenuClose?.(task.taskId);
+    if (isMoreMenuVisible === undefined) setInternalMoreMenuVisible(false);
+  };
+
+  // Close menu if selection mode becomes active
+  useEffect(() => {
+    if (isSelectionModeActive && moreMenuVisible) closeMoreMenu();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSelectionModeActive]);
 
   // Subtask count state
   const [subtaskCount, setSubtaskCount] = useState<number>(0);
@@ -436,6 +459,7 @@ const AITaskItem: React.FC<TaskItemProps> = ({
       try {
         const response = await axios.get(`http://localhost:8080/api/subtasks/${task.taskId}`);
         setSubtaskCount(Array.isArray(response.data) ? response.data.length : 0);
+        
       } catch (error) {
         setSubtaskCount(0);
       }
@@ -443,6 +467,10 @@ const AITaskItem: React.FC<TaskItemProps> = ({
     fetchSubtaskCount();
   }, [task.taskId]);
 
+
+
+
+  
   // Memoized SubtaskRow
   const SubtaskRow = memo(({ subtask }: { subtask: Subtask }) => (
     <View key={subtask.id} style={styles.subtaskRow}>
@@ -466,7 +494,7 @@ const AITaskItem: React.FC<TaskItemProps> = ({
         ]}
         value={subtask.title}
         onChangeText={text => handleEditSubtaskTitle(subtask.id, text)}
-        editable={!isEditing}
+        editable={!isOffline} // fixed: was referencing undefined isEditing
         allowFontScaling
       />
     </View>
@@ -639,6 +667,10 @@ const AITaskItem: React.FC<TaskItemProps> = ({
   const TITLE_MAX_LENGTH = 25; // Minimum length before truncating title
   const DESCRIPTION_MAX_LENGTH = 60;
 
+
+
+
+
   return (
     <ErrorBoundary>
       <Animated.View
@@ -651,16 +683,16 @@ const AITaskItem: React.FC<TaskItemProps> = ({
         {/* More Menu Modal */}
         <Modal
           transparent
-          visible={isMoreMenuVisible}
+          visible={moreMenuVisible}
           animationType="fade"
-          onRequestClose={() => setIsMoreMenuVisible(false)}
+          onRequestClose={closeMoreMenu}
         >
-          <Pressable style={styles.modalOverlay} onPress={() => setIsMoreMenuVisible(false)}>
+          <Pressable style={styles.modalOverlay} onPress={closeMoreMenu}>
             <View style={styles.moreMenu}>
               <TouchableOpacity
                 style={styles.moreMenuItem}
                 onPress={() => {
-                  setIsMoreMenuVisible(false);
+                  closeMoreMenu();
                 }}
               >
                 <Ionicons name="pencil-outline" size={18} color="#333" style={{ marginRight: 8 }} />
@@ -670,7 +702,7 @@ const AITaskItem: React.FC<TaskItemProps> = ({
                 <TouchableOpacity
                   style={styles.moreMenuItem}
                   onPress={() => {
-                    setIsMoreMenuVisible(false);
+                    closeMoreMenu();
                     onShare();
                   }}
                 >
@@ -678,8 +710,14 @@ const AITaskItem: React.FC<TaskItemProps> = ({
                   <Text style={styles.moreMenuText}>Share</Text>
                 </TouchableOpacity>
               )}
+              <TouchableOpacity style={styles.moreMenuItem} >
+                <Ionicons name="newspaper-outline" size={18} color="#333" style={{ marginRight: 8 }} />
+              <Text>Notes</Text>
+
+            </TouchableOpacity>
             </View>
           </Pressable>
+         
         </Modal>
         <Swipeable
           renderRightActions={renderRightActions}
@@ -761,7 +799,7 @@ const AITaskItem: React.FC<TaskItemProps> = ({
                     {/* More button (three dots) */}
                     {!isSelectionModeActive && (
                       <TouchableOpacity
-                        onPress={() => setIsMoreMenuVisible(true)}
+                        onPress={openMoreMenu}
                         style={{ marginLeft: 8, padding: 2 }}
                         accessibilityLabel="More Options"
                       >
@@ -859,16 +897,43 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectTog
     console.log('Edit task', taskId, updatedFields);
   };
 
-  // Add a real onShare handler (replace with your logic)
-  const handleShare = (task: Task) => {
-    // Implement your share logic here, e.g., using Share API or custom logic
-    console.log('Share task', task);
-    Toast.show({
-      type: 'info',
-      text1: 'Share',
-      text2: `Sharing "${task.taskName}"...`,
-      position: 'bottom',
-    });
+  // Add a real onShare handler (fixed: async, no undefined onShare reference, platform payload)
+  const handleShare = async (task: Task) => {
+    const API_BASE = (process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
+    const taskUrl = `${API_BASE}/tasks/${task.taskId}`;
+
+    const parts: string[] = [];
+    if (task.taskName) parts.push(`Task: ${task.taskName}`);
+    if (task.taskDescription) parts.push(`Description: ${task.taskDescription}`);
+    if (task.deadline) parts.push(`Deadline: ${task.deadline}`);
+    if (task.priority) parts.push(`Priority: ${task.priority}`);
+    if (task.category) parts.push(`Category: ${task.category}`);
+
+    const message = parts.join('\n\n');
+
+    try {
+      const payload =
+        Platform.OS === 'ios'
+          ? { title: task.taskName, url: taskUrl, message }
+          : { title: task.taskName, message: `${message}\n\n${taskUrl}` };
+
+      await Share.share(payload as any);
+
+      Toast.show({
+        type: 'success',
+        text1: 'Shared',
+        text2: `Task "${task.taskName}" shared.`,
+        position: 'bottom',
+      });
+    } catch (err: any) {
+      console.error('Share error:', err);
+      Toast.show({
+        type: 'error',
+        text1: 'Share Failed',
+        text2: err?.message || 'Unable to share the task.',
+        position: 'bottom',
+      });
+    }
   };
 
   // Add a real onDelete handler (replace with your logic)
@@ -876,6 +941,12 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectTog
     // Update your state or call your API here
     console.log('Delete task', taskId);
   };
+
+  // Control a single open More menu across the list
+  const [openMenuTaskId, setOpenMenuTaskId] = useState<number | null>(null);
+
+  const handleMoreMenuOpen = (taskId: number) => setOpenMenuTaskId(taskId);
+  const handleMoreMenuClose = () => setOpenMenuTaskId(null);
 
   return (
     <>
@@ -890,7 +961,11 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectTog
           onSelectToggle={onSelectToggle} // Pass selection handler
           isSelectionModeActive={isSelectionModeActive} // Pass selection mode status
           onEdit={handleEdit} // <-- Pass a real function here
-          onShare={() => handleShare(task)} // <-- Pass share handler
+          onShare={() => handleShare(task)} // unchanged usage
+          // controlled More menu props
+          isMoreMenuVisible={openMenuTaskId === task.taskId}
+          onMoreMenuOpen={handleMoreMenuOpen}
+          onMoreMenuClose={handleMoreMenuClose}
         />
       ))}
     </>

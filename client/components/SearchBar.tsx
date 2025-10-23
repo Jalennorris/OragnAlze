@@ -90,7 +90,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
     // Responsive width: 85% of screen width
     const searchBarWidth = searchAnim.interpolate({
         inputRange: [0, 1],
-        outputRange: [0, SCREEN_WIDTH * 0.80],
+        outputRange: [0, SCREEN_WIDTH * 0.65],
     });
 
     const handleSearchChange = (query: string) => {

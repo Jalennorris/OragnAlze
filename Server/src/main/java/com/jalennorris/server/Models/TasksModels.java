@@ -36,6 +36,8 @@ public class TasksModels {
     @Column(name = "notes")
     private String notes; // Field to store notes for the task
 
+
+
     // Default constructor (required for JPA)
     public TasksModels() {}
 

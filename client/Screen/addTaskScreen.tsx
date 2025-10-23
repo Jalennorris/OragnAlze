@@ -28,6 +28,8 @@ import  { FadeIn, useSharedValue, useAnimatedStyle, withSequence, withTiming } f
 import Animated from 'react-native-reanimated'; // <-- Add this line
 import { runOnJS } from 'react-native-reanimated';
 
+
+
 // Import custom components (assuming they exist)
 import Header from '../components/header'; // Adjust path if needed
 import Navbar from '../components/Navbar'; // Adjust path if needed
@@ -153,7 +155,7 @@ const AddTaskScreen: React.FC = () => {
   const [colorScheme, setColorScheme] = useState<'light' | 'dark'>('light');
   const [estimateDays, setEstimateDays] = React.useState<string>('0');
   const [estimateHours, setEstimateHours] = React.useState<string>('0');
-  const [EstimatedApplied, setEstimatedApplied] = React.useState<boolean>(false);
+  const [estimatedApplied, setEstimatedApplied] = useState<boolean>(false);
 
 
   const navigation = useNavigation();
@@ -210,6 +212,10 @@ const AddTaskScreen: React.FC = () => {
     };
   }, [navigation]);
 
+  useEffect(() => {
+    setEstimatedApplied(false);
+  }, [estimateDays, estimateHours]);
+
   const COLORS = colorScheme === 'dark' ? DARK_COLORS : LIGHT_COLORS;
 
   // --- Input Handlers (useCallback) ---
@@ -230,51 +236,43 @@ const normalizeDuration = (days: number, hours: number ) => {
 
 }
 
-
-const addDurationToIso = (iso: string, days: number, hours : number) =>{
-  const base = new Date(iso);
-  const {days: d, hours: h} = normalizeDuration(days, hours);
-  const result = new Date(base);
-  result.setDate(result.getDate() + d)
-
-  result.setHours(result.getHours() + h);
-  return result.toISOString();
-}
+const addDurationToIso = (iso: string, days: number, hours: number) => {
+  const { days: d, hours: h } = normalizeDuration(days, hours);
+  const baseMs = new Date(iso).getTime();
+  const res = new Date(baseMs + d * 24 * 60 * 60 * 1000 + h * 60 * 60 * 1000);
+  return res.toISOString();
+};
 
 const estimatedDuePreview = React.useMemo(() => {
-  const d = parseInt(estimateDays || '0', 10);
-  const h = parseInt(estimateHours || '0', 10)
-
-  if(!dueDate) return undefined;
+  const d = safeInt(estimateDays || '0');
+  const h = safeInt(estimateHours || '0');
+  if (!dueDate) return undefined;
   try {
-    return addDurationToIso(dueDate, d, h)
-  } catch (error) {
-    return undefined
-    
+    return addDurationToIso(dueDate, d, h);
+  } catch {
+    return undefined;
   }
-}, [estimateDays, estimateHours,dueDate])
+}, [estimateDays, estimateHours, dueDate]);
 
 const applyEstimateToDue = React.useCallback(() => {
   const d = parseInt(estimateDays || '0', 10);
   const h = parseInt(estimateHours || '0', 10);
   const safeD = Number.isNaN(d) ? 0 : d;
   const safeH = Number.isNaN(h) ? 0 : h;
-  
+
   const baseIso = dueDate || new Date().toISOString();
   try {
     const newIso = addDurationToIso(baseIso, safeD, safeH);
     setDueDate(newIso);
-    setEstimatedApplied(true);
-  } catch (e) {
-    // optional: handle invalid date error (toast/log)
-  }
+    setEstimatedApplied(safeD > 0  && safeD < 365 || safeH > 0 && safeH < 23);
+  } catch {}
 }, [estimateDays, estimateHours, dueDate, setDueDate]);
 
 const resetEstimate = React.useCallback(() => {
   setEstimateDays('0');
   setEstimateHours('0');
   setEstimatedApplied(false);
-},[setEstimateDays, setEstimateHours, setEstimatedApplied]);
+},[setEstimateDays, setEstimateHours]);
 
 
   const handleNumericInput = React.useCallback(
@@ -355,7 +353,7 @@ const resetEstimate = React.useCallback(() => {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsLoading(true);
-    const estimatedDuration = `${estimatedDays || '0'} days, ${estimatedHours || '0'} hours`;
+    const estimatedDuration = `${estimateDays || '0'} days, ${estimateHours || '0'} hours`;
     const newTask: Omit<Task, 'taskId' | 'createdAt'> & { createdAt?: string } = {
       userId: userId,
       taskName: taskName.trim(),
@@ -382,11 +380,14 @@ const resetEstimate = React.useCallback(() => {
       setStatus(Status.NotStarted);
       setErrors({});
       taskNameRef.current?.focus();
+      navigation.navigate('index')
+
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'An unknown error occurred.';
       Alert.alert('Error Saving Task', `Failed to save the task. ${errorMessage}`);
     } finally {
       setIsLoading(false);
+      navigation.navigate('index')
     }
   }, [
     validateInput,
@@ -501,7 +502,7 @@ const resetEstimate = React.useCallback(() => {
                   <View style={styles.durationInputWrapper}>
                     <TextInput
                       style={[styles.input, styles.durationInput, { color: COLORS.text, backgroundColor: COLORS.input }]}
-                      placeholder="Days"
+                      placeholder="0"
                       placeholderTextColor={COLORS.placeholder}
                       keyboardType="numeric"
                       value={estimateDays}
@@ -516,7 +517,7 @@ const resetEstimate = React.useCallback(() => {
                   <View style={styles.durationInputWrapper}>
                     <TextInput
                       style={[styles.input, styles.durationInput, { color: COLORS.text, backgroundColor: COLORS.input }]}
-                      placeholder="Hours"
+                      placeholder="0"
                       placeholderTextColor={COLORS.placeholder}
                       keyboardType="numeric"
                       value={estimateHours}
@@ -532,17 +533,15 @@ const resetEstimate = React.useCallback(() => {
                 <Text style={styles.preViewDurationText}>
                     Preview: {estimatedDuePreview ? new Date(estimatedDuePreview).toLocaleString() : 'N/A'} {' '}
                 </Text>
-                {EstimatedApplied === false  ? (
-                <TouchableOpacity onPress={applyEstimateToDue} style={styles.preViewDurationButton} >
-                    <Text style={styles.preViewDurationApplyText}>Apply Estimate</Text>
-                </TouchableOpacity>
-                ) : 
-                (
-                  <TouchableOpacity onPress={resetEstimate} style={styles.preViewDurationResetButton} > 
-                    <Text style={styles.preViewDurationApplyText}>Reset Estimate</Text>
-                  </TouchableOpacity>
-                )
-                    }
+                {(estimateDays === '0' && estimateHours === '0') || !estimatedApplied ? (
+                    <TouchableOpacity onPress={applyEstimateToDue} style={styles.preViewDurationButton}>
+                      <Text style={styles.preViewDurationApplyText}>Apply Estimate</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity onPress={resetEstimate} style={styles.preViewDurationResetButton}>
+                      <Text style={styles.preViewDurationApplyText}>Reset Estimate</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </Animated.View>
 
@@ -621,8 +620,9 @@ const resetEstimate = React.useCallback(() => {
                       key={key}
                       style={[
                         styles.pill,
-                        { backgroundColor: PRIORITY_COLORS[key] + 'cc' },
-                        priority === key && styles.pillActive,
+                // Unselected: low-opacity bg; Selected: full color bg + active shadow
+                        { backgroundColor: PRIORITY_COLORS[key] + '22' },
+                        priority === key && [styles.pillActive, { backgroundColor: PRIORITY_COLORS[key] }],
                       ]}
                       onPress={() => setPriority(key)}
                       accessibilityLabel={`Set priority to ${key}`}
@@ -632,11 +632,17 @@ const resetEstimate = React.useCallback(() => {
                       testID={`priority-${key}`}
                       activeOpacity={0.85}
                     >
-                      <Text style={[
-                        styles.pillText,
-                        key === Priority.Medium ? { color: '#222' } : {},
-                        priority === key && styles.pillTextActive
-                      ]}>
+                      <Text
+                        style={[
+                          styles.pillText,
+                          {
+                            color:
+                              priority === key
+                                ? (key === Priority.Medium ? '#222' : '#fff')
+                                : '#555',
+                          },
+                        ]}
+                      >
                         {key.toUpperCase()}
                       </Text>
                     </TouchableOpacity>
@@ -958,9 +964,9 @@ const styles = StyleSheet.create({
   },
   durationInput: {
     flex: 1,
-    marginHorizontal: 6,
+   
     borderRadius: 10,
-    paddingHorizontal: 10,
+
   },
   dateInputContainer: {
     flexDirection: 'row',
@@ -1138,6 +1144,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     
   },
+  durationTextInput: {
+       height: 48,              // taller input
+       minWidth: 80,           // wider so numbers don't feel cramped
+       paddingHorizontal: 12,  // more horizontal padding
+        fontSize: 18,           // larger text
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+        borderRadius: 8,
+        backgroundColor: '#FFFFFF',
+       textAlign: 'center',
+    },
+
   preViewDurationApplyText: {
   textAlign: 'center',  
     fontSize: 14,

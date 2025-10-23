@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, FlatList } from 'react-native';
-import TaskItem from '../components/taskItem';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, FlatList, AppState } from 'react-native';
+import TaskItem from './taskItem';
 import Icon from 'react-native-vector-icons/Ionicons';
-import EmptyState from '../components/EmptyState';
+import EmptyState from './EmptyState';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Define types for the task structure
@@ -51,21 +51,24 @@ const FutureTask: React.FC<FutureTaskProps> = ({
   const [heightAnim] = React.useState(new Animated.Value(showFutureTasks ? 1 : 0));
   const [darkMode, setDarkMode] = React.useState(false);
 
-  React.useEffect(() => {
-    const fetchDarkMode = async () => {
-      try {
-        const stored = await AsyncStorage.getItem('darkMode');
-        if (stored !== null) {
-          setDarkMode(JSON.parse(stored));
-        }
-      } catch {
-        setDarkMode(false);
+  const fetchDarkMode = React.useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem('darkMode');
+      if (stored !== null) {
+        setDarkMode(JSON.parse(stored));
       }
-    };
-    fetchDarkMode();
-    const interval = setInterval(fetchDarkMode, 1000);
-    return () => clearInterval(interval);
+    } catch {
+      setDarkMode(false);
+    }
   }, []);
+
+  React.useEffect(() => {
+    fetchDarkMode();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') fetchDarkMode();
+    });
+    return () => sub.remove();
+  }, [fetchDarkMode]);
 
   const mergedColors = darkMode ? { ...colors, ...DARK_COLORS } : colors;
 
@@ -75,12 +78,13 @@ const FutureTask: React.FC<FutureTaskProps> = ({
       duration: 300,
       useNativeDriver: false,
     }).start();
-  }, [showFutureTasks]);
+  }, [showFutureTasks, heightAnim]);
 
-  // Interpolate height for animation (adjust maxHeight as needed)
+  // Interpolate height for animation based on list size (capped)
+  const maxHeight = Math.min(Math.max(futureTasks.length, 1) * 72, 500);
   const animatedHeight = heightAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 500], // 500 is an example max height, adjust as needed
+    outputRange: [0, maxHeight],
   });
 
   return (
@@ -91,13 +95,14 @@ const FutureTask: React.FC<FutureTaskProps> = ({
         accessibilityHint="Toggles the visibility of future tasks"
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15 }}>
-          {showFutureTasks ? (
+          
+          <Text style={[styles.futureHeader, { color: mergedColors.text, paddingHorizontal: 0 }]}>
+            {'  '}Future Tasks
+            {showFutureTasks ? (
             <Icon name="chevron-up" size={18} color={mergedColors.text} />
           ) : (
             <Icon name="chevron-down" size={18} color={mergedColors.text} />
           )}
-          <Text style={[styles.futureHeader, { color: mergedColors.text, paddingHorizontal: 0 }]}>
-            {'  '}Future Tasks
           </Text>
         </View>
       </TouchableOpacity>
@@ -135,11 +140,12 @@ const styles = StyleSheet.create({
     padding: 15, // Add padding for better spacing
   },
   futureHeader: {
-    fontSize: 25,
+    fontSize: 27,
     fontWeight: 'bold',
-    textAlign: 'flex-start',
+    textAlign: 'left', // fixed: 'flex-start' is invalid for textAlign
     marginBottom: 10,
     paddingHorizontal: 15, // Add padding for better alignment
+    right: 40,
   },
   emptyStateContainer: {
     alignItems: 'center',
