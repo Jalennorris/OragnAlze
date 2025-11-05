@@ -803,7 +803,7 @@ const HomeScreen: React.FC = () => {
                   />
                 )}
                 <TaskList
-                  tasks={filteredTasks}
+                  tasks={incompleteTasks}
                   handleTaskPress={handleTaskPress}
                   toggleTaskCompletion={toggleTaskCompletion}
                   deleteTask={deleteTask}
@@ -821,7 +821,7 @@ const HomeScreen: React.FC = () => {
                           />
                           <DateSection
                             title="Today"
-                            tasks={todayTasks}
+                            tasks={todayTasks.filter(t => !t.completed)}
                             handleTaskPress={handleTaskPress}
                             toggleTaskCompletion={toggleTaskCompletion}
                             deleteTask={deleteTask}
@@ -833,7 +833,7 @@ const HomeScreen: React.FC = () => {
                           />
                           <DateSection
                             title="This Week"
-                            tasks={currentWeekTasks}
+                            tasks={currentWeekTasks.filter(t => !t.completed)}
                             handleTaskPress={handleTaskPress}
                             toggleTaskCompletion={toggleTaskCompletion}
                             deleteTask={deleteTask}
@@ -845,7 +845,7 @@ const HomeScreen: React.FC = () => {
                             color={COLORS.background === '#121212' ? '#fff' : COLORS.text} // <-- Add this line
                           />
                           <FutureTask
-                            futureTasks={futureTasks}
+                            futureTasks={futureTasks.filter(t => !t.completed)}
                             showFutureTasks={showFutureTasks}
                             setShowFutureTasks={setShowFutureTasks}
                             handleTaskPress={handleTaskPress}
@@ -862,18 +862,6 @@ const HomeScreen: React.FC = () => {
                               showIcon={false}
                             />
                           )}
-                          {incompleteTasks.map((task) => (
-                            <TaskItem
-                              key={task.taskId.toString()}
-                              task={task}
-                              onPress={() => handleTaskPress(task.taskId.toString())}
-                              onToggleCompletion={() => toggleTaskCompletion(task.taskId)}
-                              onDelete={() => deleteTask(task.taskId)}
-                              priorityColor={getPriorityColor(task.priority)}
-                              isOffline={isOffline}
-                              onShare={() => shareTask(task)}
-                            />
-                          ))}
                         </>
                   }
                   searchQuery={searchQuery}

@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, useState, memo, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Alert, TextInput, Modal, Pressable, ActivityIndicator, useColorScheme, Platform , Share} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, TextInput, Modal, Pressable, ActivityIndicator, useColorScheme, Platform , Share} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
@@ -209,71 +209,33 @@ const AITaskItem: React.FC<TaskItemProps> = ({
   // Ensure the gradient colors for the task priority exist
   const taskGradientColors = gradientColors[task.priority] || [COLORS.cardBgLight, COLORS.cardBgLight];
 
-  // Animate deletion
-  const animateDelete = useCallback((callback: () => void) => {
-    Animated.timing(animatedOpacity, {
-      toValue: 0,
-      duration: 300,
-      easing: Easing.elastic(1),
-      useNativeDriver: true,
-    }).start(() => callback());
-  }, [animatedOpacity]);
-
-  // Loading state for actions
+  // Add loading state
   const [isLoading, setIsLoading] = useState(false);
 
-  // Handle task deletion with Axios and animation
-  const handleDelete = useCallback(async () => {
-    if (isOffline) {
-      Toast.show({
-        type: 'error',
-        text1: 'Offline',
-        text2: 'Cannot delete task while offline.',
-        position: 'bottom',
-      });
+  // The child component's delete handler now just calls the prop.
+  // The parent (TaskList) will handle the API call.
+  const handleDelete = useCallback(() => {
+    if (isLoading) return;
+    onDelete(task.taskId);
+  }, [isLoading, task.taskId, onDelete]);
+
+  // Handle task completion toggle with Axios
+  const handleToggleCompletion = async () => {
+    if (isOffline || isLoading) {
+      if (isOffline) {
+        Toast.show({
+          type: 'error',
+          text1: 'Offline',
+          text2: 'Cannot update task while offline.',
+          position: 'bottom',
+        });
+      }
       return;
     }
     setIsLoading(true);
     try {
-      animateDelete(async () => {
-        try {
-          await axios.delete(`${task.taskId}`);
-          onDelete(task.taskId);
-          Toast.show({
-            type: 'success',
-            text1: 'Task Deleted',
-            text2: `Task "${task.taskName}" was successfully deleted.`,
-            position: 'bottom',
-          });
-          if (onRefresh) onRefresh(); // Auto refresh after delete
-        } catch (error: any) {
-          // ...existing code...
-          animatedOpacity.setValue(1);
-        } finally {
-          setIsLoading(false);
-        }
-      });
-    } catch (error) {
-      // ...existing code...
-      setIsLoading(false);
-    }
-  }, [task.taskId, task.taskName, onDelete, animateDelete, animatedOpacity, onRefresh, isOffline]);
-
-  // Handle task completion toggle with Axios
-  const handleToggleCompletion = async () => {
-    if (isOffline) {
-      Toast.show({
-        type: 'error',
-        text1: 'Offline',
-        text2: 'Cannot update task while offline.',
-        position: 'bottom',
-      });
-      return;
-    }
-    const previousCompleted = task.completed; // Store previous state for potential rollback
-    try {
-      // Optimistically update UI first (or let parent handle it via onToggleCompletion)
-      onToggleCompletion(); // Assuming this updates the parent state
+      // Optimistically update UI first
+      onToggleCompletion();
 
       await axios.patch(`http://localhost:8080/api/tasks/${task.taskId}`, {
         completed: !task.completed,
@@ -284,20 +246,18 @@ const AITaskItem: React.FC<TaskItemProps> = ({
         text2: `Task "${task.taskName}" marked as ${!task.completed ? 'complete' : 'incomplete'}.`,
         position: 'bottom',
       });
-      if (onRefresh) onRefresh(); // Auto refresh after completion toggle
-      // No need to call onToggleCompletion again here if it was called optimistically
+      if (onRefresh) onRefresh();
     } catch (error: any) {
       console.error('Error toggling task completion:', error);
-      // Since the app is online, this should rarely fail.
-      // Optionally, you can notify the user of the error.
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to update the task. Please try again.';
-       Toast.show({
-         type: 'error',
-         text1: 'Update Failed',
-         text2: errorMessage,
-         position: 'bottom',
-       });
-      // If you want to handle rare network errors, you could revert the UI here.
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to update the task. Please try again.';
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: errorMessage,
+        position: 'bottom',
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -523,24 +483,17 @@ const [notes, setNotes] = useState([]);
     return (
       <TouchableOpacity
         onPress={() => {
+          if (isLoading) return;
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          Alert.alert(
-            'Delete Task',
-            `Are you sure you want to delete "${task.taskName}"?`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Delete', onPress: handleDelete, style: 'destructive' },
-            ]
-          );
+          handleDelete();
         }}
-        style={styles.deleteButton} // Set background to red
+        style={styles.deleteButton}
         accessibilityRole="button"
         accessibilityLabel="Delete Task"
-        accessibilityHint="Deletes this task"
+        accessibilityHint="Deletes this task immediately"
       >
         <Animated.View style={[styles.deleteButtonItems,{ transform: [{ scale }] }]}>
           <Ionicons name="trash-outline" size={24} color="#FFF" />
-        
         </Animated.View>
       </TouchableOpacity>
     );
@@ -722,7 +675,7 @@ const [notes, setNotes] = useState([]);
         <Swipeable
           renderRightActions={renderRightActions}
           renderLeftActions={renderLeftActions}
-          enabled={!isSelectionModeActive && !isOffline} // Disable swipe actions when in selection mode or offline
+          enabled={!isSelectionModeActive && !isOffline && !isLoading} // disable when loading
         >
           <TouchableOpacity
             style={[
@@ -736,9 +689,10 @@ const [notes, setNotes] = useState([]);
                 borderColor: mergedColors.border,
               },
             ]}
-            disabled={isOffline}
+            disabled={isOffline || isLoading} // disable taps when loading
             onPress={onPress} // <-- Add this line
             onLongPress={() => {
+              if (isLoading) return;
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               onSelectToggle(task.taskId); // Initiate selection mode on long press
             }}
@@ -879,10 +833,11 @@ interface TaskListProps {
   selectedTaskIds: number[];
   onSelectToggle: (taskId: number) => void;
   isSelectionModeActive: boolean;
+  onRefresh?: () => void; // Add onRefresh to TaskListProps
   // Add handlers for bulk actions if needed, e.g., onBulkDelete, onBulkComplete
 }
 
-const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectToggle, isSelectionModeActive }) => {
+const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectToggle, isSelectionModeActive, onRefresh }) => {
   if (!tasks || tasks.length === 0) {
     return (
       <View style={styles.noTasksContainer}>
@@ -936,10 +891,28 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, selectedTaskIds, onSelectTog
     }
   };
 
-  // Add a real onDelete handler (replace with your logic)
-  const handleDelete = (taskId: number) => {
-    // Update your state or call your API here
-    console.log('Delete task', taskId);
+  // The parent component now handles the API call for deletion.
+  const handleDelete = async (taskId: number) => {
+    const taskToDelete = tasks.find(t => t.taskId === taskId);
+    if (!taskToDelete) return;
+
+    try {
+      await axios.delete(`http://localhost:8080/api/tasks/${taskId}`);
+      Toast.show({
+        type: 'success',
+        text1: 'Task Deleted',
+        text2: `Deleted "${taskToDelete.taskName}".`,
+        position: 'bottom',
+      });
+      if (onRefresh) onRefresh(); // Refresh the list
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Delete Failed',
+        text2: error?.message || 'Please try again.',
+        position: 'bottom',
+      });
+    }
   };
 
   // Control a single open More menu across the list
